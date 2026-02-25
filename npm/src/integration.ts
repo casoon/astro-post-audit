@@ -58,7 +58,7 @@ export default function postAudit(
 
         if (!existsSync(binaryPath)) {
           logger.warn(
-            'astro-post-audit binary not found. Run "npm rebuild astro-post-audit".',
+            'astro-post-audit binary not found. Run "npm rebuild @casoon/astro-post-audit".',
           );
           return;
         }

@@ -20,7 +20,7 @@ export default function postAudit(options = {}) {
                     : 'astro-post-audit';
                 const binaryPath = join(binDir, binaryName);
                 if (!existsSync(binaryPath)) {
-                    logger.warn('astro-post-audit binary not found. Run "npm rebuild astro-post-audit".');
+                    logger.warn('astro-post-audit binary not found. Run "npm rebuild @casoon/astro-post-audit".');
                     return;
                 }
                 const args = [distPath];
