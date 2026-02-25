@@ -60,7 +60,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME}"
           ARCHIVE_NAME="${BINARY_NAME}-${VERSION}-${TARGET}.tar.gz"
 
-          cp "crates/astro-post-audit/target/${TARGET}/release/${BINARY_NAME}" .
+          cp "target/${TARGET}/release/${BINARY_NAME}" .
           tar -czf "${ARCHIVE_NAME}" "${BINARY_NAME}"
           echo "ARCHIVE_NAME=${ARCHIVE_NAME}" >> $GITHUB_ENV
 
@@ -73,7 +73,7 @@ jobs:
           $VERSION = "$env:GITHUB_REF_NAME"
           $ARCHIVE_NAME = "astro-post-audit-${VERSION}-${TARGET}.zip"
 
-          Copy-Item "crates/astro-post-audit/target/${TARGET}/release/${BINARY_NAME}" .
+          Copy-Item "target/${TARGET}/release/${BINARY_NAME}" .
           Compress-Archive -Path $BINARY_NAME -DestinationPath $ARCHIVE_NAME
           echo "ARCHIVE_NAME=${ARCHIVE_NAME}" >> $env:GITHUB_ENV
 
