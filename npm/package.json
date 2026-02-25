@@ -1,0 +1,68 @@
+{
+  "name": "astro-post-audit",
+  "version": "0.1.0",
+  "description": "Fast post-build auditor for Astro sites: SEO, links, and lightweight WCAG checks",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "astro-post-audit": "bin/run.cjs"
+  },
+  "scripts": {
+    "build": "tsc",
+    "postinstall": "node bin/install.cjs"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "astro",
+    "astro-integration",
+    "seo",
+    "audit",
+    "accessibility",
+    "static-site",
+    "wcag",
+    "canonical",
+    "links"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/casoon/astro-post-audit"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "peerDependencies": {
+    "astro": "^5.0.0 || ^6.0.0-beta.0 || ^6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "astro": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "astro": "^6.0.0-beta.15",
+    "typescript": "^5.9.3"
+  }
+}

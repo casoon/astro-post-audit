@@ -1,0 +1,51 @@
+[package]
+name = "astro-post-audit"
+version = "0.1.0"
+edition = "2021"
+description = "Fast post-build auditor for Astro sites: SEO, links, and lightweight WCAG checks"
+license = "MIT"
+repository = "https://github.com/jseidel/astro-post-audit"
+keywords = ["astro", "seo", "audit", "accessibility", "static-site"]
+categories = ["command-line-utilities", "web-programming"]
+
+[[bin]]
+name = "astro-post-audit"
+path = "src/main.rs"
+
+[dependencies]
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Config
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
+# File traversal
+walkdir = "2"
+globset = "0.4"
+
+# Parallelism
+rayon = "1"
+
+# HTML parsing
+scraper = "0.22"
+
+# URL handling
+url = "2"
+
+# Sitemap XML parsing
+quick-xml = "0.37"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Output
+serde_json = "1"
+colored = "3"
+
+[dev-dependencies]
+tempfile = "3"
+pretty_assertions = "1"
+serde_json = "1"
+

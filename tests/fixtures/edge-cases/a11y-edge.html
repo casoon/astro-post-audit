@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A11y Edge Cases</title>
+  <link rel="canonical" href="https://example.com/a11y-edge/">
+</head>
+<body>
+  <h1>Accessibility Edge Cases</h1>
+
+  <!-- Decorative image: should NOT trigger error -->
+  <img src="/decorative.jpg" role="presentation">
+  <img src="/decorative2.jpg" aria-hidden="true">
+
+  <!-- Image with alt="" is valid decorative -->
+  <img src="/spacer.gif" alt="">
+
+  <!-- Link with only img alt inside: should be OK -->
+  <a href="/photos/"><img src="/icon.png" alt="Photo gallery"></a>
+
+  <!-- Link with aria-label: should be OK -->
+  <a href="/settings/" aria-label="Settings page"></a>
+
+  <!-- Button with aria-label: should be OK -->
+  <button aria-label="Close dialog"></button>
+
+  <!-- Form input with aria-label: should be OK -->
+  <input type="text" aria-label="Search">
+
+  <!-- Form input with label[for]: should be OK -->
+  <label for="email-input">Email</label>
+  <input type="email" id="email-input" name="email">
+
+  <!-- aria-hidden on focusable: should warn -->
+  <button aria-hidden="true">Hidden button</button>
+  <a href="/hidden/" aria-hidden="true">Hidden link</a>
+
+  <!-- aria-hidden on non-focusable: should NOT warn -->
+  <span aria-hidden="true">Decorative text</span>
+
+  <!-- tabindex with aria-hidden: should warn -->
+  <div tabindex="0" aria-hidden="true">Focusable div</div>
+
+  <!-- tabindex=-1 with aria-hidden: should NOT warn -->
+  <div tabindex="-1" aria-hidden="true">Not focusable div</div>
+</body>
+</html>

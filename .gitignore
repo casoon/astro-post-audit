@@ -1,0 +1,26 @@
+# Rust
+/target/
+**/*.rs.bk
+# Cargo.lock is committed for binary crates
+
+# Node
+node_modules/
+npm/package-lock.json
+npm/bin/astro-post-audit
+npm/bin/astro-post-audit.exe
+!npm/bin/run.cjs
+!npm/bin/install.cjs
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build artifacts
+*.tar.gz
+*.zip

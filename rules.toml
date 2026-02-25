@@ -1,0 +1,127 @@
+# astro-post-audit default rules
+# Ziel: konsistente Index-Signale + grundlegende A11y-Heuristiken
+# Ohne Netzwerk, nur dist/ Analyse.
+
+[site]
+# Optional: kann auch via --site gesetzt werden
+# base_url = "https://example.com"
+
+[url_normalization]
+# Astro-typisch: /about/ statt /about oder /about/index.html
+trailing_slash = "always"   # always | never | ignore
+index_html = "forbid"       # forbid | allow
+
+[canonical]
+require = true
+absolute = true
+same_origin = true
+# Self-canonical ist oft gewünscht, aber kann bei bewusst kanonisierten Clustern stören.
+# Darum default = false, aber empfehlenswert für kleinere Seiten:
+self_reference = false
+
+[robots_meta]
+# noindex ist manchmal gewollt (z.B. Thank-you pages)
+allow_noindex = true
+# Wenn du grundsätzlich keine noindex Seiten im dist haben willst:
+fail_if_noindex = false
+
+[links]
+check_internal = true
+fail_on_broken = true
+# Tracking/Parameter auf internen Links sind oft ein Signal-Konflikt-Generator
+forbid_query_params_internal = true
+# Optional: Ressourcen/Assets prüfen (img/src, script/src, link[href])
+check_assets = false
+# Fragment-IDs prüfen (#section -> id existiert?)
+check_fragments = false
+# Seiten finden, auf die nie intern verlinkt wird
+detect_orphan_pages = false
+# Warnung bei http:// statt https:// internen Links
+check_mixed_content = true
+
+[sitemap]
+# sitemap.xml ist sehr empfehlenswert, aber nicht überall vorhanden
+require = false
+canonical_must_be_in_sitemap = true
+forbid_noncanonical_in_sitemap = false
+entries_must_exist_in_dist = true
+
+[robots_txt]
+require = false
+require_sitemap_link = false
+
+[html_basics]
+lang_attr_required = true
+title_required = true
+meta_description_required = false
+viewport_required = true
+# Längen-Heuristiken (warn wenn überschritten)
+title_max_length = 60
+meta_description_max_length = 160
+
+[headings]
+require_h1 = true
+single_h1 = true
+no_skip = false
+
+[a11y]
+# Heuristiken: schnell, statisch, keine Layout-Berechnung
+img_alt_required = true
+# Für dekorative Bilder erlauben wir Ausnahmen:
+allow_decorative_images = true   # role="presentation" OR aria-hidden="true"
+a_accessible_name_required = true
+button_name_required = true
+label_for_required = true
+warn_generic_link_text = true    # "hier", "click here", "mehr", "weiter" etc.
+aria_hidden_focusable_check = true
+
+[assets]
+# Asset-Checks sind optional und per --check-assets oder hier aktivierbar
+check_broken_assets = false
+check_image_dimensions = false
+# Größenlimits (in KB) - nur warn wenn gesetzt
+# max_image_size_kb = 500
+# max_js_size_kb = 300
+# max_css_size_kb = 100
+require_hashed_filenames = false
+
+[opengraph]
+# OpenGraph / Twitter Cards (alle optional, default off)
+require_og_title = false
+require_og_description = false
+require_og_image = false
+require_twitter_card = false
+
+[structured_data]
+# JSON-LD Structured Data (optional)
+check_json_ld = false
+require_json_ld = false
+
+[hreflang]
+# Hreflang-Checks (nur relevant bei mehrsprachigen Seiten)
+check_hreflang = false
+require_x_default = false
+require_self_reference = false
+require_reciprocal = false
+
+[security]
+# Security-Heuristiken
+check_target_blank = true   # target="_blank" ohne rel="noopener"
+check_mixed_content = true  # http:// Ressourcen
+warn_inline_scripts = false
+
+[content_quality]
+# Duplikat-Erkennung (alle optional, per --check-duplicates oder hier)
+detect_duplicate_titles = false
+detect_duplicate_descriptions = false
+detect_duplicate_h1 = false
+detect_duplicate_pages = false
+
+[external_links]
+# Externe Link-Checks (benötigt Netzwerk, per --check-external)
+enabled = false
+timeout_ms = 3000
+max_concurrent = 10
+fail_on_broken = false
+# allow_domains = ["example.com"]
+# block_domains = ["archive.org"]
