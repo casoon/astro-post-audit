@@ -114,6 +114,14 @@ jobs:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
 
+      - name: Install dependencies
+        working-directory: npm
+        run: npm ci
+
+      - name: Build TypeScript
+        working-directory: npm
+        run: npm run build
+
       - name: Publish to npm
         working-directory: npm
         run: npm publish --access public

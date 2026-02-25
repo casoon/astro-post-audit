@@ -1,10 +1,10 @@
 [package]
 name = "astro-post-audit"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Fast post-build auditor for Astro sites: SEO, links, and lightweight WCAG checks"
 license = "MIT"
-repository = "https://github.com/jseidel/astro-post-audit"
+repository = "https://github.com/casoon/astro-post-audit"
 keywords = ["astro", "seo", "audit", "accessibility", "static-site"]
 categories = ["command-line-utilities", "web-programming"]
 

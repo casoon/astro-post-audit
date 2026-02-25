@@ -1,6 +1,6 @@
 {
   "name": "astro-post-audit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Fast post-build auditor for Astro sites: SEO, links, and lightweight WCAG checks",
   "license": "MIT",
   "type": "module",
@@ -21,9 +21,7 @@
   },
   "files": [
     "bin/",
-    "dist/",
-    "README.md",
-    "LICENSE"
+    "dist/"
   ],
   "keywords": [
     "astro",
