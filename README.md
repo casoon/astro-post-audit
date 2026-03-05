@@ -81,7 +81,7 @@ Options:
   --strict                  Treat warnings as errors (exit 1)
   --format <fmt>            Output format: text | json [default: text]
   --config <path>           Path to rules.toml config file
-  --max-errors <n>          Stop after n errors
+  --max-errors <n>          Maximum number of errors (exact cap, output shows truncation)
   --include <glob>          Only check files matching pattern (repeatable)
   --exclude <glob>          Skip files matching pattern (repeatable)
   --no-sitemap-check        Skip sitemap.xml checks
@@ -90,6 +90,8 @@ Options:
   --check-security          Enable security heuristic checks
   --check-duplicates        Enable content duplicate detection
   --page-overview           Show page properties overview (no checks)
+  --update-baseline         Generate/update baseline file from current findings
+  --baseline <path>         Path to baseline file [default: .astro-post-audit-baseline]
   -V, --version             Print version
   -h, --help                Print help
 ```
@@ -104,7 +106,7 @@ Options:
 
 ## Configuration
 
-Create a `rules.toml` in your project root:
+Create a `rules.toml` in your project root (also auto-discovered as `.astro-post-audit.toml`):
 
 ```toml
 [site]
@@ -145,9 +147,41 @@ require_skip_link = false
 [structured_data]
 check_json_ld = false
 require_json_ld = false
+
+[severity]
+# Override severity per rule ID: error | warning | info | off
+# "links/orphan-page" = "info"
+# "html/title-too-long" = "off"
 ```
 
 See `rules.toml` in this repo for all options with documentation.
+
+### Severity Overrides
+
+The `[severity]` section lets you reclassify any rule per project:
+
+```toml
+[severity]
+"links/orphan-page" = "info"       # downgrade to informational
+"html/title-too-long" = "off"      # suppress entirely
+"a11y/img-alt-missing" = "error"   # upgrade to error
+```
+
+Supported levels: `error`, `warning`, `info`, `off`.
+
+### Baseline / Ignore
+
+When adopting astro-post-audit in an existing project, you can baseline current findings so they don't block CI:
+
+```bash
+# Generate baseline from current state
+astro-post-audit dist --update-baseline
+
+# Subsequent runs suppress baselined findings
+astro-post-audit dist --strict
+```
+
+The baseline file (`.astro-post-audit-baseline`) is a tab-separated list of `rule_id<TAB>file_path` entries. Commit it to your repo and fix issues incrementally. The report shows how many findings were suppressed by the baseline.
 
 ## What it checks
 
@@ -159,9 +193,11 @@ See `rules.toml` in this repo for all options with documentation.
 ### Internal Links
 - Broken link detection (target not in dist/)
 - Query parameter detection on internal links
+- Fragment validation (`#id` targets exist)
+- Orphan page detection
 
 ### Sitemap
-- Cross-reference canonical URLs with sitemap entries
+- Cross-reference canonical URLs with sitemap entries (normalized comparison)
 - Detect stale sitemap entries
 
 ### HTML Basics
@@ -183,6 +219,9 @@ See `rules.toml` in this repo for all options with documentation.
 ### Structured Data
 - JSON-LD presence check (`require_json_ld`)
 - JSON-LD syntax validation (`check_json_ld`)
+- Semantic validation: `@context` plausibility, `@type` presence
+- Type-specific required properties (Article → headline, Organization → name, etc.)
+- `@graph` array support
 
 ### Open Graph
 - `og:title`, `og:description`, `og:image`, `twitter:card` (all optional)
@@ -190,6 +229,11 @@ See `rules.toml` in this repo for all options with documentation.
 ### Security
 - `target="_blank"` without `rel="noopener"`
 - Mixed content detection (http in https pages)
+
+### Assets
+- Broken asset references (img, script, link)
+- Image dimension attributes (width/height)
+- Hashed filename detection for cache-busting
 
 ### Content Quality
 - Duplicate title, description, H1 detection
