@@ -25,11 +25,12 @@ pub fn load(path: &Path) -> HashSet<(String, String)> {
 
 /// Generate baseline content from current findings.
 pub fn generate(findings: &[Finding]) -> String {
-    let mut lines = Vec::new();
-    lines.push("# astro-post-audit baseline".to_string());
-    lines.push("# Generated automatically. Each line: rule_id<TAB>file".to_string());
-    lines.push("# Remove entries as you fix them.".to_string());
-    lines.push(String::new());
+    let mut lines = vec![
+        "# astro-post-audit baseline".to_string(),
+        "# Generated automatically. Each line: rule_id<TAB>file".to_string(),
+        "# Remove entries as you fix them.".to_string(),
+        String::new(),
+    ];
 
     // Deduplicate and sort for deterministic output
     let mut entries: Vec<(&str, &str)> = findings
