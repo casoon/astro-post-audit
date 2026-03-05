@@ -150,10 +150,20 @@ async function main() {
   const binDir = path.join(__dirname);
   const binaryPath = path.join(binDir, binaryName);
 
-  // Skip if binary already exists (e.g., local dev)
+  // Skip if binary already exists AND matches the expected version
   if (fs.existsSync(binaryPath)) {
-    console.log(`${PACKAGE} binary already exists, skipping download.`);
-    return;
+    try {
+      const out = execSync(`"${binaryPath}" --version`, { encoding: "utf-8", timeout: 5000 }).trim();
+      // Output format: "astro-post-audit 0.2.2"
+      const installedVersion = out.split(/\s+/).pop();
+      if (installedVersion === VERSION) {
+        console.log(`${PACKAGE} v${VERSION} already installed, skipping download.`);
+        return;
+      }
+      console.log(`${PACKAGE} version mismatch: installed ${installedVersion}, expected ${VERSION}. Re-downloading...`);
+    } catch {
+      console.log(`${PACKAGE} binary exists but version check failed. Re-downloading...`);
+    }
   }
 
   const url = getDownloadUrl(target);

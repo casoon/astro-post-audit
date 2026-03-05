@@ -1,6 +1,6 @@
 {
   "name": "@casoon/astro-post-audit",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Astro integration for post-build auditing: SEO, links, and lightweight WCAG checks",
   "license": "MIT",
   "type": "module",
