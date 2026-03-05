@@ -29,7 +29,6 @@ export interface RulesConfig {
     check_internal?: boolean;
     fail_on_broken?: boolean;
     forbid_query_params_internal?: boolean;
-    check_assets?: boolean;
     check_fragments?: boolean;
     detect_orphan_pages?: boolean;
     check_mixed_content?: boolean;
@@ -102,6 +101,9 @@ export interface RulesConfig {
     detect_duplicate_h1?: boolean;
     detect_duplicate_pages?: boolean;
   };
+  /** Custom severity overrides per rule ID. Maps rule IDs to 'error' | 'warning' | 'info' | 'off'. */
+  severity?: Record<string, 'error' | 'warning' | 'info' | 'off'>;
+  /** @deprecated Not yet implemented — will be ignored. */
   external_links?: {
     enabled?: boolean;
     timeout_ms?: number;
@@ -149,8 +151,9 @@ export interface PostAuditOptions {
 
 /**
  * Serialize a RulesConfig object to TOML format.
+ * @internal Exported for testing only.
  */
-function rulesToToml(rules: RulesConfig): string {
+export function rulesToToml(rules: RulesConfig): string {
   const lines: string[] = [];
 
   for (const [section, values] of Object.entries(rules)) {
@@ -158,13 +161,15 @@ function rulesToToml(rules: RulesConfig): string {
     lines.push(`[${section}]`);
     for (const [key, val] of Object.entries(values as Record<string, unknown>)) {
       if (val === undefined) continue;
+      // Quote keys that contain special chars (e.g. rule IDs like "html/lang-missing")
+      const tomlKey = /^[a-zA-Z0-9_-]+$/.test(key) ? key : `"${key}"`;
       if (typeof val === 'string') {
-        lines.push(`${key} = "${val}"`);
+        lines.push(`${tomlKey} = "${val}"`);
       } else if (Array.isArray(val)) {
         const items = val.map((v) => `"${v}"`).join(', ');
-        lines.push(`${key} = [${items}]`);
+        lines.push(`${tomlKey} = [${items}]`);
       } else {
-        lines.push(`${key} = ${val}`);
+        lines.push(`${tomlKey} = ${val}`);
       }
     }
     lines.push('');
@@ -193,6 +198,19 @@ export default function postAudit(options: PostAuditOptions = {}): AstroIntegrat
 
       'astro:build:done': ({ dir, logger }) => {
         if (options.disable) return;
+
+        // Validate mutual exclusion: config and rules cannot both be set
+        if (options.config && options.rules) {
+          throw new Error(
+            'astro-post-audit: "config" and "rules" are mutually exclusive. ' +
+              'Use "config" to point to a rules.toml file, OR use "rules" to provide inline config — not both.',
+          );
+        }
+
+        // Validate that rules is a non-empty object if provided
+        if (options.rules && typeof options.rules === 'object' && Object.keys(options.rules).length === 0) {
+          logger.warn('astro-post-audit: "rules" is an empty object — using default config.');
+        }
 
         const binaryPath = resolveBinaryPath();
         if (!binaryPath) {

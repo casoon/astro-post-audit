@@ -25,7 +25,6 @@ export interface RulesConfig {
         check_internal?: boolean;
         fail_on_broken?: boolean;
         forbid_query_params_internal?: boolean;
-        check_assets?: boolean;
         check_fragments?: boolean;
         detect_orphan_pages?: boolean;
         check_mixed_content?: boolean;
@@ -98,6 +97,9 @@ export interface RulesConfig {
         detect_duplicate_h1?: boolean;
         detect_duplicate_pages?: boolean;
     };
+    /** Custom severity overrides per rule ID. Maps rule IDs to 'error' | 'warning' | 'info' | 'off'. */
+    severity?: Record<string, 'error' | 'warning' | 'info' | 'off'>;
+    /** @deprecated Not yet implemented — will be ignored. */
     external_links?: {
         enabled?: boolean;
         timeout_ms?: number;
@@ -141,5 +143,10 @@ export interface PostAuditOptions {
     /** Throw an AstroError when the audit finds errors (fails the build). Default: false */
     throwOnError?: boolean;
 }
+/**
+ * Serialize a RulesConfig object to TOML format.
+ * @internal Exported for testing only.
+ */
+export declare function rulesToToml(rules: RulesConfig): string;
 export default function postAudit(options?: PostAuditOptions): AstroIntegration;
 //# sourceMappingURL=integration.d.ts.map

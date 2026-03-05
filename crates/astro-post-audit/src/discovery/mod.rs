@@ -94,13 +94,14 @@ impl SiteIndex {
             })
             .filter_map(|e| {
                 let abs = e.path().to_path_buf();
+                // Normalize path separators to forward slash for cross-platform glob matching
                 let rel = abs
                     .strip_prefix(&dist_path)
                     .ok()?
                     .to_string_lossy()
-                    .to_string();
+                    .replace('\\', "/");
 
-                // Apply include/exclude filters
+                // Apply include/exclude filters (patterns always use forward slashes)
                 if let Some(ref inc) = include_set {
                     if !inc.is_match(&rel) {
                         return None;

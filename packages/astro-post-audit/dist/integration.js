@@ -5,8 +5,9 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 /**
  * Serialize a RulesConfig object to TOML format.
+ * @internal Exported for testing only.
  */
-function rulesToToml(rules) {
+export function rulesToToml(rules) {
     const lines = [];
     for (const [section, values] of Object.entries(rules)) {
         if (values == null || typeof values !== 'object')
@@ -15,15 +16,17 @@ function rulesToToml(rules) {
         for (const [key, val] of Object.entries(values)) {
             if (val === undefined)
                 continue;
+            // Quote keys that contain special chars (e.g. rule IDs like "html/lang-missing")
+            const tomlKey = /^[a-zA-Z0-9_-]+$/.test(key) ? key : `"${key}"`;
             if (typeof val === 'string') {
-                lines.push(`${key} = "${val}"`);
+                lines.push(`${tomlKey} = "${val}"`);
             }
             else if (Array.isArray(val)) {
                 const items = val.map((v) => `"${v}"`).join(', ');
-                lines.push(`${key} = [${items}]`);
+                lines.push(`${tomlKey} = [${items}]`);
             }
             else {
-                lines.push(`${key} = ${val}`);
+                lines.push(`${tomlKey} = ${val}`);
             }
         }
         lines.push('');
@@ -47,6 +50,15 @@ export default function postAudit(options = {}) {
             'astro:build:done': ({ dir, logger }) => {
                 if (options.disable)
                     return;
+                // Validate mutual exclusion: config and rules cannot both be set
+                if (options.config && options.rules) {
+                    throw new Error('astro-post-audit: "config" and "rules" are mutually exclusive. ' +
+                        'Use "config" to point to a rules.toml file, OR use "rules" to provide inline config — not both.');
+                }
+                // Validate that rules is a non-empty object if provided
+                if (options.rules && typeof options.rules === 'object' && Object.keys(options.rules).length === 0) {
+                    logger.warn('astro-post-audit: "rules" is an empty object — using default config.');
+                }
                 const binaryPath = resolveBinaryPath();
                 if (!binaryPath) {
                     logger.warn('astro-post-audit binary not found. Run "npm rebuild @casoon/astro-post-audit".');

@@ -17,6 +17,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "test": "tsc && node --test dist/integration.test.js",
     "prepublishOnly": "tsc",
     "postinstall": "node bin/install.cjs"
   },

@@ -23,10 +23,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 check_title(page, &html, config, &mut findings);
             }
 
-            // meta description
-            if config.html_basics.meta_description_required {
-                check_meta_description(page, &html, config, &mut findings);
-            }
+            // meta description: presence check + length check (independent)
+            check_meta_description(page, &html, config, &mut findings);
 
             // viewport
             if config.html_basics.viewport_required {
@@ -130,19 +128,8 @@ fn check_meta_description(
 
     match html.select(&sel).next() {
         None => {
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "html/meta-description-missing".into(),
-                file: page.rel_path.clone(),
-                selector: "head".into(),
-                message: "Missing or empty meta description".into(),
-                help: "Add <meta name=\"description\" content=\"...\"> to <head>".into(),
-            });
-        }
-        Some(el) => {
-            let content = el.value().attr("content").unwrap_or("");
-            let trimmed = content.trim();
-            if trimmed.is_empty() {
+            // Only warn about missing description if required
+            if config.html_basics.meta_description_required {
                 findings.push(Finding {
                     level: Level::Warning,
                     rule_id: "html/meta-description-missing".into(),
@@ -151,7 +138,24 @@ fn check_meta_description(
                     message: "Missing or empty meta description".into(),
                     help: "Add <meta name=\"description\" content=\"...\"> to <head>".into(),
                 });
+            }
+        }
+        Some(el) => {
+            let content = el.value().attr("content").unwrap_or("");
+            let trimmed = content.trim();
+            if trimmed.is_empty() {
+                if config.html_basics.meta_description_required {
+                    findings.push(Finding {
+                        level: Level::Warning,
+                        rule_id: "html/meta-description-missing".into(),
+                        file: page.rel_path.clone(),
+                        selector: "head".into(),
+                        message: "Missing or empty meta description".into(),
+                        help: "Add <meta name=\"description\" content=\"...\"> to <head>".into(),
+                    });
+                }
             } else if let Some(max) = config.html_basics.meta_description_max_length {
+                // Length check runs independently, even if description is not required
                 if trimmed.len() > max {
                     findings.push(Finding {
                         level: Level::Warning,

@@ -13,6 +13,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         findings.extend(check_broken_assets(index, config));
     }
 
+    if config.assets.require_hashed_filenames {
+        findings.extend(check_hashed_filenames(index, config));
+    }
+
     if config.assets.max_image_size_kb.is_some()
         || config.assets.max_js_size_kb.is_some()
         || config.assets.max_css_size_kb.is_some()
@@ -162,6 +166,94 @@ fn check_asset_exists(
             help: "Fix the path or add the missing asset file".into(),
         });
     }
+}
+
+/// Check that referenced assets (JS, CSS) use hashed filenames for cache busting.
+/// A hashed filename contains a segment of 8+ hex/alphanumeric chars before the extension,
+/// e.g. `main.a1b2c3d4.js` or `style-DfQ4EE2a.css`.
+fn check_hashed_filenames(index: &SiteIndex, _config: &Config) -> Vec<Finding> {
+    index
+        .pages
+        .par_iter()
+        .flat_map(|page| {
+            let mut findings = Vec::new();
+            let html = page.parse_html();
+
+            // Check script[src] and link[rel=stylesheet][href]
+            let script_sel = Selector::parse("script[src]").unwrap();
+            for el in html.select(&script_sel) {
+                if let Some(src) = el.value().attr("src") {
+                    if should_check_asset(src) && !has_hash_in_filename(src) {
+                        findings.push(Finding {
+                            level: Level::Warning,
+                            rule_id: "assets/unhashed-filename".into(),
+                            file: page.rel_path.clone(),
+                            selector: format!("script[src='{}']", src),
+                            message: format!(
+                                "Script '{}' does not use a hashed filename",
+                                src
+                            ),
+                            help: "Use content hashing in filenames for cache busting (e.g. main.a1b2c3.js)".into(),
+                        });
+                    }
+                }
+            }
+
+            let link_sel = Selector::parse("link[rel='stylesheet'][href]").unwrap();
+            for el in html.select(&link_sel) {
+                if let Some(href) = el.value().attr("href") {
+                    if should_check_asset(href) && !has_hash_in_filename(href) {
+                        findings.push(Finding {
+                            level: Level::Warning,
+                            rule_id: "assets/unhashed-filename".into(),
+                            file: page.rel_path.clone(),
+                            selector: format!("link[href='{}']", href),
+                            message: format!(
+                                "Stylesheet '{}' does not use a hashed filename",
+                                href
+                            ),
+                            help: "Use content hashing in filenames for cache busting (e.g. style.a1b2c3.css)".into(),
+                        });
+                    }
+                }
+            }
+
+            findings
+        })
+        .collect()
+}
+
+/// Check if a filename contains a hash segment (8+ alphanumeric chars) before the extension.
+/// Matches patterns like: `main.a1b2c3d4.js`, `style-DfQ4EE2a.css`, `chunk.abc12345.mjs`
+fn has_hash_in_filename(path: &str) -> bool {
+    let clean = path.split('?').next().unwrap_or(path);
+    let clean = clean.split('#').next().unwrap_or(clean);
+    let filename = clean.rsplit('/').next().unwrap_or(clean);
+
+    // Split by '.' and check if any segment (except the last/extension) looks like a hash
+    let parts: Vec<&str> = filename.split('.').collect();
+    if parts.len() >= 3 {
+        // Check segments between first and last (extension)
+        for segment in &parts[1..parts.len() - 1] {
+            if segment.len() >= 8 && segment.chars().all(|c| c.is_ascii_alphanumeric()) {
+                return true;
+            }
+        }
+    }
+
+    // Also check for hash in hyphenated segments: `chunk-abc12345.js`
+    let stem = if parts.len() >= 2 {
+        parts[..parts.len() - 1].join(".")
+    } else {
+        filename.to_string()
+    };
+    for segment in stem.split('-') {
+        if segment.len() >= 8 && segment.chars().all(|c| c.is_ascii_alphanumeric()) {
+            return true;
+        }
+    }
+
+    false
 }
 
 fn check_asset_sizes(index: &SiteIndex, config: &Config) -> Vec<Finding> {

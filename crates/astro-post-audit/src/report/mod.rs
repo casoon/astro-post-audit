@@ -29,6 +29,14 @@ pub struct Summary {
     pub warnings: usize,
     pub info: usize,
     pub files_checked: usize,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub truncated: bool,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub ignored: usize,
+}
+
+fn is_zero(v: &usize) -> bool {
+    *v == 0
 }
 
 impl Summary {
@@ -41,6 +49,8 @@ impl Summary {
                 .count(),
             info: findings.iter().filter(|f| f.level == Level::Info).count(),
             files_checked: 0, // set externally
+            truncated: false,
+            ignored: 0,
         }
     }
 }
@@ -118,6 +128,23 @@ impl Reporter {
             summary.warnings.to_string().yellow(),
             summary.info.to_string().blue(),
         );
+
+        if summary.ignored > 0 {
+            println!(
+                "  {} {} findings suppressed by baseline",
+                summary.ignored.to_string().dimmed(),
+                "".dimmed()
+            );
+        }
+
+        if summary.truncated {
+            println!(
+                "{}",
+                "  (output truncated due to --max-errors limit)"
+                    .yellow()
+                    .dimmed()
+            );
+        }
 
         Ok(())
     }

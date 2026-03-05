@@ -6,6 +6,7 @@
  */
 
 const { execSync } = require("child_process");
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
@@ -81,6 +82,68 @@ async function download(url, dest) {
   });
 }
 
+/**
+ * Download a URL and return the contents as a Buffer.
+ */
+async function downloadToBuffer(url) {
+  return new Promise((resolve, reject) => {
+    const follow = (url, redirects = 0) => {
+      if (redirects > 5) {
+        reject(new Error("Too many redirects"));
+        return;
+      }
+
+      https.get(url, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          follow(res.headers.location, redirects + 1);
+          return;
+        }
+
+        if (res.statusCode !== 200) {
+          reject(new Error(`Download failed: HTTP ${res.statusCode} from ${url}`));
+          return;
+        }
+
+        const chunks = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("end", () => resolve(Buffer.concat(chunks)));
+      }).on("error", reject);
+    };
+
+    follow(url);
+  });
+}
+
+/**
+ * Verify SHA256 hash of a file against the expected hash from the checksum file.
+ * The checksum file format is: "<hex_hash>  <filename>\n"
+ */
+function verifySha256(filePath, checksumContent, archiveFilename) {
+  const fileBuffer = fs.readFileSync(filePath);
+  const actualHash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
+
+  // Parse checksum file: each line is "<hash>  <filename>" (two spaces)
+  const lines = checksumContent.toString("utf-8").trim().split("\n");
+  for (const line of lines) {
+    const match = line.match(/^([0-9a-f]{64})\s+(.+)$/);
+    if (match && match[2].trim() === archiveFilename) {
+      const expectedHash = match[1];
+      if (actualHash !== expectedHash) {
+        throw new Error(
+          `SHA256 mismatch for ${archiveFilename}!\n` +
+          `  Expected: ${expectedHash}\n` +
+          `  Actual:   ${actualHash}\n` +
+          "The downloaded binary may have been tampered with. Aborting install."
+        );
+      }
+      console.log(`  SHA256 verified: ${actualHash}`);
+      return;
+    }
+  }
+
+  console.warn(`  Warning: SHA256 checksum not found for ${archiveFilename} — skipping verification.`);
+}
+
 async function main() {
   const target = getPlatformTarget();
   const binaryName = getBinaryName();
@@ -95,6 +158,7 @@ async function main() {
 
   const url = getDownloadUrl(target);
   const archiveExt = process.platform === "win32" ? ".zip" : ".tar.gz";
+  const archiveFilename = `${PACKAGE}-v${VERSION}-${target}${archiveExt}`;
   const archivePath = path.join(binDir, `download${archiveExt}`);
 
   console.log(`Downloading ${PACKAGE} v${VERSION} for ${target}...`);
@@ -102,6 +166,22 @@ async function main() {
 
   try {
     await download(url, archivePath);
+
+    // Verify SHA256 checksum
+    const checksumUrl = `${url}.sha256`;
+    try {
+      const checksumData = await downloadToBuffer(checksumUrl);
+      verifySha256(archivePath, checksumData, archiveFilename);
+    } catch (checksumErr) {
+      if (checksumErr.message.includes("SHA256 mismatch")) {
+        // Hash mismatch is fatal — abort immediately
+        fs.unlinkSync(archivePath);
+        throw checksumErr;
+      }
+      // Checksum file not available (older release) — warn and continue
+      console.warn(`  Warning: Could not download checksum file: ${checksumErr.message}`);
+      console.warn("  Skipping SHA256 verification.");
+    }
 
     // Extract
     if (process.platform === "win32") {

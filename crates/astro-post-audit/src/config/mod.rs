@@ -1,5 +1,6 @@
 use anyhow::Result;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::path::Path;
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -22,6 +23,25 @@ pub struct Config {
     pub content_quality: ContentQualityConfig,
     pub external_links: ExternalLinksConfig,
     pub robots_txt: RobotsTxtConfig,
+    pub severity: SeverityConfig,
+}
+
+/// Custom severity overrides per rule ID.
+/// Maps rule IDs (e.g. "links/orphan-page") to severity levels.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct SeverityConfig {
+    #[serde(flatten)]
+    pub overrides: HashMap<String, SeverityLevel>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum SeverityLevel {
+    Error,
+    Warning,
+    Info,
+    Off,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -74,7 +94,6 @@ pub struct LinksConfig {
     pub check_internal: bool,
     pub fail_on_broken: bool,
     pub forbid_query_params_internal: bool,
-    pub check_assets: bool,
     pub check_fragments: bool,
     pub detect_orphan_pages: bool,
     pub check_mixed_content: bool,
@@ -229,7 +248,6 @@ impl Default for LinksConfig {
             check_internal: true,
             fail_on_broken: true,
             forbid_query_params_internal: true,
-            check_assets: false,
             check_fragments: false,
             detect_orphan_pages: false,
             check_mixed_content: true,
@@ -313,6 +331,18 @@ impl Config {
     pub fn from_file(path: &Path) -> Result<Self> {
         let content = std::fs::read_to_string(path)?;
         let config: Config = toml::from_str(&content)?;
+        config.warn_deprecated();
         Ok(config)
+    }
+
+    /// Emit warnings for deprecated/unimplemented config sections.
+    pub fn warn_deprecated(&self) {
+        if self.external_links.enabled {
+            eprintln!(
+                "Warning: [external_links] is configured but not yet implemented. \
+                 External link checking will be available in a future release. \
+                 This section is currently ignored."
+            );
+        }
     }
 }

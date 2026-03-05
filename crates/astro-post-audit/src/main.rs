@@ -3,6 +3,7 @@ use clap::Parser;
 use std::path::{Path, PathBuf};
 use std::process;
 
+mod baseline;
 mod checks;
 mod config;
 mod discovery;
@@ -76,6 +77,14 @@ struct Cli {
     /// Show page properties overview (informational, no checks)
     #[arg(long)]
     page_overview: bool,
+
+    /// Generate/update a baseline file from current findings
+    #[arg(long)]
+    update_baseline: bool,
+
+    /// Path to baseline ignore file (default: .astro-post-audit-baseline)
+    #[arg(long)]
+    baseline: Option<PathBuf>,
 }
 
 fn main() {
@@ -217,9 +226,83 @@ fn run() -> Result<i32> {
     run_check!(checks::content_quality::check_all(&site_index, &config));
     let _ = error_count; // used by run_check! macro for early-stop
 
+    // --update-baseline: write baseline file and exit
+    let baseline_path = cli.baseline.clone().unwrap_or_else(|| {
+        cli.dist_path
+            .parent()
+            .unwrap_or(Path::new("."))
+            .join(".astro-post-audit-baseline")
+    });
+    if cli.update_baseline {
+        let content = baseline::generate(&findings);
+        std::fs::write(&baseline_path, &content)?;
+        eprintln!(
+            "Baseline written to '{}' ({} entries)",
+            baseline_path.display(),
+            findings.len()
+        );
+        return Ok(0);
+    }
+
+    // Apply severity overrides from [severity] config section
+    if !config.severity.overrides.is_empty() {
+        use config::SeverityLevel;
+        findings.retain_mut(|f| {
+            if let Some(override_level) = config.severity.overrides.get(&f.rule_id) {
+                match override_level {
+                    SeverityLevel::Off => return false, // remove finding entirely
+                    SeverityLevel::Error => f.level = report::Level::Error,
+                    SeverityLevel::Warning => f.level = report::Level::Warning,
+                    SeverityLevel::Info => f.level = report::Level::Info,
+                }
+            }
+            true
+        });
+    }
+
+    // Apply baseline: suppress known findings
+    let ignored_count = if baseline_path.exists() && !cli.update_baseline {
+        let baseline_entries = baseline::load(&baseline_path);
+        if !baseline_entries.is_empty() {
+            let (kept, ignored) = baseline::apply(findings, &baseline_entries);
+            findings = kept;
+            ignored
+        } else {
+            0
+        }
+    } else {
+        0
+    };
+
+    // Enforce exact --max-errors cap: keep only the first N errors (plus all non-errors before them)
+    let truncated = if let Some(max) = max_errors {
+        let total_errors = findings
+            .iter()
+            .filter(|f| f.level == report::Level::Error)
+            .count();
+        if total_errors > max {
+            let mut error_seen = 0usize;
+            findings.retain(|f| {
+                if f.level == report::Level::Error {
+                    error_seen += 1;
+                    error_seen <= max
+                } else {
+                    true // keep all warnings/info
+                }
+            });
+            true
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
     // Generate report
     let mut summary = Summary::from_findings(&findings);
     summary.files_checked = site_index.pages.len();
+    summary.truncated = truncated;
+    summary.ignored = ignored_count;
     let reporter = Reporter::new(cli.format);
     reporter.print(&findings, &summary)?;
 

@@ -30,8 +30,6 @@ check_internal = true
 fail_on_broken = true
 # Tracking/Parameter auf internen Links sind oft ein Signal-Konflikt-Generator
 forbid_query_params_internal = true
-# Optional: Ressourcen/Assets prüfen (img/src, script/src, link[href])
-check_assets = false
 # Fragment-IDs prüfen (#section -> id existiert?)
 check_fragments = false
 # Seiten finden, auf die nie intern verlinkt wird
@@ -118,8 +116,16 @@ detect_duplicate_descriptions = false
 detect_duplicate_h1 = false
 detect_duplicate_pages = false
 
+[severity]
+# Severity-Overrides pro Rule-ID (error|warning|info|off)
+# Beispiele:
+# "links/orphan-page" = "info"
+# "html/title-too-long" = "off"
+
 [external_links]
-# Externe Link-Checks (benötigt Netzwerk, per --check-external)
+# DEPRECATED: Externe Link-Checks sind noch nicht implementiert.
+# Diese Sektion wird aktuell ignoriert und in einer zukünftigen Version verfügbar sein.
+# Bei enabled = true wird eine Warnung ausgegeben.
 enabled = false
 timeout_ms = 3000
 max_concurrent = 10

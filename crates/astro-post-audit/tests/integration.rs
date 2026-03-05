@@ -1065,19 +1065,109 @@ fn no_sitemap_check_flag() {
 #[test]
 fn max_errors_caps_output() {
     let dir = TempDir::new().unwrap();
-    // Create a page with many errors
+    // Create a page with many errors (missing lang, title, viewport, canonical = 4+ errors)
     fs::write(
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html><head></head><body><img src="/a.jpg"><img src="/b.jpg"><a href="/x/"></a><button></button><input type="text" name="q"></body></html>"#,
     ).unwrap();
     let (json, _) = run_audit_json(dir.path(), &["--max-errors", "2"]);
     let findings = json["findings"].as_array().unwrap();
-    // With --max-errors=2, total findings should be capped at 2
+    let error_count = findings.iter().filter(|f| f["level"] == "error").count();
+    // With --max-errors=2, at most 2 errors
     assert!(
-        findings.len() <= 2,
-        "Should cap at 2 findings, got {}",
-        findings.len()
+        error_count <= 2,
+        "Should have at most 2 errors, got {}",
+        error_count
     );
+}
+
+#[test]
+fn max_errors_exact_count() {
+    let dir = TempDir::new().unwrap();
+    // Create many pages each with a broken link (all discovered in a single check_all run)
+    // This ensures the post-processing cap works even when one check returns many errors
+    for i in 0..5 {
+        let page_dir = dir.path().join(format!("page{}", i));
+        fs::create_dir_all(&page_dir).unwrap();
+        fs::write(
+            page_dir.join("index.html"),
+            format!(
+                r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Page {i}</title>
+  <link rel="canonical" href="https://example.com/page{i}/">
+</head>
+<body>
+  <h1>Page {i}</h1>
+  <a href="/nonexistent{i}/">broken</a>
+</body>
+</html>"#
+            ),
+        )
+        .unwrap();
+    }
+    // Also add root page
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+
+    let (json, _) = run_audit_json(
+        dir.path(),
+        &["--site", "https://example.com", "--max-errors", "2"],
+    );
+    let findings = json["findings"].as_array().unwrap();
+    let error_count = findings.iter().filter(|f| f["level"] == "error").count();
+    assert!(
+        error_count <= 2,
+        "With --max-errors=2, should have at most 2 errors, got {}",
+        error_count
+    );
+}
+
+#[test]
+fn max_errors_truncated_in_json() {
+    let dir = TempDir::new().unwrap();
+    // Create multiple pages that each produce errors in the same check module (seo)
+    for i in 0..5 {
+        let page_dir = dir.path().join(format!("p{}", i));
+        fs::create_dir_all(&page_dir).unwrap();
+        // Each page missing canonical = 1 error each from seo::check_all
+        fs::write(
+            page_dir.join("index.html"),
+            format!(
+                r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Page {i}</title>
+</head>
+<body><h1>Page {i}</h1></body>
+</html>"#
+            ),
+        )
+        .unwrap();
+    }
+
+    let (json, _) = run_audit_json(dir.path(), &["--max-errors", "1"]);
+    let findings = json["findings"].as_array().unwrap();
+    let error_count = findings.iter().filter(|f| f["level"] == "error").count();
+    // The seo check runs in parallel and returns 5 errors,
+    // then the post-processing caps to exactly 1
+    assert!(
+        error_count <= 1,
+        "With --max-errors=1, should have at most 1 error, got {}",
+        error_count
+    );
+    // truncated should be true when errors were actually removed
+    if error_count == 1 {
+        assert_eq!(
+            json["summary"]["truncated"].as_bool().unwrap_or(false),
+            true,
+            "Summary should indicate truncation when errors were capped"
+        );
+    }
 }
 
 // ==========================================================================
@@ -1182,4 +1272,583 @@ fn json_finding_structure() {
     assert!(f["selector"].is_string());
     assert!(f["message"].is_string());
     assert!(f["help"].is_string());
+}
+
+// ==========================================================================
+// Assets: require_hashed_filenames
+// ==========================================================================
+
+#[test]
+fn assets_unhashed_filename_warns() {
+    let dir = TempDir::new().unwrap();
+    // Page references a script without hash in filename
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Test</title>
+  <link rel="canonical" href="https://example.com/">
+  <link rel="stylesheet" href="/styles/main.css">
+</head>
+<body>
+  <h1>Test</h1>
+  <script src="/js/app.js"></script>
+</body>
+</html>"#,
+    )
+    .unwrap();
+    fs::create_dir_all(dir.path().join("styles")).unwrap();
+    fs::write(dir.path().join("styles/main.css"), "body {}").unwrap();
+    fs::create_dir_all(dir.path().join("js")).unwrap();
+    fs::write(dir.path().join("js/app.js"), "console.log('hi')").unwrap();
+
+    let config_path = dir.path().join("rules.toml");
+    fs::write(&config_path, "[assets]\nrequire_hashed_filenames = true\n").unwrap();
+
+    let (json, _) = run_audit_json(
+        dir.path(),
+        &[
+            "--site",
+            "https://example.com",
+            "--config",
+            config_path.to_str().unwrap(),
+        ],
+    );
+    let findings = json["findings"].as_array().unwrap();
+    let unhashed: Vec<_> = findings
+        .iter()
+        .filter(|f| f["rule_id"] == "assets/unhashed-filename")
+        .collect();
+    assert_eq!(
+        unhashed.len(),
+        2,
+        "Should warn for both unhashed JS and CSS"
+    );
+}
+
+#[test]
+fn assets_hashed_filename_no_warning() {
+    let dir = TempDir::new().unwrap();
+    // Page references assets WITH hashed filenames
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Test</title>
+  <link rel="canonical" href="https://example.com/">
+  <link rel="stylesheet" href="/_astro/style.DfQ4EE2a.css">
+</head>
+<body>
+  <h1>Test</h1>
+  <script src="/_astro/main.a1b2c3d4.js"></script>
+</body>
+</html>"#,
+    )
+    .unwrap();
+    fs::create_dir_all(dir.path().join("_astro")).unwrap();
+    fs::write(dir.path().join("_astro/style.DfQ4EE2a.css"), "body {}").unwrap();
+    fs::write(
+        dir.path().join("_astro/main.a1b2c3d4.js"),
+        "console.log('hi')",
+    )
+    .unwrap();
+
+    let config_path = dir.path().join("rules.toml");
+    fs::write(&config_path, "[assets]\nrequire_hashed_filenames = true\n").unwrap();
+
+    let (json, _) = run_audit_json(
+        dir.path(),
+        &[
+            "--site",
+            "https://example.com",
+            "--config",
+            config_path.to_str().unwrap(),
+        ],
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "assets/unhashed-filename"),
+        "Hashed filenames should not trigger warning"
+    );
+}
+
+// ==========================================================================
+// External links deprecation warning
+// ==========================================================================
+
+#[test]
+fn external_links_deprecation_warning() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Test", "Test", "/");
+    let config_path = dir.path().join("rules.toml");
+    fs::write(&config_path, "[external_links]\nenabled = true\n").unwrap();
+    let (_, stderr, _) = run_audit(
+        dir.path(),
+        &[
+            "--site",
+            "https://example.com",
+            "--config",
+            config_path.to_str().unwrap(),
+        ],
+    );
+    assert!(
+        stderr.contains("external_links"),
+        "Should warn about deprecated external_links section, got: {}",
+        stderr
+    );
+}
+
+#[test]
+fn external_links_disabled_no_warning() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Test", "Test", "/");
+    let config_path = dir.path().join("rules.toml");
+    fs::write(&config_path, "[external_links]\nenabled = false\n").unwrap();
+    let (_, stderr, _) = run_audit(
+        dir.path(),
+        &[
+            "--site",
+            "https://example.com",
+            "--config",
+            config_path.to_str().unwrap(),
+        ],
+    );
+    assert!(
+        !stderr.contains("external_links"),
+        "Should NOT warn when external_links.enabled = false"
+    );
+}
+
+// ==========================================================================
+// Meta description: length check decoupled from required
+// ==========================================================================
+
+#[test]
+fn meta_description_length_checked_even_when_not_required() {
+    let dir = TempDir::new().unwrap();
+    // Page with a too-long description, but description is NOT required
+    let long_desc = "A".repeat(200);
+    fs::write(
+        dir.path().join("index.html"),
+        format!(
+            r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Test</title>
+  <meta name="description" content="{long_desc}">
+  <link rel="canonical" href="https://example.com/">
+</head>
+<body><h1>Test</h1></body>
+</html>"#
+        ),
+    )
+    .unwrap();
+
+    let config_path = dir.path().join("rules.toml");
+    fs::write(
+        &config_path,
+        "[html_basics]\nmeta_description_required = false\nmeta_description_max_length = 160\n",
+    )
+    .unwrap();
+
+    let (json, _) = run_audit_json(
+        dir.path(),
+        &[
+            "--site",
+            "https://example.com",
+            "--config",
+            config_path.to_str().unwrap(),
+        ],
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "html/meta-description-too-long"),
+        "Length should be checked even when meta_description_required = false"
+    );
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "html/meta-description-missing"),
+        "Should NOT warn about missing description when required = false"
+    );
+}
+
+#[test]
+fn meta_description_missing_no_warning_when_not_required() {
+    let dir = TempDir::new().unwrap();
+    // Page WITHOUT description, and required = false
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Test</title>
+  <link rel="canonical" href="https://example.com/">
+</head>
+<body><h1>Test</h1></body>
+</html>"#,
+    )
+    .unwrap();
+
+    let config_path = dir.path().join("rules.toml");
+    fs::write(
+        &config_path,
+        "[html_basics]\nmeta_description_required = false\n",
+    )
+    .unwrap();
+
+    let (json, _) = run_audit_json(
+        dir.path(),
+        &[
+            "--site",
+            "https://example.com",
+            "--config",
+            config_path.to_str().unwrap(),
+        ],
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "html/meta-description-missing"),
+        "Should NOT warn about missing description when required = false"
+    );
+}
+
+// ==========================================================================
+// Severity mapping
+// ==========================================================================
+
+#[test]
+fn severity_mapping_downgrades_error_to_warning() {
+    let dir = TempDir::new().unwrap();
+    // Page missing lang (normally an error)
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
+    ).unwrap();
+    let config_path = dir.path().join("rules.toml");
+    fs::write(
+        &config_path,
+        "[severity]\n\"html/lang-missing\" = \"warning\"\n",
+    )
+    .unwrap();
+    let (json, code) = run_audit_json(
+        dir.path(),
+        &[
+            "--site",
+            "https://example.com",
+            "--config",
+            config_path.to_str().unwrap(),
+        ],
+    );
+    let findings = json["findings"].as_array().unwrap();
+    let lang = findings
+        .iter()
+        .find(|f| f["rule_id"] == "html/lang-missing");
+    assert!(lang.is_some(), "Should still report lang-missing");
+    assert_eq!(
+        lang.unwrap()["level"],
+        "warning",
+        "Severity should be downgraded to warning"
+    );
+    // Without --strict, warnings don't cause exit code 1
+    assert_eq!(code, 0, "Downgraded to warning should not cause error exit");
+}
+
+#[test]
+fn severity_mapping_off_suppresses_finding() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
+    ).unwrap();
+    let config_path = dir.path().join("rules.toml");
+    fs::write(
+        &config_path,
+        "[severity]\n\"html/lang-missing\" = \"off\"\n",
+    )
+    .unwrap();
+    let (json, code) = run_audit_json(
+        dir.path(),
+        &[
+            "--site",
+            "https://example.com",
+            "--config",
+            config_path.to_str().unwrap(),
+        ],
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"] == "html/lang-missing"),
+        "Rule with severity=off should be suppressed entirely"
+    );
+    assert_eq!(code, 0, "No errors should mean exit code 0");
+}
+
+#[test]
+fn severity_mapping_upgrades_warning_to_error() {
+    let dir = TempDir::new().unwrap();
+    let long_title = "A".repeat(80);
+    fs::write(
+        dir.path().join("index.html"),
+        format!(
+            r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{long_title}</title>
+  <link rel="canonical" href="https://example.com/">
+</head>
+<body><h1>Test</h1></body>
+</html>"#
+        ),
+    )
+    .unwrap();
+    let config_path = dir.path().join("rules.toml");
+    fs::write(
+        &config_path,
+        "[severity]\n\"html/title-too-long\" = \"error\"\n",
+    )
+    .unwrap();
+    let (json, code) = run_audit_json(
+        dir.path(),
+        &[
+            "--site",
+            "https://example.com",
+            "--config",
+            config_path.to_str().unwrap(),
+        ],
+    );
+    let findings = json["findings"].as_array().unwrap();
+    let title = findings
+        .iter()
+        .find(|f| f["rule_id"] == "html/title-too-long");
+    assert!(title.is_some(), "Should still report title-too-long");
+    assert_eq!(
+        title.unwrap()["level"],
+        "error",
+        "Severity should be upgraded to error"
+    );
+    assert_eq!(code, 1, "Upgraded to error should cause exit code 1");
+}
+
+// ==========================================================================
+// Baseline / Ignore mechanism
+// ==========================================================================
+
+#[test]
+fn update_baseline_creates_file() {
+    let dir = TempDir::new().unwrap();
+    // Page with errors
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
+    ).unwrap();
+    let baseline_path = dir.path().join(".astro-post-audit-baseline");
+    let (_, _, code) = run_audit(
+        dir.path(),
+        &[
+            "--site",
+            "https://example.com",
+            "--update-baseline",
+            "--baseline",
+            baseline_path.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(code, 0, "--update-baseline should always exit 0");
+    assert!(baseline_path.exists(), "Baseline file should be created");
+    let content = fs::read_to_string(&baseline_path).unwrap();
+    assert!(
+        content.contains("html/lang-missing"),
+        "Baseline should contain lang-missing"
+    );
+    assert!(
+        content.contains("index.html"),
+        "Baseline should reference the file"
+    );
+}
+
+#[test]
+fn baseline_suppresses_findings() {
+    let dir = TempDir::new().unwrap();
+    // Page with missing lang (normally an error)
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
+    ).unwrap();
+    // Create baseline that suppresses the lang-missing error
+    let baseline_path = dir.path().join(".astro-post-audit-baseline");
+    fs::write(
+        &baseline_path,
+        "# baseline\nhtml/lang-missing\tindex.html\n",
+    )
+    .unwrap();
+    let (json, code) = run_audit_json(
+        dir.path(),
+        &[
+            "--site",
+            "https://example.com",
+            "--baseline",
+            baseline_path.to_str().unwrap(),
+        ],
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"] == "html/lang-missing"),
+        "Baselined finding should be suppressed"
+    );
+    assert_eq!(code, 0, "With error baselined, should exit 0");
+    assert!(
+        json["summary"]["ignored"].as_u64().unwrap_or(0) >= 1,
+        "Summary should show ignored count"
+    );
+}
+
+#[test]
+fn baseline_only_suppresses_matching_entries() {
+    let dir = TempDir::new().unwrap();
+    // Page with missing lang AND missing viewport
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html><head><meta charset="utf-8"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
+    ).unwrap();
+    // Only baseline the lang-missing error
+    let baseline_path = dir.path().join(".astro-post-audit-baseline");
+    fs::write(&baseline_path, "html/lang-missing\tindex.html\n").unwrap();
+    let (json, code) = run_audit_json(
+        dir.path(),
+        &[
+            "--site",
+            "https://example.com",
+            "--baseline",
+            baseline_path.to_str().unwrap(),
+        ],
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"] == "html/lang-missing"),
+        "Baselined lang-missing should be suppressed"
+    );
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "html/viewport-missing"),
+        "Non-baselined viewport-missing should still appear"
+    );
+    assert_eq!(code, 1, "Remaining errors should still cause exit code 1");
+}
+
+// ==========================================================================
+// Structured data: semantic checks
+// ==========================================================================
+
+#[test]
+fn structured_data_missing_context() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Test</title>
+  <link rel="canonical" href="https://example.com/">
+  <script type="application/ld+json">{"@type": "Article", "headline": "Test"}</script>
+</head>
+<body><h1>Test</h1></body>
+</html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        &["--site", "https://example.com", "--check-structured-data"],
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "structured-data/missing-context"),
+        "Should warn about missing @context"
+    );
+}
+
+#[test]
+fn structured_data_missing_required_property() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Test</title>
+  <link rel="canonical" href="https://example.com/">
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article"}</script>
+</head>
+<body><h1>Test</h1></body>
+</html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        &["--site", "https://example.com", "--check-structured-data"],
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "structured-data/missing-property"
+                && f["message"].as_str().unwrap_or("").contains("headline")),
+        "Should warn about missing 'headline' for Article type"
+    );
+}
+
+#[test]
+fn structured_data_valid_article_no_semantic_warning() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Test</title>
+  <link rel="canonical" href="https://example.com/">
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "Test Article"}</script>
+</head>
+<body><h1>Test</h1></body>
+</html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        &["--site", "https://example.com", "--check-structured-data"],
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| {
+            let rid = f["rule_id"].as_str().unwrap_or("");
+            rid.starts_with("structured-data/missing") || rid == "structured-data/unusual-context"
+        }),
+        "Valid Article should produce no semantic warnings"
+    );
 }

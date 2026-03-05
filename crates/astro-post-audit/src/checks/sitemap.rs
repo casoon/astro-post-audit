@@ -1,9 +1,22 @@
 use url::Url;
 
-use crate::config::Config;
+use crate::config::{Config, UrlNormalizationConfig};
 use crate::discovery::SiteIndex;
 use crate::normalize;
 use crate::report::{Finding, Level};
+
+/// Normalize a full URL using the configured normalization rules.
+/// Returns the URL with its path normalized (trailing slash, index.html handling).
+fn normalize_url(url_str: &str, norm_config: &UrlNormalizationConfig) -> String {
+    if let Ok(parsed) = Url::parse(url_str) {
+        let norm_path = normalize::normalize_path(parsed.path(), norm_config);
+        let mut rebuilt = parsed.clone();
+        rebuilt.set_path(&norm_path);
+        rebuilt.to_string()
+    } else {
+        url_str.to_string()
+    }
+}
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     let mut findings = Vec::new();
@@ -28,38 +41,23 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         return findings;
     }
 
-    // Check: canonical URLs should be in sitemap
-    // Normalize both canonical and sitemap URLs for reliable comparison
-    if config.sitemap.canonical_must_be_in_sitemap {
-        let normalized_sitemap: std::collections::HashSet<String> = index
-            .sitemap_urls
-            .iter()
-            .filter_map(|u| {
-                Url::parse(u).ok().map(|parsed| {
-                    let norm_path =
-                        normalize::normalize_path(parsed.path(), &config.url_normalization);
-                    let mut rebuilt = parsed.clone();
-                    rebuilt.set_path(&norm_path);
-                    rebuilt.to_string()
-                })
-            })
-            .collect();
+    let norm = &config.url_normalization;
 
+    // Build normalized sitemap URL set (used by multiple checks)
+    let normalized_sitemap: std::collections::HashSet<String> = index
+        .sitemap_urls
+        .iter()
+        .map(|u| normalize_url(u, norm))
+        .collect();
+
+    // Check: canonical URLs should be in sitemap
+    if config.sitemap.canonical_must_be_in_sitemap {
         for page in &index.pages {
             if page.noindex {
                 continue; // noindex pages shouldn't be in sitemap
             }
             if let Some(ref canonical) = page.canonical {
-                // Normalize the canonical URL too
-                let norm_canonical = if let Ok(parsed) = Url::parse(canonical) {
-                    let norm_path =
-                        normalize::normalize_path(parsed.path(), &config.url_normalization);
-                    let mut rebuilt = parsed.clone();
-                    rebuilt.set_path(&norm_path);
-                    rebuilt.to_string()
-                } else {
-                    canonical.clone()
-                };
+                let norm_canonical = normalize_url(canonical, norm);
 
                 if !normalized_sitemap.contains(&norm_canonical) {
                     findings.push(Finding {
@@ -82,7 +80,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     if config.sitemap.entries_must_exist_in_dist {
         for url_str in &index.sitemap_urls {
             if let Ok(parsed) = Url::parse(url_str) {
-                let route = normalize::normalize_path(parsed.path(), &config.url_normalization);
+                let route = normalize::normalize_path(parsed.path(), norm);
                 if !index.route_exists(&route) {
                     findings.push(Finding {
                         level: Level::Warning,
@@ -104,12 +102,15 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     if config.sitemap.forbid_noncanonical_in_sitemap {
         for url_str in &index.sitemap_urls {
             if let Ok(parsed) = Url::parse(url_str) {
-                let route = normalize::normalize_path(parsed.path(), &config.url_normalization);
+                let route = normalize::normalize_path(parsed.path(), norm);
                 // Find the page for this route
                 if let Some(&idx) = index.route_to_index.get(&route) {
                     let page = &index.pages[idx];
                     if let Some(ref canonical) = page.canonical {
-                        if canonical != url_str {
+                        // Compare normalized forms to avoid false positives
+                        let norm_sitemap_url = normalize_url(url_str, norm);
+                        let norm_canonical = normalize_url(canonical, norm);
+                        if norm_canonical != norm_sitemap_url {
                             findings.push(Finding {
                                 level: Level::Warning,
                                 rule_id: "sitemap/non-canonical-entry".into(),
