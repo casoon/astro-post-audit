@@ -17,18 +17,12 @@ describe('postAudit', () => {
     it('accepts all option types', () => {
         const options = {
             strict: true,
-            format: 'json',
             maxErrors: 5,
-            include: ['**/*.html'],
-            exclude: ['drafts/**'],
-            noSitemapCheck: true,
-            checkAssets: true,
-            checkStructuredData: true,
-            checkSecurity: true,
-            checkDuplicates: true,
             pageOverview: false,
+            output: 'audit-report.json',
             disable: false,
             throwOnError: true,
+            rules: { canonical: { require: true } },
         };
         const integration = postAudit(options);
         assert.equal(integration.name, 'astro-post-audit');

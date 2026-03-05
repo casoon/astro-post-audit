@@ -1,6 +1,6 @@
 import type { AstroIntegration } from 'astro';
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,9 +16,9 @@ export interface RulesConfig {
   };
   /** File filters — glob patterns to include or exclude pages from all checks. */
   filters?: {
-    /** Only check files matching these glob patterns. Merged with the top-level `include` option. */
+    /** Only check files matching these glob patterns. */
     include?: string[];
-    /** Skip files matching these glob patterns (e.g. `["404.html", "drafts/**"]`). Merged with the top-level `exclude` option. */
+    /** Skip files matching these glob patterns (e.g. `["404.html", "drafts/**"]`). */
     exclude?: string[];
   };
   /** URL normalization rules for internal link and canonical consistency. */
@@ -122,7 +122,7 @@ export interface RulesConfig {
     /** Require a skip navigation link (e.g. `<a href="#main-content">`). @default false */
     require_skip_link?: boolean;
   };
-  /** Asset reference and size checks. Enable via `checkAssets` option or set fields here. */
+  /** Asset reference and size checks. */
   assets?: {
     /** Check that `<img>`, `<script>`, `<link>` references resolve to files in `dist/`. @default false */
     check_broken_assets?: boolean;
@@ -148,7 +148,7 @@ export interface RulesConfig {
     /** Require `twitter:card` meta tag. @default false */
     require_twitter_card?: boolean;
   };
-  /** Structured data (JSON-LD) validation. Enable via `checkStructuredData` option or set fields here. */
+  /** Structured data (JSON-LD) validation. */
   structured_data?: {
     /** Validate JSON-LD syntax and semantics (`@context`, `@type`, required properties). @default false */
     check_json_ld?: boolean;
@@ -168,7 +168,7 @@ export interface RulesConfig {
     /** Hreflang links must be reciprocal (A→B and B→A). @default false */
     require_reciprocal?: boolean;
   };
-  /** Security heuristic checks. Enable via `checkSecurity` option or set fields here. */
+  /** Security heuristic checks. */
   security?: {
     /** Warn on `target="_blank"` without `rel="noopener"`. @default true */
     check_target_blank?: boolean;
@@ -177,7 +177,7 @@ export interface RulesConfig {
     /** Warn on inline `<script>` tags. @default false */
     warn_inline_scripts?: boolean;
   };
-  /** Duplicate content detection. Enable via `checkDuplicates` option or set fields here. */
+  /** Duplicate content detection. */
   content_quality?: {
     /** Warn if multiple pages share the same `<title>`. @default false */
     detect_duplicate_titles?: boolean;
@@ -205,35 +205,21 @@ export interface RulesConfig {
 }
 
 export interface PostAuditOptions {
-  /** Inline rules config. */
+  /** Inline rules config — all check settings go here. */
   rules?: RulesConfig;
-  /** Base URL (auto-detected from Astro's `site` config if not set) */
+  /** Base URL (auto-detected from Astro's `site` config if not set). */
   site?: string;
-  /** Treat warnings as errors */
+  /** Treat warnings as errors. */
   strict?: boolean;
-  /** Output format */
-  format?: 'text' | 'json';
-  /** Maximum number of errors before aborting */
+  /** Maximum number of errors before aborting. */
   maxErrors?: number;
-  /** Glob patterns to include */
-  include?: string[];
-  /** Glob patterns to exclude */
-  exclude?: string[];
-  /** Skip sitemap.xml checks */
-  noSitemapCheck?: boolean;
-  /** Enable asset reference checking */
-  checkAssets?: boolean;
-  /** Enable structured data (JSON-LD) validation */
-  checkStructuredData?: boolean;
-  /** Enable security heuristic checks */
-  checkSecurity?: boolean;
-  /** Enable duplicate content detection */
-  checkDuplicates?: boolean;
-  /** Show page properties overview instead of running checks */
+  /** Show page properties overview instead of running checks. */
   pageOverview?: boolean;
-  /** Disable the integration (useful for dev mode) */
+  /** Write the JSON report to this file path (relative to project root). */
+  output?: string;
+  /** Disable the integration (useful for dev mode). */
   disable?: boolean;
-  /** Throw an AstroError when the audit finds errors (fails the build). Default: false */
+  /** Throw an error when the audit finds issues (fails the build). Default: false */
   throwOnError?: boolean;
 }
 
@@ -272,57 +258,51 @@ export default function postAudit(options: PostAuditOptions = {}): AstroIntegrat
         }
 
         const distPath = fileURLToPath(dir);
-        const args: string[] = [distPath];
+        const args: string[] = [distPath, '--config-stdin'];
 
-        // --site: explicit option > Astro config auto-detect
+        // Build the full JSON config for the Rust binary
         const site = options.site ?? siteUrl;
-        if (site) args.push('--site', site);
-
-        // Boolean flags
-        if (options.strict) args.push('--strict');
-        if (options.noSitemapCheck) args.push('--no-sitemap-check');
-        if (options.checkAssets) args.push('--check-assets');
-        if (options.checkStructuredData) args.push('--check-structured-data');
-        if (options.checkSecurity) args.push('--check-security');
-        if (options.checkDuplicates) args.push('--check-duplicates');
-        if (options.pageOverview) args.push('--page-overview');
-
-        // Value flags
-        if (options.format) args.push('--format', options.format);
-        if (options.maxErrors != null) args.push('--max-errors', String(options.maxErrors));
-
-        // Array flags
-        if (options.include) {
-          for (const pattern of options.include) {
-            args.push('--include', pattern);
-          }
-        }
-        if (options.exclude) {
-          for (const pattern of options.exclude) {
-            args.push('--exclude', pattern);
-          }
-        }
-
-        // Pipe inline rules config via stdin as JSON
-        let stdinInput: string | undefined;
-        if (options.rules) {
-          args.push('--config-stdin');
-          stdinInput = JSON.stringify(options.rules);
-        }
+        const stdinConfig: Record<string, unknown> = {
+          ...options.rules,
+        };
+        if (site) stdinConfig.site = { base_url: site };
+        if (options.strict) stdinConfig.strict = true;
+        if (options.maxErrors != null) stdinConfig.max_errors = options.maxErrors;
+        if (options.pageOverview) stdinConfig.page_overview = true;
+        if (options.output) stdinConfig.format = 'json';
+        const stdinInput = JSON.stringify(stdinConfig);
 
         logger.info('Running post-build audit...');
 
+        const captureOutput = !!options.output;
+
         try {
-          execFileSync(binaryPath, args, {
-            stdio: stdinInput ? ['pipe', 'inherit', 'inherit'] : 'inherit',
+          const result = execFileSync(binaryPath, args, {
+            stdio: ['pipe', captureOutput ? 'pipe' : 'inherit', 'inherit'],
             input: stdinInput,
+            encoding: captureOutput ? 'utf-8' : undefined,
           });
+
+          if (captureOutput && result) {
+            writeFileSync(options.output!, result);
+            logger.info(`Report written to ${options.output}`);
+          }
+
           logger.info('All checks passed!');
         } catch (err: unknown) {
           const exitCode =
             err && typeof err === 'object' && 'status' in err
               ? (err as { status: number }).status
               : undefined;
+
+          // Write output file even on exit code 1 (findings exist but run succeeded)
+          if (captureOutput && exitCode === 1 && err && typeof err === 'object' && 'stdout' in err) {
+            const stdout = (err as { stdout: string | Buffer }).stdout;
+            if (stdout) {
+              writeFileSync(options.output!, stdout);
+              logger.info(`Report written to ${options.output}`);
+            }
+          }
 
           if (exitCode === 1) {
             if (options.throwOnError) {

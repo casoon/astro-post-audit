@@ -1,10 +1,9 @@
 use anyhow::Result;
 use clap::Parser;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process;
 
-mod baseline;
 mod checks;
 mod config;
 mod discovery;
@@ -27,65 +26,9 @@ struct Cli {
     #[arg(default_value = "dist")]
     dist_path: PathBuf,
 
-    /// Base URL of the site (for URL normalization)
-    #[arg(long)]
-    site: Option<String>,
-
-    /// Treat warnings as errors
-    #[arg(long)]
-    strict: bool,
-
-    /// Output format
-    #[arg(long, default_value = "text")]
-    format: report::Format,
-
-    /// Read JSON config from stdin
+    /// Read JSON config from stdin (all options are passed via JSON)
     #[arg(long)]
     config_stdin: bool,
-
-    /// Maximum number of errors before aborting
-    #[arg(long)]
-    max_errors: Option<usize>,
-
-    /// Include only files matching these glob patterns
-    #[arg(long)]
-    include: Vec<String>,
-
-    /// Exclude files matching these glob patterns
-    #[arg(long)]
-    exclude: Vec<String>,
-
-    /// Skip sitemap.xml checks
-    #[arg(long)]
-    no_sitemap_check: bool,
-
-    /// Enable asset reference checking (img/src, script/src, link/href)
-    #[arg(long)]
-    check_assets: bool,
-
-    /// Enable structured data (JSON-LD) validation
-    #[arg(long)]
-    check_structured_data: bool,
-
-    /// Enable security heuristic checks
-    #[arg(long)]
-    check_security: bool,
-
-    /// Enable content duplicate detection
-    #[arg(long)]
-    check_duplicates: bool,
-
-    /// Show page properties overview (informational, no checks)
-    #[arg(long)]
-    page_overview: bool,
-
-    /// Generate/update a baseline file from current findings
-    #[arg(long)]
-    update_baseline: bool,
-
-    /// Path to baseline ignore file (default: .astro-post-audit-baseline)
-    #[arg(long)]
-    baseline: Option<PathBuf>,
 }
 
 fn main() {
@@ -102,41 +45,13 @@ fn run() -> Result<i32> {
     let cli = Cli::parse();
 
     // Load config: --config-stdin (JSON) or defaults
-    let mut config = if cli.config_stdin {
+    let config = if cli.config_stdin {
         let mut buf = String::new();
         std::io::stdin().read_to_string(&mut buf)?;
         Config::from_json(&buf)?
     } else {
         Config::default()
     };
-
-    // CLI overrides
-    if let Some(ref site) = cli.site {
-        config.site.base_url = Some(site.clone());
-    }
-    if cli.no_sitemap_check {
-        config.sitemap.require = false;
-        config.sitemap.canonical_must_be_in_sitemap = false;
-        config.sitemap.forbid_noncanonical_in_sitemap = false;
-        config.sitemap.entries_must_exist_in_dist = false;
-    }
-    if cli.check_assets {
-        config.assets.check_broken_assets = true;
-        config.assets.check_image_dimensions = true;
-    }
-    if cli.check_structured_data {
-        config.structured_data.check_json_ld = true;
-    }
-    if cli.check_security {
-        config.security.check_target_blank = true;
-        config.security.check_mixed_content = true;
-    }
-    if cli.check_duplicates {
-        config.content_quality.detect_duplicate_titles = true;
-        config.content_quality.detect_duplicate_descriptions = true;
-        config.content_quality.detect_duplicate_h1 = true;
-        config.content_quality.detect_duplicate_pages = true;
-    }
 
     // Validate dist path
     if !cli.dist_path.is_dir() {
@@ -146,26 +61,28 @@ fn run() -> Result<i32> {
         );
     }
 
-    // Merge CLI and config include/exclude patterns
-    let mut include = cli.include.clone();
-    include.extend(config.filters.include.iter().cloned());
-    let mut exclude = cli.exclude.clone();
-    exclude.extend(config.filters.exclude.iter().cloned());
-
     // Discover HTML files and build site index
-    let site_index = SiteIndex::build(&cli.dist_path, &config, &include, &exclude)?;
+    let include = &config.filters.include;
+    let exclude = &config.filters.exclude;
+    let site_index = SiteIndex::build(&cli.dist_path, &config, include, exclude)?;
+
+    // Parse format from config
+    let format = match config.format.as_deref() {
+        Some("json") => report::Format::Json,
+        _ => report::Format::Text,
+    };
 
     // Page properties overview mode (informational, exits before checks)
-    if cli.page_overview {
+    if config.page_overview {
         let ov = overview::collect(&site_index);
-        let reporter = Reporter::new(cli.format);
+        let reporter = Reporter::new(format);
         reporter.print_overview(&ov)?;
         return Ok(0);
     }
 
     // Run all checks, with early stop if --max-errors is exceeded
     let mut findings: Vec<Finding> = Vec::new();
-    let max_errors = cli.max_errors;
+    let max_errors = config.max_errors;
     let mut error_count: usize = 0;
 
     // Core checks (always on by default)
@@ -188,10 +105,7 @@ fn run() -> Result<i32> {
     run_check!(checks::html_basics::check_all(&site_index, &config));
     run_check!(checks::headings::check_all(&site_index, &config));
 
-    // Sitemap checks
-    if !cli.no_sitemap_check {
-        run_check!(checks::sitemap::check_all(&site_index, &config));
-    }
+    run_check!(checks::sitemap::check_all(&site_index, &config));
 
     // robots.txt checks
     run_check!(checks::robots_txt::check_all(&site_index, &config));
@@ -204,24 +118,6 @@ fn run() -> Result<i32> {
     run_check!(checks::security::check_all(&site_index, &config));
     run_check!(checks::content_quality::check_all(&site_index, &config));
     let _ = error_count; // used by run_check! macro for early-stop
-
-    // --update-baseline: write baseline file and exit
-    let baseline_path = cli.baseline.clone().unwrap_or_else(|| {
-        cli.dist_path
-            .parent()
-            .unwrap_or(Path::new("."))
-            .join(".astro-post-audit-baseline")
-    });
-    if cli.update_baseline {
-        let content = baseline::generate(&findings);
-        std::fs::write(&baseline_path, &content)?;
-        eprintln!(
-            "Baseline written to '{}' ({} entries)",
-            baseline_path.display(),
-            findings.len()
-        );
-        return Ok(0);
-    }
 
     // Apply severity overrides from [severity] config section
     if !config.severity.overrides.is_empty() {
@@ -238,20 +134,6 @@ fn run() -> Result<i32> {
             true
         });
     }
-
-    // Apply baseline: suppress known findings
-    let ignored_count = if baseline_path.exists() && !cli.update_baseline {
-        let baseline_entries = baseline::load(&baseline_path);
-        if !baseline_entries.is_empty() {
-            let (kept, ignored) = baseline::apply(findings, &baseline_entries);
-            findings = kept;
-            ignored
-        } else {
-            0
-        }
-    } else {
-        0
-    };
 
     // Enforce exact --max-errors cap: keep only the first N errors (plus all non-errors before them)
     let truncated = if let Some(max) = max_errors {
@@ -281,12 +163,11 @@ fn run() -> Result<i32> {
     let mut summary = Summary::from_findings(&findings);
     summary.files_checked = site_index.pages.len();
     summary.truncated = truncated;
-    summary.ignored = ignored_count;
-    let reporter = Reporter::new(cli.format);
+    let reporter = Reporter::new(format);
     reporter.print(&findings, &summary)?;
 
     // Determine exit code
-    if summary.errors > 0 || (cli.strict && summary.warnings > 0) {
+    if summary.errors > 0 || (config.strict && summary.warnings > 0) {
         Ok(1)
     } else {
         Ok(0)

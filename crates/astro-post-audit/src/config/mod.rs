@@ -5,6 +5,14 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct Config {
+    /// Treat warnings as errors (exit code 1).
+    pub strict: bool,
+    /// Maximum number of errors before truncating output.
+    pub max_errors: Option<usize>,
+    /// Show page properties overview instead of running checks.
+    pub page_overview: bool,
+    /// Output format: "text" (default) or "json".
+    pub format: Option<String>,
     pub site: SiteConfig,
     pub filters: FilterConfig,
     pub url_normalization: UrlNormalizationConfig,

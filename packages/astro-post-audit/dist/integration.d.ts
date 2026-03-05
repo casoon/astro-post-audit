@@ -11,9 +11,9 @@ export interface RulesConfig {
     };
     /** File filters — glob patterns to include or exclude pages from all checks. */
     filters?: {
-        /** Only check files matching these glob patterns. Merged with the top-level `include` option. */
+        /** Only check files matching these glob patterns. */
         include?: string[];
-        /** Skip files matching these glob patterns (e.g. `["404.html", "drafts/**"]`). Merged with the top-level `exclude` option. */
+        /** Skip files matching these glob patterns (e.g. `["404.html", "drafts/**"]`). */
         exclude?: string[];
     };
     /** URL normalization rules for internal link and canonical consistency. */
@@ -117,7 +117,7 @@ export interface RulesConfig {
         /** Require a skip navigation link (e.g. `<a href="#main-content">`). @default false */
         require_skip_link?: boolean;
     };
-    /** Asset reference and size checks. Enable via `checkAssets` option or set fields here. */
+    /** Asset reference and size checks. */
     assets?: {
         /** Check that `<img>`, `<script>`, `<link>` references resolve to files in `dist/`. @default false */
         check_broken_assets?: boolean;
@@ -143,7 +143,7 @@ export interface RulesConfig {
         /** Require `twitter:card` meta tag. @default false */
         require_twitter_card?: boolean;
     };
-    /** Structured data (JSON-LD) validation. Enable via `checkStructuredData` option or set fields here. */
+    /** Structured data (JSON-LD) validation. */
     structured_data?: {
         /** Validate JSON-LD syntax and semantics (`@context`, `@type`, required properties). @default false */
         check_json_ld?: boolean;
@@ -163,7 +163,7 @@ export interface RulesConfig {
         /** Hreflang links must be reciprocal (A→B and B→A). @default false */
         require_reciprocal?: boolean;
     };
-    /** Security heuristic checks. Enable via `checkSecurity` option or set fields here. */
+    /** Security heuristic checks. */
     security?: {
         /** Warn on `target="_blank"` without `rel="noopener"`. @default true */
         check_target_blank?: boolean;
@@ -172,7 +172,7 @@ export interface RulesConfig {
         /** Warn on inline `<script>` tags. @default false */
         warn_inline_scripts?: boolean;
     };
-    /** Duplicate content detection. Enable via `checkDuplicates` option or set fields here. */
+    /** Duplicate content detection. */
     content_quality?: {
         /** Warn if multiple pages share the same `<title>`. @default false */
         detect_duplicate_titles?: boolean;
@@ -199,35 +199,21 @@ export interface RulesConfig {
     };
 }
 export interface PostAuditOptions {
-    /** Inline rules config. */
+    /** Inline rules config — all check settings go here. */
     rules?: RulesConfig;
-    /** Base URL (auto-detected from Astro's `site` config if not set) */
+    /** Base URL (auto-detected from Astro's `site` config if not set). */
     site?: string;
-    /** Treat warnings as errors */
+    /** Treat warnings as errors. */
     strict?: boolean;
-    /** Output format */
-    format?: 'text' | 'json';
-    /** Maximum number of errors before aborting */
+    /** Maximum number of errors before aborting. */
     maxErrors?: number;
-    /** Glob patterns to include */
-    include?: string[];
-    /** Glob patterns to exclude */
-    exclude?: string[];
-    /** Skip sitemap.xml checks */
-    noSitemapCheck?: boolean;
-    /** Enable asset reference checking */
-    checkAssets?: boolean;
-    /** Enable structured data (JSON-LD) validation */
-    checkStructuredData?: boolean;
-    /** Enable security heuristic checks */
-    checkSecurity?: boolean;
-    /** Enable duplicate content detection */
-    checkDuplicates?: boolean;
-    /** Show page properties overview instead of running checks */
+    /** Show page properties overview instead of running checks. */
     pageOverview?: boolean;
-    /** Disable the integration (useful for dev mode) */
+    /** Write the JSON report to this file path (relative to project root). */
+    output?: string;
+    /** Disable the integration (useful for dev mode). */
     disable?: boolean;
-    /** Throw an AstroError when the audit finds errors (fails the build). Default: false */
+    /** Throw an error when the audit finds issues (fails the build). Default: false */
     throwOnError?: boolean;
 }
 export default function postAudit(options?: PostAuditOptions): AstroIntegration;

@@ -23,6 +23,8 @@ export default defineConfig({
 
 That's it. The audit runs automatically after every `astro build`.
 
+> **Note:** If you use `@astrojs/sitemap`, make sure `postAudit()` comes **after** `sitemap()` in the integrations array. Both plugins use the `astro:build:done` hook and run in array order — the sitemap file needs to exist before the audit can check it.
+
 ## Configuration
 
 All options are optional. Your editor provides autocomplete with descriptions and defaults for every field.
@@ -31,14 +33,16 @@ All options are optional. Your editor provides autocomplete with descriptions an
 postAudit({
   strict: true,              // Treat warnings as errors
   throwOnError: true,        // Fail the build on errors
-  checkAssets: true,         // Enable asset reference checking
-  checkStructuredData: true, // Enable JSON-LD validation
-  checkSecurity: true,       // Enable security checks
-  checkDuplicates: true,     // Enable duplicate detection
-  exclude: ['404.html', 'drafts/**'],
+  maxErrors: 20,             // Stop after 20 errors
+  output: 'audit-report.json', // Write JSON report to file
   rules: {
+    filters: { exclude: ['404.html', 'drafts/**'] },
     canonical: { self_reference: true },
     a11y: { require_skip_link: true },
+    assets: { check_broken_assets: true, check_image_dimensions: true },
+    structured_data: { check_json_ld: true },
+    security: { check_target_blank: true },
+    content_quality: { detect_duplicate_titles: true },
     opengraph: { require_og_title: true, require_og_image: true },
     headings: { no_skip: true },
     severity: {
@@ -60,7 +64,7 @@ rules: {
     base_url: undefined,               // Auto-detected from Astro's `site` config
   },
 
-  // File filters (merged with top-level include/exclude)
+  // File filters
   filters: {
     include: [],                        // Glob patterns to include
     exclude: [],                        // Glob patterns to exclude (e.g. ["404.html", "drafts/**"])
@@ -139,7 +143,7 @@ rules: {
     require_skip_link: false,           // Require skip navigation link
   },
 
-  // Asset checks (also enabled via checkAssets option)
+  // Asset checks
   assets: {
     check_broken_assets: false,         // Verify img/script/link references
     check_image_dimensions: false,      // Warn on missing width/height (CLS)
@@ -157,8 +161,7 @@ rules: {
     require_twitter_card: false,        // Require twitter:card
   },
 
-  // Structured data (JSON-LD) — also enabled via checkStructuredData option
-  structured_data: {
+  // Structured data (JSON-LD)  structured_data: {
     check_json_ld: false,               // Validate JSON-LD syntax and semantics
     require_json_ld: false,             // Every page must have JSON-LD
     detect_duplicate_types: false,      // Warn on duplicate @type per page
@@ -172,15 +175,13 @@ rules: {
     require_reciprocal: false,          // Links must be reciprocal (A→B and B→A)
   },
 
-  // Security — also enabled via checkSecurity option
-  security: {
+  // Security  security: {
     check_target_blank: true,           // Warn on target="_blank" without rel="noopener"
     check_mixed_content: true,          // Warn on http:// resource URLs
     warn_inline_scripts: false,         // Warn on inline <script> tags
   },
 
-  // Content quality — also enabled via checkDuplicates option
-  content_quality: {
+  // Content quality  content_quality: {
     detect_duplicate_titles: false,     // Warn on duplicate <title> across pages
     detect_duplicate_descriptions: false, // Warn on duplicate meta descriptions
     detect_duplicate_h1: false,         // Warn on duplicate <h1> across pages

@@ -11,84 +11,15 @@ use tempfile::TempDir;
 // Since astro-post-audit is a bin crate, integration tests need to test via CLI
 // or we restructure. Instead we'll test via CLI invocations.
 
-/// Helper: run the binary against a given dist directory with optional extra args.
-fn run_audit(dist_path: &Path, args: &[&str]) -> (String, String, i32) {
-    let bin = env!("CARGO_BIN_EXE_astro-post-audit");
-    let mut cmd = std::process::Command::new(bin);
-    cmd.arg(dist_path.to_str().unwrap());
-    for arg in args {
-        cmd.arg(arg);
-    }
-    // Force no color for deterministic output
-    cmd.env("NO_COLOR", "1");
-    let output = cmd.output().expect("failed to execute binary");
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let code = output.status.code().unwrap_or(2);
-    (stdout, stderr, code)
-}
-
-/// Helper: run the binary and return JSON output parsed.
-fn run_audit_json(dist_path: &Path, args: &[&str]) -> (serde_json::Value, i32) {
-    let mut full_args = vec!["--format", "json"];
-    full_args.extend_from_slice(args);
-    let (stdout, _stderr, code) = run_audit(dist_path, &full_args);
-    let json: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|e| {
-        panic!(
-            "Failed to parse JSON output: {}\nOutput was:\n{}",
-            e, stdout
-        );
-    });
-    (json, code)
-}
-
-/// Helper: run the binary with JSON config on stdin and return parsed JSON output.
-fn run_audit_json_stdin(
-    dist_path: &Path,
-    args: &[&str],
-    stdin_json: &str,
-) -> (serde_json::Value, i32) {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-
-    let bin = env!("CARGO_BIN_EXE_astro-post-audit");
-    let mut cmd = Command::new(bin);
-    cmd.arg(dist_path.to_str().unwrap())
-        .args(["--format", "json", "--config-stdin"])
-        .args(args)
-        .env("NO_COLOR", "1")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    let mut child = cmd.spawn().expect("failed to spawn binary");
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(stdin_json.as_bytes())
-        .expect("failed to write stdin");
-    let output = child.wait_with_output().expect("failed to wait");
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let code = output.status.code().unwrap_or(2);
-    let json: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|e| {
-        panic!(
-            "Failed to parse JSON output: {}\nOutput was:\n{}",
-            e, stdout
-        );
-    });
-    (json, code)
-}
-
 /// Helper: run the binary with JSON config on stdin and return raw stdout/stderr/code.
-fn run_audit_stdin(dist_path: &Path, args: &[&str], stdin_json: &str) -> (String, String, i32) {
+fn run_audit(dist_path: &Path, config_json: &str) -> (String, String, i32) {
     use std::io::Write;
     use std::process::{Command, Stdio};
 
     let bin = env!("CARGO_BIN_EXE_astro-post-audit");
     let mut cmd = Command::new(bin);
     cmd.arg(dist_path.to_str().unwrap())
-        .args(["--config-stdin"])
-        .args(args)
+        .arg("--config-stdin")
         .env("NO_COLOR", "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -98,13 +29,34 @@ fn run_audit_stdin(dist_path: &Path, args: &[&str], stdin_json: &str) -> (String
         .stdin
         .take()
         .unwrap()
-        .write_all(stdin_json.as_bytes())
+        .write_all(config_json.as_bytes())
         .expect("failed to write stdin");
     let output = child.wait_with_output().expect("failed to wait");
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     let code = output.status.code().unwrap_or(2);
     (stdout, stderr, code)
+}
+
+/// Helper: run the binary with JSON config (format=json) and return parsed JSON output.
+fn run_audit_json(dist_path: &Path, config_json: &str) -> (serde_json::Value, i32) {
+    // Merge {"format":"json"} into the provided config
+    let mut config: serde_json::Value =
+        serde_json::from_str(config_json).unwrap_or(serde_json::json!({}));
+    config
+        .as_object_mut()
+        .unwrap()
+        .insert("format".to_string(), serde_json::json!("json"));
+    let merged = config.to_string();
+
+    let (stdout, _stderr, code) = run_audit(dist_path, &merged);
+    let json: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|e| {
+        panic!(
+            "Failed to parse JSON output: {}\nOutput was:\n{}",
+            e, stdout
+        );
+    });
+    (json, code)
 }
 
 /// Create a minimal valid page in a temp dir.
@@ -140,7 +92,10 @@ fn write_valid_page(dir: &Path, rel_path: &str, title: &str, h1: &str, canonical
 #[test]
 fn good_fixtures_pass_clean() {
     let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/good");
-    let (json, code) = run_audit_json(&fixture_path, &["--site", "https://example.com"]);
+    let (json, code) = run_audit_json(
+        &fixture_path,
+        r#"{"site":{"base_url":"https://example.com"}}"#,
+    );
     let findings = json["findings"].as_array().unwrap();
     // Good fixtures should produce no errors under default config.
     // They may produce canonical/target-missing warnings since canonicals point
@@ -161,7 +116,7 @@ fn good_fixtures_pass_clean() {
 #[test]
 fn bad_fixtures_detect_errors() {
     let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/bad");
-    let (json, code) = run_audit_json(&fixture_path, &[]);
+    let (json, code) = run_audit_json(&fixture_path, "{}");
     let findings = json["findings"].as_array().unwrap();
     let rule_ids: Vec<&str> = findings
         .iter()
@@ -202,7 +157,7 @@ fn seo_canonical_missing() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title></head><body><h1>Test</h1></body></html>"#,
     ).unwrap();
-    let (json, code) = run_audit_json(dir.path(), &[]);
+    let (json, code) = run_audit_json(dir.path(), "{}");
     let findings = json["findings"].as_array().unwrap();
     let rule_ids: Vec<&str> = findings
         .iter()
@@ -219,7 +174,7 @@ fn seo_canonical_multiple() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"><link rel="canonical" href="https://example.com/other/"></head><body><h1>Test</h1></body></html>"#,
     ).unwrap();
-    let (json, code) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     let rule_ids: Vec<&str> = findings
         .iter()
@@ -236,7 +191,7 @@ fn seo_canonical_empty() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href=""></head><body><h1>Test</h1></body></html>"#,
     ).unwrap();
-    let (json, code) = run_audit_json(dir.path(), &[]);
+    let (json, code) = run_audit_json(dir.path(), "{}");
     let findings = json["findings"].as_array().unwrap();
     let rule_ids: Vec<&str> = findings
         .iter()
@@ -253,7 +208,7 @@ fn seo_canonical_not_absolute() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="/about/"></head><body><h1>Test</h1></body></html>"#,
     ).unwrap();
-    let (json, code) = run_audit_json(dir.path(), &[]);
+    let (json, code) = run_audit_json(dir.path(), "{}");
     let findings = json["findings"].as_array().unwrap();
     let rule_ids: Vec<&str> = findings
         .iter()
@@ -270,7 +225,7 @@ fn seo_canonical_cross_origin() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://other-site.com/"></head><body><h1>Test</h1></body></html>"#,
     ).unwrap();
-    let (json, code) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     let rule_ids: Vec<&str> = findings
         .iter()
@@ -288,7 +243,8 @@ fn seo_noindex_detection() {
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"><meta name="robots" content="noindex"></head><body><h1>Test</h1></body></html>"#,
     ).unwrap();
     // Default: allow_noindex=true, fail_if_noindex=false -> no finding
-    let (json, _code) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, _code) =
+        run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     let has_noindex = findings.iter().any(|f| f["rule_id"] == "robots/noindex");
     assert!(!has_noindex, "Default config should allow noindex");
@@ -305,7 +261,7 @@ fn html_basics_lang_missing() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(findings.iter().any(|f| f["rule_id"] == "html/lang-missing"));
 }
@@ -317,7 +273,7 @@ fn html_basics_title_missing() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(findings
         .iter()
@@ -335,7 +291,7 @@ fn html_basics_title_too_long() {
             long_title
         ),
     ).unwrap();
-    let (json, code) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(findings
         .iter()
@@ -350,7 +306,7 @@ fn html_basics_viewport_missing() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(findings
         .iter()
@@ -368,7 +324,7 @@ fn headings_no_h1() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h2>Not an H1</h2></body></html>"#,
     ).unwrap();
-    let (json, code) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(findings.iter().any(|f| f["rule_id"] == "headings/no-h1"));
     assert_eq!(code, 1);
@@ -381,7 +337,7 @@ fn headings_multiple_h1() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>First</h1><h1>Second</h1></body></html>"#,
     ).unwrap();
-    let (json, code) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(findings
         .iter()
@@ -400,7 +356,7 @@ fn a11y_img_alt_missing() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1><img src="/photo.jpg"></body></html>"#,
     ).unwrap();
-    let (json, code) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(findings.iter().any(|f| f["rule_id"] == "a11y/img-alt"));
     assert_eq!(code, 1);
@@ -413,7 +369,7 @@ fn a11y_decorative_image_no_error() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1><img src="/spacer.gif" role="presentation"><img src="/bg.jpg" aria-hidden="true"></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     let img_alt_findings: Vec<_> = findings
         .iter()
@@ -432,7 +388,7 @@ fn a11y_link_name_empty() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1><a href="/page/"></a></body></html>"#,
     ).unwrap();
-    let (json, code) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(findings.iter().any(|f| f["rule_id"] == "a11y/link-name"));
     assert_eq!(code, 1);
@@ -445,7 +401,7 @@ fn a11y_link_with_aria_label_ok() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1><a href="/settings/" aria-label="Settings"></a></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
         !findings.iter().any(|f| f["rule_id"] == "a11y/link-name"),
@@ -460,7 +416,7 @@ fn a11y_generic_link_text() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1><a href="/page/">click here</a><a href="/other/">mehr</a></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     let generic: Vec<_> = findings
         .iter()
@@ -480,7 +436,7 @@ fn a11y_button_name_missing() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1><button></button><button aria-label="OK"></button></body></html>"#,
     ).unwrap();
-    let (json, code) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     let button_findings: Vec<_> = findings
         .iter()
@@ -501,7 +457,7 @@ fn a11y_form_label_missing() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1><input type="text" name="q"><input type="hidden" name="secret"><label for="email">Email</label><input type="email" id="email" name="email"></body></html>"#,
     ).unwrap();
-    let (json, code) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     let label_findings: Vec<_> = findings
         .iter()
@@ -522,7 +478,7 @@ fn a11y_aria_hidden_focusable() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1><button aria-hidden="true">Bad</button><span aria-hidden="true">OK</span><div tabindex="0" aria-hidden="true">Bad div</div><div tabindex="-1" aria-hidden="true">OK div</div></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     let aria_findings: Vec<_> = findings
         .iter()
@@ -548,7 +504,7 @@ fn links_broken_internal() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home</title><link rel="canonical" href="https://example.com/"></head><body><h1>Home</h1><a href="/nonexistent/">Bad link</a></body></html>"#,
     ).unwrap();
-    let (json, code) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(findings.iter().any(|f| f["rule_id"] == "links/broken"));
     assert_eq!(code, 1);
@@ -564,7 +520,7 @@ fn links_query_params() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home</title><link rel="canonical" href="https://example.com/"></head><body><h1>Home</h1><a href="/about/?ref=nav">About</a></body></html>"#,
     ).unwrap();
-    let (json, code) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(findings
         .iter()
@@ -582,7 +538,7 @@ fn links_valid_internal_no_error() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home</title><link rel="canonical" href="https://example.com/"></head><body><h1>Home</h1><a href="/about/">About</a></body></html>"#,
     ).unwrap();
-    let (json, code) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(!findings.iter().any(|f| f["rule_id"] == "links/broken"));
     assert_eq!(code, 0);
@@ -599,7 +555,7 @@ fn security_target_blank_noopener() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1><a href="https://ext.com" target="_blank">External</a><a href="https://safe.com" target="_blank" rel="noopener">Safe</a></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     let target_blank: Vec<_> = findings
         .iter()
@@ -615,7 +571,7 @@ fn security_mixed_content() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1><img src="http://insecure.com/img.jpg" alt="mixed"><img src="https://secure.com/img.jpg" alt="fine"></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     let mixed: Vec<_> = findings
         .iter()
@@ -632,10 +588,10 @@ fn security_inline_scripts() {
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1><script>alert(1);</script><script type="application/ld+json">{"@type":"test"}</script></body></html>"#,
     ).unwrap();
     // inline scripts warning is off by default; need a config file to enable it
-    // For now just test with --check-security (which doesn't toggle inline scripts)
+    // Enable security checks via config-stdin (which doesn't toggle inline scripts)
     let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com", "--check-security"],
+        r#"{"site":{"base_url":"https://example.com"},"security":{"check_target_blank":true,"check_mixed_content":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     // Default security config doesn't enable warn_inline_scripts
@@ -659,7 +615,7 @@ fn structured_data_invalid_json() {
     ).unwrap();
     let (json, code) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com", "--check-structured-data"],
+        r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(findings
@@ -677,7 +633,7 @@ fn structured_data_empty_script() {
     ).unwrap();
     let (json, code) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com", "--check-structured-data"],
+        r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(findings
@@ -695,7 +651,7 @@ fn structured_data_valid_json_ld() {
     ).unwrap();
     let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com", "--check-structured-data"],
+        r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(!findings.iter().any(|f| f["rule_id"]
@@ -721,7 +677,7 @@ fn content_quality_duplicate_titles() {
     );
     let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com", "--check-duplicates"],
+        r#"{"site":{"base_url":"https://example.com"},"content_quality":{"detect_duplicate_titles":true,"detect_duplicate_descriptions":true,"detect_duplicate_h1":true,"detect_duplicate_pages":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(findings
@@ -736,7 +692,7 @@ fn content_quality_unique_titles_no_warning() {
     write_valid_page(dir.path(), "about/index.html", "About", "About", "/about/");
     let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com", "--check-duplicates"],
+        r#"{"site":{"base_url":"https://example.com"},"content_quality":{"detect_duplicate_titles":true,"detect_duplicate_descriptions":true,"detect_duplicate_h1":true,"detect_duplicate_pages":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(!findings
@@ -757,7 +713,7 @@ fn assets_broken_img() {
     ).unwrap();
     let (json, code) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com", "--check-assets"],
+        r#"{"site":{"base_url":"https://example.com"},"assets":{"check_broken_assets":true,"check_image_dimensions":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(findings.iter().any(|f| f["rule_id"] == "assets/broken"));
@@ -775,7 +731,7 @@ fn assets_img_dimensions_missing() {
     ).unwrap();
     let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com", "--check-assets"],
+        r#"{"site":{"base_url":"https://example.com"},"assets":{"check_broken_assets":true,"check_image_dimensions":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     let dim_findings: Vec<_> = findings
@@ -795,7 +751,7 @@ fn assets_existing_img_no_broken_error() {
     ).unwrap();
     let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com", "--check-assets"],
+        r#"{"site":{"base_url":"https://example.com"},"assets":{"check_broken_assets":true,"check_image_dimensions":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
@@ -812,10 +768,9 @@ fn assets_existing_img_no_broken_error() {
 fn robots_txt_missing_when_required() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
-    let (json, _) = run_audit_json_stdin(
+    let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com"],
-        r#"{"robots_txt":{"require":true}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"robots_txt":{"require":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(findings
@@ -828,10 +783,9 @@ fn robots_txt_no_sitemap_link() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
     fs::write(dir.path().join("robots.txt"), "User-agent: *\nAllow: /\n").unwrap();
-    let (json, _) = run_audit_json_stdin(
+    let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com"],
-        r#"{"robots_txt":{"require":true,"require_sitemap_link":true}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"robots_txt":{"require":true,"require_sitemap_link":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(findings
@@ -848,10 +802,9 @@ fn robots_txt_with_sitemap_ok() {
         "User-agent: *\nAllow: /\nSitemap: https://example.com/sitemap.xml\n",
     )
     .unwrap();
-    let (json, _) = run_audit_json_stdin(
+    let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com"],
-        r#"{"robots_txt":{"require":true,"require_sitemap_link":true}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"robots_txt":{"require":true,"require_sitemap_link":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(!findings
@@ -867,7 +820,7 @@ fn robots_txt_with_sitemap_ok() {
 fn edge_case_empty_file() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("index.html"), "").unwrap();
-    let (json, code) = run_audit_json(dir.path(), &[]);
+    let (json, code) = run_audit_json(dir.path(), "{}");
     let findings = json["findings"].as_array().unwrap();
     // Empty file should trigger many missing checks
     let rule_ids: Vec<&str> = findings
@@ -886,7 +839,7 @@ fn edge_case_empty_file() {
 fn edge_case_whitespace_only_file() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("index.html"), "   \n\n  \n").unwrap();
-    let (_json, code) = run_audit_json(dir.path(), &[]);
+    let (_json, code) = run_audit_json(dir.path(), "{}");
     // Should not crash, should have errors
     assert_eq!(code, 1);
 }
@@ -899,7 +852,8 @@ fn edge_case_malformed_html() {
         r#"<!DOCTYPE html><html lang="en"><head><title>Malformed</title><link rel="canonical" href="https://example.com/"></head><body><h1>OK</h1><p>Unclosed <div>mismatched</span></body></html>"#,
     ).unwrap();
     // Should not crash; scraper is tolerant of malformed HTML
-    let (_json, _code) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (_json, _code) =
+        run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
 }
 
 #[test]
@@ -910,7 +864,7 @@ fn edge_case_no_doctype() {
         r#"<html><head><title>No DOCTYPE</title></head><body><h1>Test</h1></body></html>"#,
     )
     .unwrap();
-    let (json, code) = run_audit_json(dir.path(), &[]);
+    let (json, code) = run_audit_json(dir.path(), "{}");
     let findings = json["findings"].as_array().unwrap();
     // Should detect missing lang and canonical at minimum
     let rule_ids: Vec<&str> = findings
@@ -934,25 +888,19 @@ fn strict_mode_warnings_become_errors() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>First</h1><h1>Second</h1></body></html>"#,
     ).unwrap();
-    // Without --strict: exit 0 (only warnings)
+    // Without strict: exit 0 (only warnings)
     let (_, _, code_normal) = run_audit(
         dir.path(),
-        &["--site", "https://example.com", "--format", "json"],
+        r#"{"site":{"base_url":"https://example.com"},"format":"json"}"#,
     );
-    assert_eq!(code_normal, 0, "Warnings should exit 0 without --strict");
+    assert_eq!(code_normal, 0, "Warnings should exit 0 without strict");
 
-    // With --strict: exit 1
+    // With strict: exit 1
     let (_, _, code_strict) = run_audit(
         dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--strict",
-            "--format",
-            "json",
-        ],
+        r#"{"site":{"base_url":"https://example.com"},"strict":true,"format":"json"}"#,
     );
-    assert_eq!(code_strict, 1, "Warnings should exit 1 with --strict");
+    assert_eq!(code_strict, 1, "Warnings should exit 1 with strict");
 }
 
 // ==========================================================================
@@ -963,7 +911,7 @@ fn strict_mode_warnings_become_errors() {
 fn json_output_structure() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
-    let (json, _) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     assert!(json["findings"].is_array(), "findings should be array");
     assert!(json["summary"].is_object(), "summary should be object");
     assert!(json["summary"]["errors"].is_number());
@@ -978,7 +926,7 @@ fn json_output_structure() {
 
 #[test]
 fn exit_code_2_on_bad_dist_path() {
-    let (_, stderr, code) = run_audit(Path::new("/nonexistent/dist/path"), &[]);
+    let (_, stderr, code) = run_audit(Path::new("/nonexistent/dist/path"), "{}");
     assert_eq!(code, 2);
     assert!(stderr.contains("does not exist") || stderr.contains("Error"));
 }
@@ -1000,7 +948,7 @@ fn exclude_glob_skips_files() {
     // Exclude bad.html
     let (json, code) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com", "--exclude", "bad.html"],
+        r#"{"site":{"base_url":"https://example.com"},"filters":{"exclude":["bad.html"]}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     // bad.html should be excluded, so no findings from it
@@ -1030,10 +978,9 @@ fn config_exclude_filters_files() {
     )
     .unwrap();
     // Config excludes 404.html and drafts/**
-    let (json, code) = run_audit_json_stdin(
+    let (json, code) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com"],
-        r#"{"filters":{"exclude":["404.html","drafts/**"]}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"filters":{"exclude":["404.html","drafts/**"]}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
@@ -1065,7 +1012,7 @@ fn include_glob_limits_files() {
     // Include only index.html at root
     let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com", "--include", "index.html"],
+        r#"{"site":{"base_url":"https://example.com"},"filters":{"include":["index.html"]}}"#,
     );
     let summary = &json["summary"];
     assert_eq!(summary["files_checked"].as_u64().unwrap(), 1);
@@ -1079,10 +1026,9 @@ fn include_glob_limits_files() {
 fn sitemap_missing_when_required() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
-    let (json, code) = run_audit_json_stdin(
+    let (json, code) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com"],
-        r#"{"sitemap":{"require":true}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"sitemap":{"require":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(findings.iter().any(|f| f["rule_id"] == "sitemap/missing"));
@@ -1098,7 +1044,7 @@ fn sitemap_stale_entry() {
         dir.path().join("sitemap.xml"),
         r#"<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://example.com/</loc></url><url><loc>https://example.com/deleted-page/</loc></url></urlset>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), &["--site", "https://example.com"]);
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(findings
         .iter()
@@ -1106,13 +1052,12 @@ fn sitemap_stale_entry() {
 }
 
 #[test]
-fn no_sitemap_check_flag() {
+fn no_sitemap_check_via_config() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
-    let (json, code) = run_audit_json_stdin(
+    let (json, code) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com", "--no-sitemap-check"],
-        r#"{"sitemap":{"require":true}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"sitemap":{"require":false,"canonical_must_be_in_sitemap":false,"forbid_noncanonical_in_sitemap":false,"entries_must_exist_in_dist":false}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(!findings
@@ -1133,7 +1078,7 @@ fn max_errors_caps_output() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html><head></head><body><img src="/a.jpg"><img src="/b.jpg"><a href="/x/"></a><button></button><input type="text" name="q"></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), &["--max-errors", "2"]);
+    let (json, _) = run_audit_json(dir.path(), r#"{"max_errors":2}"#);
     let findings = json["findings"].as_array().unwrap();
     let error_count = findings.iter().filter(|f| f["level"] == "error").count();
     // With --max-errors=2, at most 2 errors
@@ -1177,7 +1122,7 @@ fn max_errors_exact_count() {
 
     let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com", "--max-errors", "2"],
+        r#"{"site":{"base_url":"https://example.com"},"max_errors":2}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     let error_count = findings.iter().filter(|f| f["level"] == "error").count();
@@ -1213,7 +1158,7 @@ fn max_errors_truncated_in_json() {
         .unwrap();
     }
 
-    let (json, _) = run_audit_json(dir.path(), &["--max-errors", "1"]);
+    let (json, _) = run_audit_json(dir.path(), r#"{"max_errors":1}"#);
     let findings = json["findings"].as_array().unwrap();
     let error_count = findings.iter().filter(|f| f["level"] == "error").count();
     // The seo check runs in parallel and returns 5 errors,
@@ -1249,10 +1194,9 @@ fn config_disables_checks() {
         r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
     ).unwrap();
     // Config that disables lang check
-    let (json, _) = run_audit_json_stdin(
+    let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com"],
-        r#"{"html_basics":{"lang_attr_required":false}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"html_basics":{"lang_attr_required":false}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
@@ -1269,7 +1213,7 @@ fn config_disables_checks() {
 fn text_output_format_structure() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
-    let (stdout, _, code) = run_audit(dir.path(), &["--site", "https://example.com"]);
+    let (stdout, _, code) = run_audit(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     assert_eq!(code, 0);
     assert!(stdout.contains("All checks passed") || stdout.contains("Summary"));
 }
@@ -1278,7 +1222,7 @@ fn text_output_format_structure() {
 fn text_output_with_errors() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("index.html"), "").unwrap();
-    let (stdout, _, code) = run_audit(dir.path(), &[]);
+    let (stdout, _, code) = run_audit(dir.path(), "{}");
     assert_eq!(code, 1);
     assert!(stdout.contains("Summary"));
     assert!(stdout.contains("error"));
@@ -1292,7 +1236,7 @@ fn text_output_with_errors() {
 fn json_finding_structure() {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("index.html"), "").unwrap();
-    let (json, _) = run_audit_json(dir.path(), &[]);
+    let (json, _) = run_audit_json(dir.path(), "{}");
     let findings = json["findings"].as_array().unwrap();
     assert!(!findings.is_empty());
     let f = &findings[0];
@@ -1335,10 +1279,9 @@ fn assets_unhashed_filename_warns() {
     fs::create_dir_all(dir.path().join("js")).unwrap();
     fs::write(dir.path().join("js/app.js"), "console.log('hi')").unwrap();
 
-    let (json, _) = run_audit_json_stdin(
+    let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com"],
-        r#"{"assets":{"require_hashed_filenames":true}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"assets":{"require_hashed_filenames":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     let unhashed: Vec<_> = findings
@@ -1382,10 +1325,9 @@ fn assets_hashed_filename_no_warning() {
     )
     .unwrap();
 
-    let (json, _) = run_audit_json_stdin(
+    let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com"],
-        r#"{"assets":{"require_hashed_filenames":true}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"assets":{"require_hashed_filenames":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
@@ -1404,10 +1346,9 @@ fn assets_hashed_filename_no_warning() {
 fn external_links_deprecation_warning() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Test", "Test", "/");
-    let (_, stderr, _) = run_audit_stdin(
+    let (_, stderr, _) = run_audit(
         dir.path(),
-        &["--site", "https://example.com"],
-        r#"{"external_links":{"enabled":true}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"external_links":{"enabled":true}}"#,
     );
     assert!(
         stderr.contains("external_links"),
@@ -1420,10 +1361,9 @@ fn external_links_deprecation_warning() {
 fn external_links_disabled_no_warning() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Test", "Test", "/");
-    let (_, stderr, _) = run_audit_stdin(
+    let (_, stderr, _) = run_audit(
         dir.path(),
-        &["--site", "https://example.com"],
-        r#"{"external_links":{"enabled":false}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"external_links":{"enabled":false}}"#,
     );
     assert!(
         !stderr.contains("external_links"),
@@ -1458,10 +1398,9 @@ fn meta_description_length_checked_even_when_not_required() {
     )
     .unwrap();
 
-    let (json, _) = run_audit_json_stdin(
+    let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com"],
-        r#"{"html_basics":{"meta_description_required":false,"meta_description_max_length":160}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"html_basics":{"meta_description_required":false,"meta_description_max_length":160}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
@@ -1497,10 +1436,9 @@ fn meta_description_missing_no_warning_when_not_required() {
     )
     .unwrap();
 
-    let (json, _) = run_audit_json_stdin(
+    let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com"],
-        r#"{"html_basics":{"meta_description_required":false}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"html_basics":{"meta_description_required":false}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
@@ -1523,10 +1461,9 @@ fn severity_mapping_downgrades_error_to_warning() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
     ).unwrap();
-    let (json, code) = run_audit_json_stdin(
+    let (json, code) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com"],
-        r#"{"severity":{"html/lang-missing":"warning"}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"severity":{"html/lang-missing":"warning"}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     let lang = findings
@@ -1549,10 +1486,9 @@ fn severity_mapping_off_suppresses_finding() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
     ).unwrap();
-    let (json, code) = run_audit_json_stdin(
+    let (json, code) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com"],
-        r#"{"severity":{"html/lang-missing":"off"}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"severity":{"html/lang-missing":"off"}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
@@ -1582,10 +1518,9 @@ fn severity_mapping_upgrades_warning_to_error() {
         ),
     )
     .unwrap();
-    let (json, code) = run_audit_json_stdin(
+    let (json, code) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com"],
-        r#"{"severity":{"html/title-too-long":"error"}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"severity":{"html/title-too-long":"error"}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     let title = findings
@@ -1598,112 +1533,6 @@ fn severity_mapping_upgrades_warning_to_error() {
         "Severity should be upgraded to error"
     );
     assert_eq!(code, 1, "Upgraded to error should cause exit code 1");
-}
-
-// ==========================================================================
-// Baseline / Ignore mechanism
-// ==========================================================================
-
-#[test]
-fn update_baseline_creates_file() {
-    let dir = TempDir::new().unwrap();
-    // Page with errors
-    fs::write(
-        dir.path().join("index.html"),
-        r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
-    ).unwrap();
-    let baseline_path = dir.path().join(".astro-post-audit-baseline");
-    let (_, _, code) = run_audit(
-        dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--update-baseline",
-            "--baseline",
-            baseline_path.to_str().unwrap(),
-        ],
-    );
-    assert_eq!(code, 0, "--update-baseline should always exit 0");
-    assert!(baseline_path.exists(), "Baseline file should be created");
-    let content = fs::read_to_string(&baseline_path).unwrap();
-    assert!(
-        content.contains("html/lang-missing"),
-        "Baseline should contain lang-missing"
-    );
-    assert!(
-        content.contains("index.html"),
-        "Baseline should reference the file"
-    );
-}
-
-#[test]
-fn baseline_suppresses_findings() {
-    let dir = TempDir::new().unwrap();
-    // Page with missing lang (normally an error)
-    fs::write(
-        dir.path().join("index.html"),
-        r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
-    ).unwrap();
-    // Create baseline that suppresses the lang-missing error
-    let baseline_path = dir.path().join(".astro-post-audit-baseline");
-    fs::write(
-        &baseline_path,
-        "# baseline\nhtml/lang-missing\tindex.html\n",
-    )
-    .unwrap();
-    let (json, code) = run_audit_json(
-        dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--baseline",
-            baseline_path.to_str().unwrap(),
-        ],
-    );
-    let findings = json["findings"].as_array().unwrap();
-    assert!(
-        !findings.iter().any(|f| f["rule_id"] == "html/lang-missing"),
-        "Baselined finding should be suppressed"
-    );
-    assert_eq!(code, 0, "With error baselined, should exit 0");
-    assert!(
-        json["summary"]["ignored"].as_u64().unwrap_or(0) >= 1,
-        "Summary should show ignored count"
-    );
-}
-
-#[test]
-fn baseline_only_suppresses_matching_entries() {
-    let dir = TempDir::new().unwrap();
-    // Page with missing lang AND missing viewport
-    fs::write(
-        dir.path().join("index.html"),
-        r#"<!DOCTYPE html><html><head><meta charset="utf-8"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
-    ).unwrap();
-    // Only baseline the lang-missing error
-    let baseline_path = dir.path().join(".astro-post-audit-baseline");
-    fs::write(&baseline_path, "html/lang-missing\tindex.html\n").unwrap();
-    let (json, code) = run_audit_json(
-        dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--baseline",
-            baseline_path.to_str().unwrap(),
-        ],
-    );
-    let findings = json["findings"].as_array().unwrap();
-    assert!(
-        !findings.iter().any(|f| f["rule_id"] == "html/lang-missing"),
-        "Baselined lang-missing should be suppressed"
-    );
-    assert!(
-        findings
-            .iter()
-            .any(|f| f["rule_id"] == "html/viewport-missing"),
-        "Non-baselined viewport-missing should still appear"
-    );
-    assert_eq!(code, 1, "Remaining errors should still cause exit code 1");
 }
 
 // ==========================================================================
@@ -1730,7 +1559,7 @@ fn structured_data_missing_context() {
     .unwrap();
     let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com", "--check-structured-data"],
+        r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
@@ -1761,7 +1590,7 @@ fn structured_data_missing_required_property() {
     .unwrap();
     let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com", "--check-structured-data"],
+        r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
@@ -1793,7 +1622,7 @@ fn structured_data_valid_article_no_semantic_warning() {
     .unwrap();
     let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com", "--check-structured-data"],
+        r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
@@ -1824,10 +1653,9 @@ fn structured_data_duplicate_type_warns() {
 </html>"#,
     )
     .unwrap();
-    let (json, _) = run_audit_json_stdin(
+    let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com"],
-        r#"{"structured_data":{"detect_duplicate_types":true}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"structured_data":{"detect_duplicate_types":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
@@ -1857,10 +1685,9 @@ fn structured_data_different_types_no_warning() {
 </html>"#,
     )
     .unwrap();
-    let (json, _) = run_audit_json_stdin(
+    let (json, _) = run_audit_json(
         dir.path(),
-        &["--site", "https://example.com"],
-        r#"{"structured_data":{"detect_duplicate_types":true}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"structured_data":{"detect_duplicate_types":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
