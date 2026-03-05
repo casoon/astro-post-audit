@@ -1210,9 +1210,8 @@ fn max_errors_truncated_in_json() {
     );
     // truncated should be true when errors were actually removed
     if error_count == 1 {
-        assert_eq!(
+        assert!(
             json["summary"]["truncated"].as_bool().unwrap_or(false),
-            true,
             "Summary should indicate truncation when errors were capped"
         );
     }

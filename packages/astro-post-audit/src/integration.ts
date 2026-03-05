@@ -1,8 +1,7 @@
 import type { AstroIntegration } from 'astro';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, writeFileSync, unlinkSync, rmdirSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 /**
@@ -341,21 +340,22 @@ export default function postAudit(options: PostAuditOptions = {}): AstroIntegrat
           }
         }
 
-        // Config: explicit file path OR generate temp from inline rules
-        let tempConfigPath: string | undefined;
+        // Config: explicit file path OR pipe inline rules via stdin
+        let stdinInput: string | undefined;
         if (options.config) {
           args.push('--config', options.config);
         } else if (options.rules) {
-          const tempDir = mkdtempSync(join(tmpdir(), 'astro-post-audit-'));
-          tempConfigPath = join(tempDir, 'rules.toml');
-          writeFileSync(tempConfigPath, rulesToToml(options.rules), 'utf-8');
-          args.push('--config', tempConfigPath);
+          args.push('--config-stdin');
+          stdinInput = rulesToToml(options.rules);
         }
 
         logger.info('Running post-build audit...');
 
         try {
-          execFileSync(binaryPath, args, { stdio: 'inherit' });
+          execFileSync(binaryPath, args, {
+            stdio: stdinInput ? ['pipe', 'inherit', 'inherit'] : 'inherit',
+            input: stdinInput,
+          });
           logger.info('All checks passed!');
         } catch (err: unknown) {
           const exitCode =
@@ -372,16 +372,6 @@ export default function postAudit(options: PostAuditOptions = {}): AstroIntegrat
             logger.warn('Audit found issues. See output above.');
           } else {
             logger.error(`Audit failed with exit code ${exitCode ?? 'unknown'}`);
-          }
-        } finally {
-          // Clean up temp config
-          if (tempConfigPath) {
-            try {
-              unlinkSync(tempConfigPath);
-              rmdirSync(dirname(tempConfigPath));
-            } catch {
-              // ignore cleanup errors
-            }
           }
         }
       },

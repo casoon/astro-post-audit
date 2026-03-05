@@ -339,7 +339,11 @@ impl Default for ExternalLinksConfig {
 impl Config {
     pub fn from_file(path: &Path) -> Result<Self> {
         let content = std::fs::read_to_string(path)?;
-        let config: Config = toml::from_str(&content)?;
+        Self::from_toml(&content)
+    }
+
+    pub fn from_toml(toml_str: &str) -> Result<Self> {
+        let config: Config = toml::from_str(toml_str)?;
         config.warn_deprecated();
         Ok(config)
     }

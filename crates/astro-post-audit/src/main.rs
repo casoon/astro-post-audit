@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -39,8 +40,12 @@ struct Cli {
     format: report::Format,
 
     /// Path to rules config file (TOML)
-    #[arg(long)]
+    #[arg(long, conflicts_with = "config_stdin")]
     config: Option<PathBuf>,
+
+    /// Read TOML config from stdin
+    #[arg(long)]
+    config_stdin: bool,
 
     /// Maximum number of errors before aborting
     #[arg(long)]
@@ -100,10 +105,15 @@ fn main() {
 fn run() -> Result<i32> {
     let cli = Cli::parse();
 
-    // Load config: explicit --config path or defaults
-    let mut config = match &cli.config {
-        Some(path) => Config::from_file(path)?,
-        None => Config::default(),
+    // Load config: --config-stdin > --config path > defaults
+    let mut config = if cli.config_stdin {
+        let mut buf = String::new();
+        std::io::stdin().read_to_string(&mut buf)?;
+        Config::from_toml(&buf)?
+    } else if let Some(ref path) = cli.config {
+        Config::from_file(path)?
+    } else {
+        Config::default()
     };
 
     // CLI overrides
