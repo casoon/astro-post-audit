@@ -49,6 +49,150 @@ postAudit({
 })
 ```
 
+### Full rules reference
+
+All fields are optional — shown here with their defaults.
+
+```js
+rules: {
+  // Site settings
+  site: {
+    base_url: undefined,               // Auto-detected from Astro's `site` config
+  },
+
+  // File filters (merged with top-level include/exclude)
+  filters: {
+    include: [],                        // Glob patterns to include
+    exclude: [],                        // Glob patterns to exclude (e.g. ["404.html", "drafts/**"])
+  },
+
+  // URL normalization
+  url_normalization: {
+    trailing_slash: 'always',           // 'always' | 'never' | 'ignore'
+    index_html: 'forbid',              // 'forbid' | 'allow'
+  },
+
+  // Canonical tag checks
+  canonical: {
+    require: true,                      // Every page must have a canonical tag
+    absolute: true,                     // Canonical URL must be absolute
+    same_origin: true,                  // Must point to same origin as site
+    self_reference: false,              // Must be a self-referencing canonical
+  },
+
+  // Robots meta
+  robots_meta: {
+    allow_noindex: true,                // Don't warn on noindex pages
+    fail_if_noindex: false,             // Treat noindex as error
+  },
+
+  // Internal link checks
+  links: {
+    check_internal: true,               // Verify internal links resolve
+    fail_on_broken: true,               // Broken links are errors (not warnings)
+    forbid_query_params_internal: true,  // Warn on ?query in internal links
+    check_fragments: false,             // Validate #fragment targets exist
+    detect_orphan_pages: false,         // Warn about pages with no incoming links
+    check_mixed_content: true,          // Warn on http:// in internal links
+  },
+
+  // Sitemap cross-reference
+  sitemap: {
+    require: false,                     // sitemap.xml must exist
+    canonical_must_be_in_sitemap: true,  // Canonical URLs should appear in sitemap
+    forbid_noncanonical_in_sitemap: false, // Sitemap must not contain non-canonical URLs
+    entries_must_exist_in_dist: true,    // Sitemap URLs must correspond to pages
+  },
+
+  // robots.txt
+  robots_txt: {
+    require: false,                     // robots.txt must exist
+    require_sitemap_link: false,        // Must contain a sitemap link
+  },
+
+  // HTML basics
+  html_basics: {
+    lang_attr_required: true,           // <html lang="..."> required
+    title_required: true,               // <title> required and non-empty
+    meta_description_required: false,   // <meta name="description"> required
+    viewport_required: true,            // <meta name="viewport"> required
+    title_max_length: 60,               // Warn if title exceeds this length
+    meta_description_max_length: 160,   // Warn if description exceeds this length
+  },
+
+  // Heading hierarchy
+  headings: {
+    require_h1: true,                   // Page must have at least one <h1>
+    single_h1: true,                    // Only one <h1> per page
+    no_skip: false,                     // No heading level gaps (h2 → h4)
+  },
+
+  // Accessibility
+  a11y: {
+    img_alt_required: true,             // <img> must have alt attribute
+    allow_decorative_images: true,      // role="presentation" skips alt check
+    a_accessible_name_required: true,   // <a> must have accessible name
+    button_name_required: true,         // <button> must have accessible name
+    label_for_required: true,           // Form controls need associated <label>
+    warn_generic_link_text: true,       // Warn on "click here", "mehr", "weiter"
+    aria_hidden_focusable_check: true,  // Warn on aria-hidden on focusable elements
+    require_skip_link: false,           // Require skip navigation link
+  },
+
+  // Asset checks (also enabled via checkAssets option)
+  assets: {
+    check_broken_assets: false,         // Verify img/script/link references
+    check_image_dimensions: false,      // Warn on missing width/height (CLS)
+    max_image_size_kb: undefined,       // Warn if image exceeds size in KB
+    max_js_size_kb: undefined,          // Warn if JS file exceeds size in KB
+    max_css_size_kb: undefined,         // Warn if CSS file exceeds size in KB
+    require_hashed_filenames: false,    // Warn if filenames lack cache-busting hash
+  },
+
+  // Open Graph & Twitter Cards
+  opengraph: {
+    require_og_title: false,            // Require og:title
+    require_og_description: false,      // Require og:description
+    require_og_image: false,            // Require og:image
+    require_twitter_card: false,        // Require twitter:card
+  },
+
+  // Structured data (JSON-LD) — also enabled via checkStructuredData option
+  structured_data: {
+    check_json_ld: false,               // Validate JSON-LD syntax and semantics
+    require_json_ld: false,             // Every page must have JSON-LD
+  },
+
+  // Hreflang (multilingual sites)
+  hreflang: {
+    check_hreflang: false,              // Enable hreflang checks
+    require_x_default: false,           // Require x-default entry
+    require_self_reference: false,      // Must include self-referencing entry
+    require_reciprocal: false,          // Links must be reciprocal (A→B and B→A)
+  },
+
+  // Security — also enabled via checkSecurity option
+  security: {
+    check_target_blank: true,           // Warn on target="_blank" without rel="noopener"
+    check_mixed_content: true,          // Warn on http:// resource URLs
+    warn_inline_scripts: false,         // Warn on inline <script> tags
+  },
+
+  // Content quality — also enabled via checkDuplicates option
+  content_quality: {
+    detect_duplicate_titles: false,     // Warn on duplicate <title> across pages
+    detect_duplicate_descriptions: false, // Warn on duplicate meta descriptions
+    detect_duplicate_h1: false,         // Warn on duplicate <h1> across pages
+    detect_duplicate_pages: false,      // Warn on identical page content
+  },
+
+  // Override severity per rule ID
+  severity: {
+    // 'rule-id': 'error' | 'warning' | 'info' | 'off'
+  },
+}
+```
+
 ## What it checks
 
 - **SEO** — Canonical tags, robots meta, URL normalization (trailing slash, index.html)
