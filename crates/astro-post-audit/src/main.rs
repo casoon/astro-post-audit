@@ -32,6 +32,14 @@ struct Cli {
 }
 
 fn main() {
+    // Install miette's fancy graphical handler for any unhandled errors
+    miette::set_hook(Box::new(|_| {
+        Box::new(
+            miette::GraphicalReportHandler::new().with_theme(miette::GraphicalTheme::unicode()),
+        )
+    }))
+    .ok();
+
     match run() {
         Ok(code) => process::exit(code),
         Err(e) => {
@@ -117,6 +125,7 @@ fn run() -> Result<i32> {
     run_check!(checks::hreflang::check_all(&site_index, &config));
     run_check!(checks::security::check_all(&site_index, &config));
     run_check!(checks::content_quality::check_all(&site_index, &config));
+    run_check!(checks::external_links::check_all(&site_index, &config));
     let _ = error_count; // used by run_check! macro for early-stop
 
     // Apply severity overrides from [severity] config section

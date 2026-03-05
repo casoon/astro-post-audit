@@ -1,6 +1,7 @@
 pub mod a11y;
 pub mod assets;
 pub mod content_quality;
+pub mod external_links;
 pub mod headings;
 pub mod hreflang;
 pub mod html_basics;

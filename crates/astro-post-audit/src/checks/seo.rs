@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use rayon::prelude::*;
 use scraper::{Html, Selector};
 use url::Url;
@@ -8,7 +10,7 @@ use crate::normalize;
 use crate::report::{Finding, Level};
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
-    index
+    let mut findings: Vec<Finding> = index
         .pages
         .par_iter()
         .flat_map(|page| {
@@ -25,7 +27,14 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             findings
         })
-        .collect()
+        .collect();
+
+    // Cross-page: canonical cluster detection
+    if config.canonical.detect_clusters {
+        findings.extend(check_canonical_clusters(index));
+    }
+
+    findings
 }
 
 fn check_canonical(
@@ -178,4 +187,48 @@ fn check_robots(page: &crate::discovery::PageInfo, config: &Config, findings: &m
             });
         }
     }
+}
+
+/// Detect canonical clusters: multiple pages pointing to the same canonical URL.
+/// This is often a copy-paste error, but can be intentional (AMP, hreflang variants).
+fn check_canonical_clusters(index: &SiteIndex) -> Vec<Finding> {
+    let mut canonical_to_pages: HashMap<&str, Vec<&str>> = HashMap::new();
+
+    for page in &index.pages {
+        if let Some(ref canonical) = page.canonical {
+            canonical_to_pages
+                .entry(canonical.as_str())
+                .or_default()
+                .push(&page.rel_path);
+        }
+    }
+
+    let mut findings = Vec::new();
+    for (canonical, pages) in &canonical_to_pages {
+        if pages.len() > 1 {
+            for page in pages {
+                let others: Vec<&str> = pages.iter().filter(|p| *p != page).copied().collect();
+                let others_display = if others.len() <= 3 {
+                    others.join(", ")
+                } else {
+                    format!("{} and {} more", others[..3].join(", "), others.len() - 3)
+                };
+                findings.push(Finding {
+                    level: Level::Warning,
+                    rule_id: "canonical/cluster".into(),
+                    file: page.to_string(),
+                    selector: format!("link[rel='canonical'][href='{}']", canonical),
+                    message: format!(
+                        "{} pages share canonical URL '{}' (also: {})",
+                        pages.len(),
+                        canonical,
+                        others_display
+                    ),
+                    help: "Multiple pages pointing to the same canonical may indicate a copy-paste error. If intentional (AMP, variants), disable with detect_clusters: false".into(),
+                });
+            }
+        }
+    }
+
+    findings
 }

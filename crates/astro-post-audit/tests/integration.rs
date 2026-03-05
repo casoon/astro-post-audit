@@ -1224,8 +1224,14 @@ fn text_output_with_errors() {
     fs::write(dir.path().join("index.html"), "").unwrap();
     let (stdout, _, code) = run_audit(dir.path(), "{}");
     assert_eq!(code, 1);
-    assert!(stdout.contains("Summary"));
-    assert!(stdout.contains("error"));
+    assert!(
+        stdout.contains("error"),
+        "Output should contain error summary"
+    );
+    assert!(
+        stdout.contains("file"),
+        "Output should mention files checked"
+    );
 }
 
 // ==========================================================================
@@ -1339,35 +1345,45 @@ fn assets_hashed_filename_no_warning() {
 }
 
 // ==========================================================================
-// External links deprecation warning
+// External links checking
 // ==========================================================================
 
 #[test]
-fn external_links_deprecation_warning() {
+fn external_links_disabled_by_default() {
     let dir = TempDir::new().unwrap();
-    write_valid_page(dir.path(), "index.html", "Test", "Test", "/");
-    let (_, stderr, _) = run_audit(
-        dir.path(),
-        r#"{"site":{"base_url":"https://example.com"},"external_links":{"enabled":true}}"#,
-    );
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1><a href="https://httpstat.us/404">Bad</a></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
     assert!(
-        stderr.contains("external_links"),
-        "Should warn about deprecated external_links section, got: {}",
-        stderr
+        !findings.iter().any(|f| f["rule_id"]
+            .as_str()
+            .unwrap()
+            .starts_with("external-links/")),
+        "External link checks should not run when disabled (default)"
     );
 }
 
 #[test]
-fn external_links_disabled_no_warning() {
+fn external_links_no_findings_when_no_external_links() {
     let dir = TempDir::new().unwrap();
-    write_valid_page(dir.path(), "index.html", "Test", "Test", "/");
-    let (_, stderr, _) = run_audit(
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1><a href="/about/">Internal</a></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(
         dir.path(),
-        r#"{"site":{"base_url":"https://example.com"},"external_links":{"enabled":false}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"external_links":{"enabled":true}}"#,
     );
+    let findings = json["findings"].as_array().unwrap();
     assert!(
-        !stderr.contains("external_links"),
-        "Should NOT warn when external_links.enabled = false"
+        !findings.iter().any(|f| f["rule_id"]
+            .as_str()
+            .unwrap()
+            .starts_with("external-links/")),
+        "No external link findings when page has no external links"
     );
 }
 
@@ -1695,5 +1711,83 @@ fn structured_data_different_types_no_warning() {
             .iter()
             .any(|f| f["rule_id"] == "structured-data/duplicate-type"),
         "Different @types should not trigger duplicate warning"
+    );
+}
+
+// ==========================================================================
+// Canonical cluster detection
+// ==========================================================================
+
+#[test]
+fn canonical_cluster_detected() {
+    let dir = TempDir::new().unwrap();
+    // Two pages sharing the same canonical URL
+    let pages = dir.path().join("index.html");
+    fs::write(
+        &pages,
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home</title><link rel="canonical" href="https://example.com/"></head><body><h1>Home</h1></body></html>"#,
+    ).unwrap();
+    let dup_dir = dir.path().join("duplicate");
+    fs::create_dir_all(&dup_dir).unwrap();
+    fs::write(
+        dup_dir.join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Duplicate</title><link rel="canonical" href="https://example.com/"></head><body><h1>Duplicate</h1></body></html>"#,
+    ).unwrap();
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    assert_eq!(code, 0, "Clusters are warnings, not errors");
+    let findings = json["findings"].as_array().unwrap();
+    let cluster_findings: Vec<_> = findings
+        .iter()
+        .filter(|f| f["rule_id"] == "canonical/cluster")
+        .collect();
+    assert_eq!(
+        cluster_findings.len(),
+        2,
+        "Both pages should get a cluster warning"
+    );
+}
+
+#[test]
+fn canonical_cluster_disabled() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home</title><link rel="canonical" href="https://example.com/"></head><body><h1>Home</h1></body></html>"#,
+    ).unwrap();
+    let dup_dir = dir.path().join("duplicate");
+    fs::create_dir_all(&dup_dir).unwrap();
+    fs::write(
+        dup_dir.join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Duplicate</title><link rel="canonical" href="https://example.com/"></head><body><h1>Duplicate</h1></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"canonical":{"detect_clusters":false}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"] == "canonical/cluster"),
+        "Cluster detection should be suppressed when disabled"
+    );
+}
+
+#[test]
+fn canonical_no_cluster_when_unique() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home</title><link rel="canonical" href="https://example.com/"></head><body><h1>Home</h1></body></html>"#,
+    ).unwrap();
+    let about_dir = dir.path().join("about");
+    fs::create_dir_all(&about_dir).unwrap();
+    fs::write(
+        about_dir.join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>About</title><link rel="canonical" href="https://example.com/about/"></head><body><h1>About</h1></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"] == "canonical/cluster"),
+        "Unique canonicals should not trigger cluster warning"
     );
 }

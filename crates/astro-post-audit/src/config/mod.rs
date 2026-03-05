@@ -95,6 +95,7 @@ pub struct CanonicalConfig {
     pub absolute: bool,
     pub same_origin: bool,
     pub self_reference: bool,
+    pub detect_clusters: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -246,6 +247,7 @@ impl Default for CanonicalConfig {
             absolute: true,
             same_origin: true,
             self_reference: false,
+            detect_clusters: true,
         }
     }
 }
@@ -353,12 +355,7 @@ impl Config {
 
     /// Emit warnings for deprecated/unimplemented config sections.
     pub fn warn_deprecated(&self) {
-        if self.external_links.enabled {
-            eprintln!(
-                "Warning: [external_links] is configured but not yet implemented. \
-                 External link checking will be available in a future release. \
-                 This section is currently ignored."
-            );
-        }
+        // Currently no deprecated sections
+        let _ = self;
     }
 }

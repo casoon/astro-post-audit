@@ -38,6 +38,8 @@ export interface RulesConfig {
     same_origin?: boolean;
     /** Canonical must be a self-reference (point to the page itself). @default false */
     self_reference?: boolean;
+    /** Warn when multiple pages share the same canonical URL (cluster detection). @default true */
+    detect_clusters?: boolean;
   };
   /** Robots meta tag checks. */
   robots_meta?: {
@@ -193,13 +195,19 @@ export interface RulesConfig {
    * @example `{ "html/title-too-long": "off", "a11y/img-alt-missing": "error" }`
    */
   severity?: Record<string, 'error' | 'warning' | 'info' | 'off'>;
-  /** @deprecated Not yet implemented — will be ignored. */
+  /** External link checking (HEAD requests to verify URLs return 2xx). */
   external_links?: {
+    /** Enable external link checking. @default false */
     enabled?: boolean;
+    /** Timeout per request in milliseconds. @default 3000 */
     timeout_ms?: number;
+    /** Maximum concurrent requests. @default 10 */
     max_concurrent?: number;
+    /** Broken external links are errors (not just warnings). @default false */
     fail_on_broken?: boolean;
+    /** Only check links to these domains (empty = all). */
     allow_domains?: string[];
+    /** Skip links to these domains. */
     block_domains?: string[];
   };
 }

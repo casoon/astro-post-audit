@@ -1,6 +1,7 @@
 use anyhow::Result;
 use colored::Colorize;
 use serde::Serialize;
+use std::fmt::Write as FmtWrite;
 use std::str::FromStr;
 
 use crate::overview::PageOverview;
@@ -84,7 +85,12 @@ impl Reporter {
 
     fn print_text(&self, findings: &[Finding], summary: &Summary) -> Result<()> {
         if findings.is_empty() {
-            println!("{}", "All checks passed!".green().bold());
+            println!(
+                "\n  {} {}",
+                "✓".green().bold(),
+                "All checks passed!".green().bold()
+            );
+            println!();
             return Ok(());
         }
 
@@ -96,41 +102,93 @@ impl Reporter {
         }
 
         for (file, file_findings) in &by_file {
-            println!("\n{}", file.bold().underline());
+            // File header with miette-style location marker
+            println!();
+            println!("  {} {}", "──▶".dimmed(), file.bold().underline());
+
             for f in file_findings {
-                let level_str = match f.level {
-                    Level::Error => "ERROR".red().bold(),
-                    Level::Warning => "WARN".yellow().bold(),
-                    Level::Info => "INFO".blue(),
+                // Severity marker with miette-style symbols
+                let (marker, level_label) = match f.level {
+                    Level::Error => ("×".red().bold(), "error".red().bold()),
+                    Level::Warning => ("⚠".yellow().bold(), "warning".yellow().bold()),
+                    Level::Info => ("ℹ".blue(), "info".blue()),
                 };
-                println!("  {} [{}] {}", level_str, f.rule_id.dimmed(), f.message);
+
+                // Rule ID and message
+                println!(
+                    "  {} {}{} {}",
+                    marker,
+                    level_label,
+                    format!("[{}]", f.rule_id).dimmed(),
+                    f.message
+                );
+
+                // Selector (location within the HTML)
                 if !f.selector.is_empty() {
-                    println!("    {} {}", "at".dimmed(), f.selector.dimmed());
+                    println!("    {} {}", "╰─▶".dimmed(), f.selector.dimmed());
                 }
+
+                // Help text with miette-style formatting
                 if !f.help.is_empty() {
-                    println!("    {} {}", "fix:".cyan(), f.help);
+                    println!("    {} {}", "help:".cyan().bold(), f.help);
                 }
             }
         }
 
+        // Summary box
         println!();
+        let mut summary_line = String::new();
+        if summary.errors > 0 {
+            write!(
+                summary_line,
+                "{} error{}",
+                summary.errors,
+                if summary.errors == 1 { "" } else { "s" }
+            )
+            .unwrap();
+        }
+        if summary.warnings > 0 {
+            if !summary_line.is_empty() {
+                summary_line.push_str(", ");
+            }
+            write!(
+                summary_line,
+                "{} warning{}",
+                summary.warnings,
+                if summary.warnings == 1 { "" } else { "s" }
+            )
+            .unwrap();
+        }
+        if summary.info > 0 {
+            if !summary_line.is_empty() {
+                summary_line.push_str(", ");
+            }
+            write!(summary_line, "{} info", summary.info).unwrap();
+        }
+
+        let status_icon = if summary.errors > 0 {
+            "×".red().bold()
+        } else {
+            "⚠".yellow().bold()
+        };
+
         println!(
-            "{}: {} errors, {} warnings, {} info",
-            "Summary".bold(),
-            summary.errors.to_string().red(),
-            summary.warnings.to_string().yellow(),
-            summary.info.to_string().blue(),
+            "  {} {} ({} file{} checked)",
+            status_icon,
+            summary_line.bold(),
+            summary.files_checked,
+            if summary.files_checked == 1 { "" } else { "s" }
         );
 
         if summary.truncated {
             println!(
-                "{}",
-                "  (output truncated due to --max-errors limit)"
-                    .yellow()
-                    .dimmed()
+                "    {} {}",
+                "note:".cyan().bold(),
+                "output truncated due to max-errors limit".dimmed()
             );
         }
 
+        println!();
         Ok(())
     }
 

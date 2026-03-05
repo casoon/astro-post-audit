@@ -44,6 +44,7 @@ postAudit({
     security: { check_target_blank: true },
     content_quality: { detect_duplicate_titles: true },
     opengraph: { require_og_title: true, require_og_image: true },
+    external_links: { enabled: true, timeout_ms: 5000 },
     headings: { no_skip: true },
     severity: {
       'html/title-too-long': 'off',
@@ -82,6 +83,7 @@ rules: {
     absolute: true,                     // Canonical URL must be absolute
     same_origin: true,                  // Must point to same origin as site
     self_reference: false,              // Must be a self-referencing canonical
+    detect_clusters: true,              // Warn when multiple pages share the same canonical
   },
 
   // Robots meta
@@ -161,7 +163,8 @@ rules: {
     require_twitter_card: false,        // Require twitter:card
   },
 
-  // Structured data (JSON-LD)  structured_data: {
+  // Structured data (JSON-LD)
+  structured_data: {
     check_json_ld: false,               // Validate JSON-LD syntax and semantics
     require_json_ld: false,             // Every page must have JSON-LD
     detect_duplicate_types: false,      // Warn on duplicate @type per page
@@ -175,17 +178,29 @@ rules: {
     require_reciprocal: false,          // Links must be reciprocal (A→B and B→A)
   },
 
-  // Security  security: {
+  // Security
+  security: {
     check_target_blank: true,           // Warn on target="_blank" without rel="noopener"
     check_mixed_content: true,          // Warn on http:// resource URLs
     warn_inline_scripts: false,         // Warn on inline <script> tags
   },
 
-  // Content quality  content_quality: {
+  // Content quality
+  content_quality: {
     detect_duplicate_titles: false,     // Warn on duplicate <title> across pages
     detect_duplicate_descriptions: false, // Warn on duplicate meta descriptions
     detect_duplicate_h1: false,         // Warn on duplicate <h1> across pages
     detect_duplicate_pages: false,      // Warn on identical page content
+  },
+
+  // External link checking (network requests)
+  external_links: {
+    enabled: false,                     // Enable external link checking via HEAD requests
+    timeout_ms: 3000,                   // Timeout per request in milliseconds
+    max_concurrent: 10,                 // Maximum concurrent requests
+    fail_on_broken: false,              // Broken external links are errors (not just warnings)
+    allow_domains: [],                  // Only check links to these domains (empty = all)
+    block_domains: [],                  // Skip links to these domains
   },
 
   // Override severity per rule ID
@@ -197,8 +212,9 @@ rules: {
 
 ## What it checks
 
-- **SEO** — Canonical tags, robots meta, URL normalization (trailing slash, index.html)
+- **SEO** — Canonical tags (including cluster detection), robots meta, URL normalization (trailing slash, index.html)
 - **Links** — Broken internal links, query parameters, fragment validation, orphan pages
+- **External Links** — HEAD requests to verify external URLs return 2xx, with domain filtering and concurrency control
 - **Sitemap** — Cross-reference with canonical URLs, stale entries
 - **HTML** — `<html lang>`, `<title>`, viewport, meta description, heading hierarchy
 - **Accessibility** — img alt, link/button names, form labels, generic link text, skip link, aria-hidden
