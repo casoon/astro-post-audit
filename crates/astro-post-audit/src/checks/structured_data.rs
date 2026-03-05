@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use rayon::prelude::*;
 use scraper::Selector;
 use serde_json::Value;
@@ -7,7 +9,10 @@ use crate::discovery::SiteIndex;
 use crate::report::{Finding, Level};
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
-    if !config.structured_data.check_json_ld && !config.structured_data.require_json_ld {
+    if !config.structured_data.check_json_ld
+        && !config.structured_data.require_json_ld
+        && !config.structured_data.detect_duplicate_types
+    {
         return Vec::new();
     }
 
@@ -36,15 +41,15 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 return findings;
             }
 
-            // Validate each JSON-LD block
-            if config.structured_data.check_json_ld {
-                for (i, script) in scripts.iter().enumerate() {
-                    let content: String = script.text().collect();
-                    let trimmed = content.trim();
-                    let selector_hint =
-                        format!("script[type='application/ld+json']:nth({})", i + 1);
+            // Parse all JSON-LD blocks
+            let mut parsed_blocks: Vec<(String, Value)> = Vec::new();
+            for (i, script) in scripts.iter().enumerate() {
+                let content: String = script.text().collect();
+                let trimmed = content.trim();
+                let selector_hint = format!("script[type='application/ld+json']:nth({})", i + 1);
 
-                    if trimmed.is_empty() {
+                if trimmed.is_empty() {
+                    if config.structured_data.check_json_ld {
                         findings.push(Finding {
                             level: Level::Error,
                             rule_id: "structured-data/empty".into(),
@@ -53,24 +58,57 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                             message: "JSON-LD script is empty".into(),
                             help: "Add valid JSON-LD content or remove the empty script tag".into(),
                         });
-                        continue;
                     }
+                    continue;
+                }
 
-                    match serde_json::from_str::<Value>(trimmed) {
-                        Err(e) => {
+                match serde_json::from_str::<Value>(trimmed) {
+                    Err(e) => {
+                        if config.structured_data.check_json_ld {
                             findings.push(Finding {
                                 level: Level::Error,
                                 rule_id: "structured-data/invalid-json".into(),
                                 file: page.rel_path.clone(),
-                                selector: selector_hint,
+                                selector: selector_hint.clone(),
                                 message: format!("Invalid JSON in JSON-LD: {}", e),
                                 help: "Fix the JSON syntax in the structured data block".into(),
                             });
                         }
-                        Ok(ref json) => {
-                            // Semantic checks on valid JSON
-                            check_semantics(json, &page.rel_path, &selector_hint, &mut findings);
+                    }
+                    Ok(json) => {
+                        if config.structured_data.check_json_ld {
+                            check_semantics(&json, &page.rel_path, &selector_hint, &mut findings);
                         }
+                        parsed_blocks.push((selector_hint, json));
+                    }
+                }
+            }
+
+            // Detect duplicate @type across JSON-LD blocks on the same page
+            if config.structured_data.detect_duplicate_types && parsed_blocks.len() > 1 {
+                let mut type_counts: HashMap<String, Vec<String>> = HashMap::new();
+                for (selector, json) in &parsed_blocks {
+                    for t in extract_types(json) {
+                        type_counts.entry(t).or_default().push(selector.clone());
+                    }
+                }
+                for (type_name, selectors) in &type_counts {
+                    if selectors.len() > 1 {
+                        findings.push(Finding {
+                            level: Level::Warning,
+                            rule_id: "structured-data/duplicate-type".into(),
+                            file: page.rel_path.clone(),
+                            selector: selectors.join(", "),
+                            message: format!(
+                                "Duplicate JSON-LD @type '{}' found {} times on this page",
+                                type_name,
+                                selectors.len()
+                            ),
+                            help: format!(
+                                "Consolidate {} blocks into a single JSON-LD script or use @graph",
+                                type_name
+                            ),
+                        });
                     }
                 }
             }
@@ -78,6 +116,32 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             findings
         })
         .collect()
+}
+
+/// Extract all @type values from a JSON-LD object (including @graph items).
+fn extract_types(json: &Value) -> Vec<String> {
+    let mut types = Vec::new();
+    if let Some(graph) = json.get("@graph").and_then(|g| g.as_array()) {
+        for item in graph {
+            if let Some(t) = get_type_name(item) {
+                types.push(t);
+            }
+        }
+    } else if let Some(t) = get_type_name(json) {
+        types.push(t);
+    }
+    types
+}
+
+fn get_type_name(entity: &Value) -> Option<String> {
+    entity.get("@type").and_then(|t| {
+        t.as_str().map(|s| s.to_string()).or_else(|| {
+            t.as_array()
+                .and_then(|arr| arr.first())
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        })
+    })
 }
 
 /// Check semantic validity of a JSON-LD object.

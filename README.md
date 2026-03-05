@@ -161,6 +161,7 @@ rules: {
   structured_data: {
     check_json_ld: false,               // Validate JSON-LD syntax and semantics
     require_json_ld: false,             // Every page must have JSON-LD
+    detect_duplicate_types: false,      // Warn on duplicate @type per page
   },
 
   // Hreflang (multilingual sites)

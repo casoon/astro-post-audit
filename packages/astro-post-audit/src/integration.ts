@@ -154,6 +154,8 @@ export interface RulesConfig {
     check_json_ld?: boolean;
     /** Every page must contain at least one JSON-LD block. @default false */
     require_json_ld?: boolean;
+    /** Warn if a page has multiple JSON-LD blocks with the same `@type`. @default false */
+    detect_duplicate_types?: boolean;
   };
   /** Hreflang checks for multilingual sites. */
   hreflang?: {
@@ -203,9 +205,7 @@ export interface RulesConfig {
 }
 
 export interface PostAuditOptions {
-  /** Path to a TOML config file. Mutually exclusive with `rules`. */
-  config?: string;
-  /** Inline rules config. Mutually exclusive with `config`. */
+  /** Inline rules config. */
   rules?: RulesConfig;
   /** Base URL (auto-detected from Astro's `site` config if not set) */
   site?: string;
@@ -258,14 +258,6 @@ export default function postAudit(options: PostAuditOptions = {}): AstroIntegrat
       'astro:build:done': ({ dir, logger }) => {
         if (options.disable) return;
 
-        // Validate mutual exclusion: config and rules cannot both be set
-        if (options.config && options.rules) {
-          throw new Error(
-            'astro-post-audit: "config" and "rules" are mutually exclusive. ' +
-              'Use "config" to point to a config file, OR use "rules" to provide inline config — not both.',
-          );
-        }
-
         // Validate that rules is a non-empty object if provided
         if (options.rules && typeof options.rules === 'object' && Object.keys(options.rules).length === 0) {
           logger.warn('astro-post-audit: "rules" is an empty object — using default config.');
@@ -311,11 +303,9 @@ export default function postAudit(options: PostAuditOptions = {}): AstroIntegrat
           }
         }
 
-        // Config: explicit file path OR pipe inline rules via stdin
+        // Pipe inline rules config via stdin as JSON
         let stdinInput: string | undefined;
-        if (options.config) {
-          args.push('--config', options.config);
-        } else if (options.rules) {
+        if (options.rules) {
           args.push('--config-stdin');
           stdinInput = JSON.stringify(options.rules);
         }

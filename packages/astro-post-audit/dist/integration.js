@@ -19,11 +19,6 @@ export default function postAudit(options = {}) {
             'astro:build:done': ({ dir, logger }) => {
                 if (options.disable)
                     return;
-                // Validate mutual exclusion: config and rules cannot both be set
-                if (options.config && options.rules) {
-                    throw new Error('astro-post-audit: "config" and "rules" are mutually exclusive. ' +
-                        'Use "config" to point to a config file, OR use "rules" to provide inline config — not both.');
-                }
                 // Validate that rules is a non-empty object if provided
                 if (options.rules && typeof options.rules === 'object' && Object.keys(options.rules).length === 0) {
                     logger.warn('astro-post-audit: "rules" is an empty object — using default config.');
@@ -70,12 +65,9 @@ export default function postAudit(options = {}) {
                         args.push('--exclude', pattern);
                     }
                 }
-                // Config: explicit file path OR pipe inline rules via stdin
+                // Pipe inline rules config via stdin as JSON
                 let stdinInput;
-                if (options.config) {
-                    args.push('--config', options.config);
-                }
-                else if (options.rules) {
+                if (options.rules) {
                     args.push('--config-stdin');
                     stdinInput = JSON.stringify(options.rules);
                 }

@@ -149,6 +149,8 @@ export interface RulesConfig {
         check_json_ld?: boolean;
         /** Every page must contain at least one JSON-LD block. @default false */
         require_json_ld?: boolean;
+        /** Warn if a page has multiple JSON-LD blocks with the same `@type`. @default false */
+        detect_duplicate_types?: boolean;
     };
     /** Hreflang checks for multilingual sites. */
     hreflang?: {
@@ -197,9 +199,7 @@ export interface RulesConfig {
     };
 }
 export interface PostAuditOptions {
-    /** Path to a TOML config file. Mutually exclusive with `rules`. */
-    config?: string;
-    /** Inline rules config. Mutually exclusive with `config`. */
+    /** Inline rules config. */
     rules?: RulesConfig;
     /** Base URL (auto-detected from Astro's `site` config if not set) */
     site?: string;

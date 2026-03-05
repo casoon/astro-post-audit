@@ -42,6 +42,71 @@ fn run_audit_json(dist_path: &Path, args: &[&str]) -> (serde_json::Value, i32) {
     (json, code)
 }
 
+/// Helper: run the binary with JSON config on stdin and return parsed JSON output.
+fn run_audit_json_stdin(
+    dist_path: &Path,
+    args: &[&str],
+    stdin_json: &str,
+) -> (serde_json::Value, i32) {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    let bin = env!("CARGO_BIN_EXE_astro-post-audit");
+    let mut cmd = Command::new(bin);
+    cmd.arg(dist_path.to_str().unwrap())
+        .args(["--format", "json", "--config-stdin"])
+        .args(args)
+        .env("NO_COLOR", "1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd.spawn().expect("failed to spawn binary");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(stdin_json.as_bytes())
+        .expect("failed to write stdin");
+    let output = child.wait_with_output().expect("failed to wait");
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let code = output.status.code().unwrap_or(2);
+    let json: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|e| {
+        panic!(
+            "Failed to parse JSON output: {}\nOutput was:\n{}",
+            e, stdout
+        );
+    });
+    (json, code)
+}
+
+/// Helper: run the binary with JSON config on stdin and return raw stdout/stderr/code.
+fn run_audit_stdin(dist_path: &Path, args: &[&str], stdin_json: &str) -> (String, String, i32) {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    let bin = env!("CARGO_BIN_EXE_astro-post-audit");
+    let mut cmd = Command::new(bin);
+    cmd.arg(dist_path.to_str().unwrap())
+        .args(["--config-stdin"])
+        .args(args)
+        .env("NO_COLOR", "1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd.spawn().expect("failed to spawn binary");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(stdin_json.as_bytes())
+        .expect("failed to write stdin");
+    let output = child.wait_with_output().expect("failed to wait");
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let code = output.status.code().unwrap_or(2);
+    (stdout, stderr, code)
+}
+
 /// Create a minimal valid page in a temp dir.
 fn write_valid_page(dir: &Path, rel_path: &str, title: &str, h1: &str, canonical_path: &str) {
     let full = dir.join(rel_path);
@@ -747,17 +812,10 @@ fn assets_existing_img_no_broken_error() {
 fn robots_txt_missing_when_required() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
-    // Create a config that requires robots.txt
-    let config_path = dir.path().join("rules.toml");
-    fs::write(&config_path, "[robots_txt]\nrequire = true\n").unwrap();
-    let (json, _) = run_audit_json(
+    let (json, _) = run_audit_json_stdin(
         dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--config",
-            config_path.to_str().unwrap(),
-        ],
+        &["--site", "https://example.com"],
+        r#"{"robots_txt":{"require":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(findings
@@ -770,20 +828,10 @@ fn robots_txt_no_sitemap_link() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
     fs::write(dir.path().join("robots.txt"), "User-agent: *\nAllow: /\n").unwrap();
-    let config_path = dir.path().join("rules.toml");
-    fs::write(
-        &config_path,
-        "[robots_txt]\nrequire = true\nrequire_sitemap_link = true\n",
-    )
-    .unwrap();
-    let (json, _) = run_audit_json(
+    let (json, _) = run_audit_json_stdin(
         dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--config",
-            config_path.to_str().unwrap(),
-        ],
+        &["--site", "https://example.com"],
+        r#"{"robots_txt":{"require":true,"require_sitemap_link":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(findings
@@ -800,20 +848,10 @@ fn robots_txt_with_sitemap_ok() {
         "User-agent: *\nAllow: /\nSitemap: https://example.com/sitemap.xml\n",
     )
     .unwrap();
-    let config_path = dir.path().join("rules.toml");
-    fs::write(
-        &config_path,
-        "[robots_txt]\nrequire = true\nrequire_sitemap_link = true\n",
-    )
-    .unwrap();
-    let (json, _) = run_audit_json(
+    let (json, _) = run_audit_json_stdin(
         dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--config",
-            config_path.to_str().unwrap(),
-        ],
+        &["--site", "https://example.com"],
+        r#"{"robots_txt":{"require":true,"require_sitemap_link":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(!findings
@@ -992,20 +1030,10 @@ fn config_exclude_filters_files() {
     )
     .unwrap();
     // Config excludes 404.html and drafts/**
-    let config_path = dir.path().join("rules.toml");
-    fs::write(
-        &config_path,
-        "[filters]\nexclude = [\"404.html\", \"drafts/**\"]\n",
-    )
-    .unwrap();
-    let (json, code) = run_audit_json(
+    let (json, code) = run_audit_json_stdin(
         dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--config",
-            config_path.to_str().unwrap(),
-        ],
+        &["--site", "https://example.com"],
+        r#"{"filters":{"exclude":["404.html","drafts/**"]}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
@@ -1051,16 +1079,10 @@ fn include_glob_limits_files() {
 fn sitemap_missing_when_required() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
-    let config_path = dir.path().join("rules.toml");
-    fs::write(&config_path, "[sitemap]\nrequire = true\n").unwrap();
-    let (json, code) = run_audit_json(
+    let (json, code) = run_audit_json_stdin(
         dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--config",
-            config_path.to_str().unwrap(),
-        ],
+        &["--site", "https://example.com"],
+        r#"{"sitemap":{"require":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(findings.iter().any(|f| f["rule_id"] == "sitemap/missing"));
@@ -1087,17 +1109,10 @@ fn sitemap_stale_entry() {
 fn no_sitemap_check_flag() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
-    let config_path = dir.path().join("rules.toml");
-    fs::write(&config_path, "[sitemap]\nrequire = true\n").unwrap();
-    let (json, code) = run_audit_json(
+    let (json, code) = run_audit_json_stdin(
         dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--config",
-            config_path.to_str().unwrap(),
-            "--no-sitemap-check",
-        ],
+        &["--site", "https://example.com", "--no-sitemap-check"],
+        r#"{"sitemap":{"require":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(!findings
@@ -1234,16 +1249,10 @@ fn config_disables_checks() {
         r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
     ).unwrap();
     // Config that disables lang check
-    let config_path = dir.path().join("rules.toml");
-    fs::write(&config_path, "[html_basics]\nlang_attr_required = false\n").unwrap();
-    let (json, _) = run_audit_json(
+    let (json, _) = run_audit_json_stdin(
         dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--config",
-            config_path.to_str().unwrap(),
-        ],
+        &["--site", "https://example.com"],
+        r#"{"html_basics":{"lang_attr_required":false}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
@@ -1326,17 +1335,10 @@ fn assets_unhashed_filename_warns() {
     fs::create_dir_all(dir.path().join("js")).unwrap();
     fs::write(dir.path().join("js/app.js"), "console.log('hi')").unwrap();
 
-    let config_path = dir.path().join("rules.toml");
-    fs::write(&config_path, "[assets]\nrequire_hashed_filenames = true\n").unwrap();
-
-    let (json, _) = run_audit_json(
+    let (json, _) = run_audit_json_stdin(
         dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--config",
-            config_path.to_str().unwrap(),
-        ],
+        &["--site", "https://example.com"],
+        r#"{"assets":{"require_hashed_filenames":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     let unhashed: Vec<_> = findings
@@ -1380,17 +1382,10 @@ fn assets_hashed_filename_no_warning() {
     )
     .unwrap();
 
-    let config_path = dir.path().join("rules.toml");
-    fs::write(&config_path, "[assets]\nrequire_hashed_filenames = true\n").unwrap();
-
-    let (json, _) = run_audit_json(
+    let (json, _) = run_audit_json_stdin(
         dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--config",
-            config_path.to_str().unwrap(),
-        ],
+        &["--site", "https://example.com"],
+        r#"{"assets":{"require_hashed_filenames":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
@@ -1409,16 +1404,10 @@ fn assets_hashed_filename_no_warning() {
 fn external_links_deprecation_warning() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Test", "Test", "/");
-    let config_path = dir.path().join("rules.toml");
-    fs::write(&config_path, "[external_links]\nenabled = true\n").unwrap();
-    let (_, stderr, _) = run_audit(
+    let (_, stderr, _) = run_audit_stdin(
         dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--config",
-            config_path.to_str().unwrap(),
-        ],
+        &["--site", "https://example.com"],
+        r#"{"external_links":{"enabled":true}}"#,
     );
     assert!(
         stderr.contains("external_links"),
@@ -1431,16 +1420,10 @@ fn external_links_deprecation_warning() {
 fn external_links_disabled_no_warning() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Test", "Test", "/");
-    let config_path = dir.path().join("rules.toml");
-    fs::write(&config_path, "[external_links]\nenabled = false\n").unwrap();
-    let (_, stderr, _) = run_audit(
+    let (_, stderr, _) = run_audit_stdin(
         dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--config",
-            config_path.to_str().unwrap(),
-        ],
+        &["--site", "https://example.com"],
+        r#"{"external_links":{"enabled":false}}"#,
     );
     assert!(
         !stderr.contains("external_links"),
@@ -1475,21 +1458,10 @@ fn meta_description_length_checked_even_when_not_required() {
     )
     .unwrap();
 
-    let config_path = dir.path().join("rules.toml");
-    fs::write(
-        &config_path,
-        "[html_basics]\nmeta_description_required = false\nmeta_description_max_length = 160\n",
-    )
-    .unwrap();
-
-    let (json, _) = run_audit_json(
+    let (json, _) = run_audit_json_stdin(
         dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--config",
-            config_path.to_str().unwrap(),
-        ],
+        &["--site", "https://example.com"],
+        r#"{"html_basics":{"meta_description_required":false,"meta_description_max_length":160}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
@@ -1525,21 +1497,10 @@ fn meta_description_missing_no_warning_when_not_required() {
     )
     .unwrap();
 
-    let config_path = dir.path().join("rules.toml");
-    fs::write(
-        &config_path,
-        "[html_basics]\nmeta_description_required = false\n",
-    )
-    .unwrap();
-
-    let (json, _) = run_audit_json(
+    let (json, _) = run_audit_json_stdin(
         dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--config",
-            config_path.to_str().unwrap(),
-        ],
+        &["--site", "https://example.com"],
+        r#"{"html_basics":{"meta_description_required":false}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
@@ -1562,20 +1523,10 @@ fn severity_mapping_downgrades_error_to_warning() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
     ).unwrap();
-    let config_path = dir.path().join("rules.toml");
-    fs::write(
-        &config_path,
-        "[severity]\n\"html/lang-missing\" = \"warning\"\n",
-    )
-    .unwrap();
-    let (json, code) = run_audit_json(
+    let (json, code) = run_audit_json_stdin(
         dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--config",
-            config_path.to_str().unwrap(),
-        ],
+        &["--site", "https://example.com"],
+        r#"{"severity":{"html/lang-missing":"warning"}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     let lang = findings
@@ -1598,20 +1549,10 @@ fn severity_mapping_off_suppresses_finding() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
     ).unwrap();
-    let config_path = dir.path().join("rules.toml");
-    fs::write(
-        &config_path,
-        "[severity]\n\"html/lang-missing\" = \"off\"\n",
-    )
-    .unwrap();
-    let (json, code) = run_audit_json(
+    let (json, code) = run_audit_json_stdin(
         dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--config",
-            config_path.to_str().unwrap(),
-        ],
+        &["--site", "https://example.com"],
+        r#"{"severity":{"html/lang-missing":"off"}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
@@ -1641,20 +1582,10 @@ fn severity_mapping_upgrades_warning_to_error() {
         ),
     )
     .unwrap();
-    let config_path = dir.path().join("rules.toml");
-    fs::write(
-        &config_path,
-        "[severity]\n\"html/title-too-long\" = \"error\"\n",
-    )
-    .unwrap();
-    let (json, code) = run_audit_json(
+    let (json, code) = run_audit_json_stdin(
         dir.path(),
-        &[
-            "--site",
-            "https://example.com",
-            "--config",
-            config_path.to_str().unwrap(),
-        ],
+        &["--site", "https://example.com"],
+        r#"{"severity":{"html/title-too-long":"error"}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     let title = findings
@@ -1871,5 +1802,71 @@ fn structured_data_valid_article_no_semantic_warning() {
             rid.starts_with("structured-data/missing") || rid == "structured-data/unusual-context"
         }),
         "Valid Article should produce no semantic warnings"
+    );
+}
+
+#[test]
+fn structured_data_duplicate_type_warns() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Test</title>
+  <link rel="canonical" href="https://example.com/">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"First"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Second"}</script>
+</head>
+<body><h1>Test</h1></body>
+</html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json_stdin(
+        dir.path(),
+        &["--site", "https://example.com"],
+        r#"{"structured_data":{"detect_duplicate_types":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "structured-data/duplicate-type"),
+        "Should warn about duplicate Article @type on same page"
+    );
+}
+
+#[test]
+fn structured_data_different_types_no_warning() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Test</title>
+  <link rel="canonical" href="https://example.com/">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Test"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[]}</script>
+</head>
+<body><h1>Test</h1></body>
+</html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json_stdin(
+        dir.path(),
+        &["--site", "https://example.com"],
+        r#"{"structured_data":{"detect_duplicate_types":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "structured-data/duplicate-type"),
+        "Different @types should not trigger duplicate warning"
     );
 }

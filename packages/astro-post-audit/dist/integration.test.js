@@ -33,37 +33,6 @@ describe('postAudit', () => {
         const integration = postAudit(options);
         assert.equal(integration.name, 'astro-post-audit');
     });
-    it('throws when both config and rules are set', () => {
-        const integration = postAudit({
-            config: '/path/to/rules.toml',
-            rules: { canonical: { require: true } },
-        });
-        // Simulate astro:build:done hook
-        const hook = integration.hooks['astro:build:done'];
-        assert.throws(() => hook({
-            dir: new URL('file:///tmp/dist/'),
-            logger: {
-                info: () => { },
-                warn: () => { },
-                error: () => { },
-            },
-        }), {
-            message: /mutually exclusive/,
-        });
-    });
-    it('does not throw when only config is set', () => {
-        const integration = postAudit({ config: '/path/to/rules.toml' });
-        const hook = integration.hooks['astro:build:done'];
-        // Should not throw (will just warn about missing binary)
-        assert.doesNotThrow(() => hook({
-            dir: new URL('file:///tmp/dist/'),
-            logger: {
-                info: () => { },
-                warn: () => { },
-                error: () => { },
-            },
-        }));
-    });
     it('does not throw when only rules is set', () => {
         const integration = postAudit({
             rules: { canonical: { require: true } },

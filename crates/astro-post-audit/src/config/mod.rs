@@ -1,7 +1,6 @@
 use anyhow::Result;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::path::Path;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
@@ -174,6 +173,7 @@ pub struct OpenGraphConfig {
 pub struct StructuredDataConfig {
     pub check_json_ld: bool,
     pub require_json_ld: bool,
+    pub detect_duplicate_types: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -337,17 +337,6 @@ impl Default for ExternalLinksConfig {
 }
 
 impl Config {
-    pub fn from_file(path: &Path) -> Result<Self> {
-        let content = std::fs::read_to_string(path)?;
-        Self::from_toml(&content)
-    }
-
-    pub fn from_toml(toml_str: &str) -> Result<Self> {
-        let config: Config = toml::from_str(toml_str)?;
-        config.warn_deprecated();
-        Ok(config)
-    }
-
     pub fn from_json(json_str: &str) -> Result<Self> {
         let config: Config = serde_json::from_str(json_str)?;
         config.warn_deprecated();
