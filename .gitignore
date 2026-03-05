@@ -5,7 +5,6 @@
 
 # Node
 node_modules/
-packages/astro-post-audit/package-lock.json
 packages/astro-post-audit/bin/astro-post-audit
 packages/astro-post-audit/bin/astro-post-audit.exe
 !packages/astro-post-audit/bin/run.cjs

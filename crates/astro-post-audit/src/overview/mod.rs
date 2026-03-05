@@ -216,7 +216,10 @@ fn build_stats(pages: &[PageProperties]) -> OverviewStats {
     OverviewStats {
         total_pages: pages.len(),
         pages_with_title: pages.iter().filter(|p| p.title.is_some()).count(),
-        pages_with_description: pages.iter().filter(|p| p.meta_description.is_some()).count(),
+        pages_with_description: pages
+            .iter()
+            .filter(|p| p.meta_description.is_some())
+            .count(),
         pages_with_canonical: pages.iter().filter(|p| p.has_canonical).count(),
         pages_with_og_title: pages.iter().filter(|p| p.has_og_title).count(),
         pages_with_og_description: pages.iter().filter(|p| p.has_og_description).count(),

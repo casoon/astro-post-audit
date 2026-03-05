@@ -244,11 +244,7 @@ fn check_form_labels(page: &crate::discovery::PageInfo, html: &Html, findings: &
     }
 }
 
-fn check_skip_link(
-    page: &crate::discovery::PageInfo,
-    html: &Html,
-    findings: &mut Vec<Finding>,
-) {
+fn check_skip_link(page: &crate::discovery::PageInfo, html: &Html, findings: &mut Vec<Finding>) {
     // A skip link is an <a> early in the DOM linking to #main, #main-content, #content or similar
     let sel = match Selector::parse("a[href^='#']") {
         Ok(s) => s,

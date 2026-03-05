@@ -168,10 +168,7 @@ impl Reporter {
             width = max_file_len
         );
         println!("{}", header.dimmed());
-        println!(
-            "  {}",
-            "─".repeat(header.len().saturating_sub(2)).dimmed()
-        );
+        println!("  {}", "─".repeat(header.len().saturating_sub(2)).dimmed());
 
         // Rows
         for p in &overview.pages {
@@ -181,7 +178,13 @@ impl Reporter {
                 p.file.clone()
             };
 
-            let check = |b: bool| if b { "✓".green().to_string() } else { "✗".red().to_string() };
+            let check = |b: bool| {
+                if b {
+                    "✓".green().to_string()
+                } else {
+                    "✗".red().to_string()
+                }
+            };
             let og_all = p.has_og_title && p.has_og_description && p.has_og_image;
 
             let h1_str = if p.h1_count == 0 {
@@ -259,11 +262,7 @@ impl Reporter {
                 .iter()
                 .map(|(t, c)| format!("{} ×{}", t, c))
                 .collect();
-            println!(
-                "\n{}:  {}",
-                "JSON-LD Types".bold(),
-                types_str.join("  ·  ")
-            );
+            println!("\n{}:  {}", "JSON-LD Types".bold(), types_str.join("  ·  "));
         }
 
         println!();
