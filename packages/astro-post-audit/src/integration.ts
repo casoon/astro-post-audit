@@ -250,7 +250,12 @@ export default function postAudit(options: PostAuditOptions = {}): AstroIntegrat
       },
 
       'astro:build:done': ({ dir, logger }) => {
-        if (options.disable) return;
+        if (options.disable || process.env.SKIP_AUDIT === '1' || process.env.SKIP_AUDIT === 'true') {
+          if (process.env.SKIP_AUDIT) {
+            logger.info('Audit skipped (SKIP_AUDIT is set).');
+          }
+          return;
+        }
 
         // Validate that rules is a non-empty object if provided
         if (options.rules && typeof options.rules === 'object' && Object.keys(options.rules).length === 0) {

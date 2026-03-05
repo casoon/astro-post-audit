@@ -25,6 +25,29 @@ That's it. The audit runs automatically after every `astro build`.
 
 > **Note:** If you use `@astrojs/sitemap`, make sure `postAudit()` comes **after** `sitemap()` in the integrations array. Both plugins use the `astro:build:done` hook and run in array order — the sitemap file needs to exist before the audit can check it.
 
+## Skipping the audit
+
+Set the `SKIP_AUDIT` environment variable to skip the audit for a single build. Useful for quick dev builds when external link checking would slow things down:
+
+```bash
+SKIP_AUDIT=1 astro build
+```
+
+Or add a dedicated script to your `package.json`:
+
+```json
+{
+  "scripts": {
+    "build": "astro build",
+    "build:fast": "SKIP_AUDIT=1 astro build"
+  }
+}
+```
+
+Then run `npm run build:fast` (or `pnpm build:fast`) when you want to skip the audit.
+
+You can also disable the audit permanently via config: `postAudit({ disable: true })`.
+
 ## Configuration
 
 All options are optional. Your editor provides autocomplete with descriptions and defaults for every field.
