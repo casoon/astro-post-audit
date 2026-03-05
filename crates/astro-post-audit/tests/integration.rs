@@ -1222,32 +1222,6 @@ fn max_errors_truncated_in_json() {
 // Config file auto-discovery
 // ==========================================================================
 
-#[test]
-fn config_auto_discovery_in_dist_parent() {
-    // Create a structure like: project/dist/index.html + project/rules.toml
-    let project_dir = TempDir::new().unwrap();
-    let dist = project_dir.path().join("dist");
-    fs::create_dir_all(&dist).unwrap();
-    // Page with missing lang - normally an error
-    fs::write(
-        dist.join("index.html"),
-        r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
-    ).unwrap();
-    // Config in project root disables lang check
-    fs::write(
-        project_dir.path().join("rules.toml"),
-        "[html_basics]\nlang_attr_required = false\n",
-    )
-    .unwrap();
-    // Run against dist/ without --config
-    let (json, _) = run_audit_json(&dist, &["--site", "https://example.com"]);
-    let findings = json["findings"].as_array().unwrap();
-    assert!(
-        !findings.iter().any(|f| f["rule_id"] == "html/lang-missing"),
-        "Auto-discovered config should disable lang check"
-    );
-}
-
 // ==========================================================================
 // Config file loading (explicit)
 // ==========================================================================

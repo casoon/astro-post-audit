@@ -97,44 +97,13 @@ fn main() {
     }
 }
 
-/// Auto-discover config file: check CWD and dist parent for rules.toml or .astro-post-audit.toml.
-fn discover_config(dist_path: &Path) -> Option<Config> {
-    let candidates = ["rules.toml", ".astro-post-audit.toml"];
-
-    // Search locations: CWD, then dist parent directory
-    let mut search_dirs = vec![std::env::current_dir().ok()];
-    if let Some(parent) = dist_path.parent() {
-        search_dirs.push(Some(parent.to_path_buf()));
-    }
-
-    for dir in search_dirs.into_iter().flatten() {
-        for name in &candidates {
-            let path = dir.join(name);
-            if path.is_file() {
-                match Config::from_file(&path) {
-                    Ok(cfg) => return Some(cfg),
-                    Err(e) => {
-                        eprintln!(
-                            "Warning: found config '{}' but failed to parse: {}",
-                            path.display(),
-                            e
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    None
-}
-
 fn run() -> Result<i32> {
     let cli = Cli::parse();
 
-    // Load config: explicit path > auto-discovery > defaults
+    // Load config: explicit --config path or defaults
     let mut config = match &cli.config {
         Some(path) => Config::from_file(path)?,
-        None => discover_config(&cli.dist_path).unwrap_or_default(),
+        None => Config::default(),
     };
 
     // CLI overrides
