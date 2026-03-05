@@ -91,6 +91,7 @@ dependencies = [
  "colored",
  "globset",
  "miette",
+ "percent-encoding",
  "pretty_assertions",
  "quick-xml",
  "rayon",

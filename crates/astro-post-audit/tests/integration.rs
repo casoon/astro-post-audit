@@ -1791,3 +1791,55 @@ fn canonical_no_cluster_when_unique() {
         "Unique canonicals should not trigger cluster warning"
     );
 }
+
+// ==========================================================================
+// Fragment check: percent-encoded umlauts (e.g. rehype-slug + MDX)
+// ==========================================================================
+
+#[test]
+fn fragment_percent_encoded_umlaut_same_page() {
+    // Href uses percent-encoded umlaut (%C3%A4 = ä), ID uses raw umlaut (rehype-slug behavior)
+    let dir = TempDir::new().unwrap();
+    // Build HTML with umlaut in ID but percent-encoded in href
+    let html = "<!DOCTYPE html><html lang=\"de\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Test</title><link rel=\"canonical\" href=\"https://example.com/\"></head><body><h1>Test</h1><a href=\"#n%C3%A4chste-schritte\">Link</a><h2 id=\"n\u{00E4}chste-schritte\">N\u{00E4}chste Schritte</h2></body></html>";
+    fs::write(dir.path().join("index.html"), html).unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"links":{"check_fragments":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "links/broken-fragment"),
+        "Percent-encoded umlaut fragment should match decoded ID, findings: {:?}",
+        findings
+            .iter()
+            .filter(|f| f["rule_id"] == "links/broken-fragment")
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn fragment_percent_encoded_umlaut_cross_page() {
+    let dir = TempDir::new().unwrap();
+    // Page with umlaut heading (ü = \u{00FC})
+    let target_dir = dir.path().join("target");
+    fs::create_dir_all(&target_dir).unwrap();
+    let target_html = "<!DOCTYPE html><html lang=\"de\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Target</title><link rel=\"canonical\" href=\"https://example.com/target/\"></head><body><h1>Target</h1><h2 id=\"\u{00FC}ber-uns\">\u{00DC}ber uns</h2></body></html>";
+    fs::write(target_dir.join("index.html"), target_html).unwrap();
+    // Page linking to it with percent-encoded fragment (%C3%BC = ü)
+    let home_html = "<!DOCTYPE html><html lang=\"de\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Home</title><link rel=\"canonical\" href=\"https://example.com/\"></head><body><h1>Home</h1><a href=\"/target/#%C3%BCber-uns\">Link</a></body></html>";
+    fs::write(dir.path().join("index.html"), home_html).unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"links":{"check_fragments":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "links/broken-fragment"),
+        "Cross-page percent-encoded umlaut fragment should match decoded ID"
+    );
+}

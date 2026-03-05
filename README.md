@@ -224,6 +224,24 @@ rules: {
 - **Assets** — Broken references, image dimensions, file size limits, cache-busting hashes
 - **Content Quality** — Duplicate titles, descriptions, H1s, pages
 
+## Output
+
+Rich diagnostic output with colored severity markers, location pointers, and actionable help text:
+
+```
+  ──▶ blog/post/index.html
+  × error[canonical/missing] Missing canonical tag
+    ╰─▶ head
+    help: Add <link rel="canonical" href="..."> to <head>
+  ⚠ warning[a11y/img-alt-missing] <img> missing alt attribute
+    ╰─▶ img[src='/photo.jpg']
+    help: Add an alt attribute describing the image
+
+  × 1 error, 1 warning (12 files checked)
+```
+
+Set `output: 'audit-report.json'` to write a machine-readable JSON report.
+
 ## License
 
 MIT

@@ -1,3 +1,4 @@
+use percent_encoding::percent_decode_str;
 use rayon::prelude::*;
 use scraper::Selector;
 use std::collections::HashSet;
@@ -6,6 +7,13 @@ use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::normalize;
 use crate::report::{Finding, Level};
+
+/// Decode percent-encoded fragment (e.g. `n%C3%A4chste` -> `nächste`).
+fn decode_fragment(fragment: &str) -> String {
+    percent_decode_str(fragment)
+        .decode_utf8_lossy()
+        .into_owned()
+}
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     let mut findings = Vec::new();
@@ -65,9 +73,11 @@ fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
                 // Fragment-only links: check if target ID exists on same page
                 if let Some(fragment) = href.strip_prefix('#') {
+                    let decoded = decode_fragment(fragment);
                     if config.links.check_fragments
                         && !fragment.is_empty()
                         && !page_ids.contains(fragment)
+                        && !page_ids.contains(decoded.as_str())
                     {
                         findings.push(Finding {
                             level: Level::Warning,
@@ -151,22 +161,35 @@ fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                                 if let Some(&target_idx) = index.route_to_index.get(&normalized) {
                                     let target_page = &index.pages[target_idx];
                                     let target_html = target_page.parse_html();
-                                    let id_selector_str = format!("[id='{}']", fragment);
-                                    let id_sel = Selector::parse(&id_selector_str);
-                                    if let Ok(sel) = id_sel {
-                                        if target_html.select(&sel).next().is_none() {
-                                            findings.push(Finding {
-                                                level: Level::Warning,
-                                                rule_id: "links/broken-fragment".into(),
-                                                file: page.rel_path.clone(),
-                                                selector: format!("a[href='{}']", href),
-                                                message: format!(
-                                                    "Fragment '{}' not found on target page '{}'",
-                                                    fragment, normalized
-                                                ),
-                                                help: "Fix the fragment or add the target id".into(),
-                                            });
-                                        }
+
+                                    // Try both raw and decoded fragment to handle
+                                    // percent-encoded umlauts (e.g. %C3%A4 -> ä)
+                                    let decoded = decode_fragment(fragment);
+                                    let found = [fragment, decoded.as_str()]
+                                        .iter()
+                                        .any(|frag| {
+                                            let id_selector_str =
+                                                format!("[id='{}']", frag);
+                                            Selector::parse(&id_selector_str)
+                                                .ok()
+                                                .is_some_and(|sel| {
+                                                    target_html.select(&sel).next().is_some()
+                                                })
+                                        });
+
+                                    if !found {
+                                        findings.push(Finding {
+                                            level: Level::Warning,
+                                            rule_id: "links/broken-fragment".into(),
+                                            file: page.rel_path.clone(),
+                                            selector: format!("a[href='{}']", href),
+                                            message: format!(
+                                                "Fragment '{}' not found on target page '{}'",
+                                                fragment, normalized
+                                            ),
+                                            help: "Fix the fragment or add the target id"
+                                                .into(),
+                                        });
                                     }
                                 }
                             }
