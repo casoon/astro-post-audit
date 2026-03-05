@@ -173,8 +173,14 @@ fn run() -> Result<i32> {
         );
     }
 
+    // Merge CLI and config include/exclude patterns
+    let mut include = cli.include.clone();
+    include.extend(config.filters.include.iter().cloned());
+    let mut exclude = cli.exclude.clone();
+    exclude.extend(config.filters.exclude.iter().cloned());
+
     // Discover HTML files and build site index
-    let site_index = SiteIndex::build(&cli.dist_path, &config, &cli.include, &cli.exclude)?;
+    let site_index = SiteIndex::build(&cli.dist_path, &config, &include, &exclude)?;
 
     // Page properties overview mode (informational, exits before checks)
     if cli.page_overview {

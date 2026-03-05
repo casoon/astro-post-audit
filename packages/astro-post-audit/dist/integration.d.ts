@@ -7,6 +7,10 @@ export interface RulesConfig {
     site?: {
         base_url?: string;
     };
+    filters?: {
+        include?: string[];
+        exclude?: string[];
+    };
     url_normalization?: {
         trailing_slash?: 'always' | 'never' | 'ignore';
         index_html?: 'forbid' | 'allow';

@@ -106,55 +106,139 @@ Options:
 
 ## Configuration
 
-Create a `rules.toml` in your project root (also auto-discovered as `.astro-post-audit.toml`):
+Create a `rules.toml` in your project root (also auto-discovered as `.astro-post-audit.toml`). All fields are optional — only set what you want to override. Copy-paste the full reference below:
 
 ```toml
+# ── Site ────────────────────────────────────────────────────────────────
 [site]
-base_url = "https://example.com"
+# Base URL, also settable via --site. Used for canonical/sitemap checks.
+# base_url = "https://example.com"
 
+# ── Filters ─────────────────────────────────────────────────────────────
+[filters]
+# Glob patterns to exclude files from all checks (merged with CLI --exclude).
+# Typical use: error pages, drafts, or generated pages without SEO relevance.
+# exclude = ["404.html", "drafts/**", "preview/**"]
+# Only check files matching these patterns (merged with CLI --include).
+# include = []
+
+# ── URL Normalization ───────────────────────────────────────────────────
 [url_normalization]
-trailing_slash = "always"  # always | never | ignore
-index_html = "forbid"      # forbid | allow
+trailing_slash = "always"   # "always" | "never" | "ignore" (default: always)
+index_html = "forbid"       # "forbid" | "allow" (default: forbid)
 
+# ── Canonical ───────────────────────────────────────────────────────────
 [canonical]
-require = true
-absolute = true
-same_origin = true
-self_reference = false
+require = true              # Every page needs a canonical tag (default: true)
+absolute = true             # Canonical must be absolute URL (default: true)
+same_origin = true          # Canonical must point to same origin (default: true)
+self_reference = false      # Canonical must point to the page itself (default: false)
 
+# ── Robots Meta ─────────────────────────────────────────────────────────
+[robots_meta]
+allow_noindex = true        # Don't warn on noindex pages (default: true)
+fail_if_noindex = false     # Error if any page has noindex (default: false)
+
+# ── Internal Links ──────────────────────────────────────────────────────
 [links]
-check_internal = true
-fail_on_broken = true
-forbid_query_params_internal = true
+check_internal = true                # Check internal links resolve (default: true)
+fail_on_broken = true                # Broken internal links are errors (default: true)
+forbid_query_params_internal = true  # Warn on ?query in internal links (default: true)
+check_fragments = false              # Validate #fragment targets exist (default: false)
+detect_orphan_pages = false          # Warn about pages with no incoming links (default: false)
+check_mixed_content = true           # Warn on http:// in internal links (default: true)
 
+# ── Sitemap ─────────────────────────────────────────────────────────────
+[sitemap]
+require = false                          # sitemap.xml must exist (default: false)
+canonical_must_be_in_sitemap = true      # Canonicals should be in sitemap (default: true)
+forbid_noncanonical_in_sitemap = false   # Sitemap must not contain non-canonical URLs (default: false)
+entries_must_exist_in_dist = true         # Sitemap URLs must match dist/ pages (default: true)
+
+# ── robots.txt ──────────────────────────────────────────────────────────
+[robots_txt]
+require = false              # robots.txt must exist (default: false)
+require_sitemap_link = false # robots.txt must link to sitemap (default: false)
+
+# ── HTML Basics ─────────────────────────────────────────────────────────
 [html_basics]
-lang_attr_required = true
-title_required = true
-viewport_required = true
+lang_attr_required = true              # <html lang> required (default: true)
+title_required = true                  # <title> required (default: true)
+meta_description_required = false      # <meta name="description"> required (default: false)
+viewport_required = true               # <meta name="viewport"> required (default: true)
+title_max_length = 60                  # Warn if title exceeds this length (default: 60)
+meta_description_max_length = 160      # Warn if description exceeds this (default: 160)
 
+# ── Headings ────────────────────────────────────────────────────────────
 [headings]
-require_h1 = true
-single_h1 = true
+require_h1 = true   # Page must have an <h1> (default: true)
+single_h1 = true    # Only one <h1> per page (default: true)
+no_skip = false      # No heading level gaps, e.g. h2→h4 (default: false)
 
+# ── Accessibility ───────────────────────────────────────────────────────
 [a11y]
-img_alt_required = true
-a_accessible_name_required = true
-button_name_required = true
-label_for_required = true
-warn_generic_link_text = true
-require_skip_link = false
+img_alt_required = true              # <img> must have alt attribute (default: true)
+allow_decorative_images = true       # role="presentation" / aria-hidden exempts alt (default: true)
+a_accessible_name_required = true    # <a> must have accessible name (default: true)
+button_name_required = true          # <button> must have accessible name (default: true)
+label_for_required = true            # Form controls need associated <label> (default: true)
+warn_generic_link_text = true        # Warn on "click here", "mehr" etc. (default: true)
+aria_hidden_focusable_check = true   # Warn if aria-hidden on focusable element (default: true)
+require_skip_link = false            # Require skip navigation link (default: false)
 
+# ── Assets ──────────────────────────────────────────────────────────────
+[assets]
+# Enable via --check-assets or set here.
+check_broken_assets = false          # Check img/src, script/src, link/href exist (default: false)
+check_image_dimensions = false       # Warn if <img> missing width/height (default: false)
+# max_image_size_kb = 500            # Warn if image file exceeds size (off by default)
+# max_js_size_kb = 300               # Warn if JS file exceeds size (off by default)
+# max_css_size_kb = 100              # Warn if CSS file exceeds size (off by default)
+require_hashed_filenames = false     # Warn if assets lack cache-busting hash (default: false)
+
+# ── Open Graph ──────────────────────────────────────────────────────────
+[opengraph]
+require_og_title = false        # Require og:title (default: false)
+require_og_description = false  # Require og:description (default: false)
+require_og_image = false        # Require og:image (default: false)
+require_twitter_card = false    # Require twitter:card (default: false)
+
+# ── Structured Data (JSON-LD) ──────────────────────────────────────────
 [structured_data]
-check_json_ld = false
-require_json_ld = false
+# Enable via --check-structured-data or set here.
+check_json_ld = false    # Validate JSON-LD syntax + semantics (default: false)
+require_json_ld = false  # Every page must have JSON-LD (default: false)
 
+# ── Hreflang ────────────────────────────────────────────────────────────
+[hreflang]
+check_hreflang = false          # Enable hreflang checks (default: false)
+require_x_default = false       # Require x-default hreflang (default: false)
+require_self_reference = false  # Hreflang must include self-reference (default: false)
+require_reciprocal = false      # Hreflang links must be reciprocal (default: false)
+
+# ── Security ────────────────────────────────────────────────────────────
+[security]
+# Enable via --check-security or set here.
+check_target_blank = true    # Warn target="_blank" without rel="noopener" (default: true)
+check_mixed_content = true   # Warn http:// resources on pages (default: true)
+warn_inline_scripts = false  # Warn on inline <script> tags (default: false)
+
+# ── Content Quality ─────────────────────────────────────────────────────
+[content_quality]
+# Enable via --check-duplicates or set here.
+detect_duplicate_titles = false        # Warn if multiple pages share same title (default: false)
+detect_duplicate_descriptions = false  # Warn if multiple pages share same description (default: false)
+detect_duplicate_h1 = false            # Warn if multiple pages share same H1 (default: false)
+detect_duplicate_pages = false         # Warn if pages have identical content hash (default: false)
+
+# ── Severity Overrides ──────────────────────────────────────────────────
 [severity]
-# Override severity per rule ID: error | warning | info | off
-# "links/orphan-page" = "info"
-# "html/title-too-long" = "off"
+# Override severity per rule ID: "error" | "warning" | "info" | "off"
+# "canonical/missing" = "warning"    # downgrade to warning
+# "links/orphan-page" = "info"       # downgrade to informational
+# "html/title-too-long" = "off"      # suppress entirely
+# "a11y/img-alt-missing" = "error"   # upgrade to error
 ```
-
-See `rules.toml` in this repo for all options with documentation.
 
 ### Severity Overrides
 
@@ -167,7 +251,7 @@ The `[severity]` section lets you reclassify any rule per project:
 "a11y/img-alt-missing" = "error"   # upgrade to error
 ```
 
-Supported levels: `error`, `warning`, `info`, `off`.
+Supported levels: `error`, `warning`, `info`, `off`. Applied after all checks, before `--max-errors` cap.
 
 ### Baseline / Ignore
 

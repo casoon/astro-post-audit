@@ -7,6 +7,7 @@ use std::path::Path;
 #[serde(default)]
 pub struct Config {
     pub site: SiteConfig,
+    pub filters: FilterConfig,
     pub url_normalization: UrlNormalizationConfig,
     pub canonical: CanonicalConfig,
     pub robots_meta: RobotsMetaConfig,
@@ -48,6 +49,14 @@ pub enum SeverityLevel {
 #[serde(default)]
 pub struct SiteConfig {
     pub base_url: Option<String>,
+}
+
+/// File include/exclude patterns (merged with CLI --include/--exclude).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct FilterConfig {
+    pub include: Vec<String>,
+    pub exclude: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

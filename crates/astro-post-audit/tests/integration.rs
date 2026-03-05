@@ -976,6 +976,54 @@ fn exclude_glob_skips_files() {
 }
 
 #[test]
+fn config_exclude_filters_files() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    // Create pages that should be excluded via config
+    fs::write(
+        dir.path().join("404.html"),
+        r#"<!DOCTYPE html><html><head><title>Not Found</title></head><body><h1>404</h1></body></html>"#,
+    )
+    .unwrap();
+    fs::create_dir_all(dir.path().join("drafts")).unwrap();
+    fs::write(
+        dir.path().join("drafts/index.html"),
+        r#"<!DOCTYPE html><html><head><title>Draft</title></head><body><h1>Draft</h1></body></html>"#,
+    )
+    .unwrap();
+    // Config excludes 404.html and drafts/**
+    let config_path = dir.path().join("rules.toml");
+    fs::write(
+        &config_path,
+        "[filters]\nexclude = [\"404.html\", \"drafts/**\"]\n",
+    )
+    .unwrap();
+    let (json, code) = run_audit_json(
+        dir.path(),
+        &[
+            "--site",
+            "https://example.com",
+            "--config",
+            config_path.to_str().unwrap(),
+        ],
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["file"].as_str().unwrap().contains("404")),
+        "Config-excluded 404.html should not have findings"
+    );
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["file"].as_str().unwrap().contains("drafts")),
+        "Config-excluded drafts/** should not have findings"
+    );
+    assert_eq!(code, 0);
+}
+
+#[test]
 fn include_glob_limits_files() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
