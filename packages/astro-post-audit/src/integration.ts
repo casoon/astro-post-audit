@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * Inline rules config that mirrors the Rust rules.toml structure.
+ * Inline rules config that mirrors the Rust config structure.
  * All sections and fields are optional — only set what you want to override.
  */
 export interface RulesConfig {
@@ -203,9 +203,9 @@ export interface RulesConfig {
 }
 
 export interface PostAuditOptions {
-  /** Path to rules.toml config file. Mutually exclusive with `rules`. */
+  /** Path to a TOML config file. Mutually exclusive with `rules`. */
   config?: string;
-  /** Inline rules config (generates a temporary rules.toml). Mutually exclusive with `config`. */
+  /** Inline rules config. Mutually exclusive with `config`. */
   rules?: RulesConfig;
   /** Base URL (auto-detected from Astro's `site` config if not set) */
   site?: string;
@@ -237,35 +237,6 @@ export interface PostAuditOptions {
   throwOnError?: boolean;
 }
 
-/**
- * Serialize a RulesConfig object to TOML format.
- * @internal Exported for testing only.
- */
-export function rulesToToml(rules: RulesConfig): string {
-  const lines: string[] = [];
-
-  for (const [section, values] of Object.entries(rules)) {
-    if (values == null || typeof values !== 'object') continue;
-    lines.push(`[${section}]`);
-    for (const [key, val] of Object.entries(values as Record<string, unknown>)) {
-      if (val === undefined) continue;
-      // Quote keys that contain special chars (e.g. rule IDs like "html/lang-missing")
-      const tomlKey = /^[a-zA-Z0-9_-]+$/.test(key) ? key : `"${key}"`;
-      if (typeof val === 'string') {
-        lines.push(`${tomlKey} = "${val}"`);
-      } else if (Array.isArray(val)) {
-        const items = val.map((v) => `"${v}"`).join(', ');
-        lines.push(`${tomlKey} = [${items}]`);
-      } else {
-        lines.push(`${tomlKey} = ${val}`);
-      }
-    }
-    lines.push('');
-  }
-
-  return lines.join('\n');
-}
-
 function resolveBinaryPath(): string | null {
   const binDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin');
   const binaryName =
@@ -291,7 +262,7 @@ export default function postAudit(options: PostAuditOptions = {}): AstroIntegrat
         if (options.config && options.rules) {
           throw new Error(
             'astro-post-audit: "config" and "rules" are mutually exclusive. ' +
-              'Use "config" to point to a rules.toml file, OR use "rules" to provide inline config — not both.',
+              'Use "config" to point to a config file, OR use "rules" to provide inline config — not both.',
           );
         }
 
@@ -346,7 +317,7 @@ export default function postAudit(options: PostAuditOptions = {}): AstroIntegrat
           args.push('--config', options.config);
         } else if (options.rules) {
           args.push('--config-stdin');
-          stdinInput = rulesToToml(options.rules);
+          stdinInput = JSON.stringify(options.rules);
         }
 
         logger.info('Running post-build audit...');

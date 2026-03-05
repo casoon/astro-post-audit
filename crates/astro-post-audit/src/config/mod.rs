@@ -348,6 +348,12 @@ impl Config {
         Ok(config)
     }
 
+    pub fn from_json(json_str: &str) -> Result<Self> {
+        let config: Config = serde_json::from_str(json_str)?;
+        config.warn_deprecated();
+        Ok(config)
+    }
+
     /// Emit warnings for deprecated/unimplemented config sections.
     pub fn warn_deprecated(&self) {
         if self.external_links.enabled {

@@ -1,6 +1,6 @@
 import type { AstroIntegration } from 'astro';
 /**
- * Inline rules config that mirrors the Rust rules.toml structure.
+ * Inline rules config that mirrors the Rust config structure.
  * All sections and fields are optional — only set what you want to override.
  */
 export interface RulesConfig {
@@ -197,9 +197,9 @@ export interface RulesConfig {
     };
 }
 export interface PostAuditOptions {
-    /** Path to rules.toml config file. Mutually exclusive with `rules`. */
+    /** Path to a TOML config file. Mutually exclusive with `rules`. */
     config?: string;
-    /** Inline rules config (generates a temporary rules.toml). Mutually exclusive with `config`. */
+    /** Inline rules config. Mutually exclusive with `config`. */
     rules?: RulesConfig;
     /** Base URL (auto-detected from Astro's `site` config if not set) */
     site?: string;
@@ -230,10 +230,5 @@ export interface PostAuditOptions {
     /** Throw an AstroError when the audit finds errors (fails the build). Default: false */
     throwOnError?: boolean;
 }
-/**
- * Serialize a RulesConfig object to TOML format.
- * @internal Exported for testing only.
- */
-export declare function rulesToToml(rules: RulesConfig): string;
 export default function postAudit(options?: PostAuditOptions): AstroIntegration;
 //# sourceMappingURL=integration.d.ts.map

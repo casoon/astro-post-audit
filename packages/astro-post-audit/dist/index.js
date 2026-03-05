@@ -1,1 +1,1 @@
-export { default, rulesToToml } from './integration.js';
+export { default } from './integration.js';

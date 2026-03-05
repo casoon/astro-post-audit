@@ -43,7 +43,7 @@ struct Cli {
     #[arg(long, conflicts_with = "config_stdin")]
     config: Option<PathBuf>,
 
-    /// Read TOML config from stdin
+    /// Read JSON config from stdin (used by Astro integration)
     #[arg(long)]
     config_stdin: bool,
 
@@ -105,11 +105,11 @@ fn main() {
 fn run() -> Result<i32> {
     let cli = Cli::parse();
 
-    // Load config: --config-stdin > --config path > defaults
+    // Load config: --config-stdin (JSON) > --config path (TOML) > defaults
     let mut config = if cli.config_stdin {
         let mut buf = String::new();
         std::io::stdin().read_to_string(&mut buf)?;
-        Config::from_toml(&buf)?
+        Config::from_json(&buf)?
     } else if let Some(ref path) = cli.config {
         Config::from_file(path)?
     } else {
