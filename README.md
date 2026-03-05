@@ -5,17 +5,65 @@ Fast post-build auditor for Astro sites. Checks SEO signals, internal link consi
 ## Installation
 
 ```bash
-npm i -D astro-post-audit
+npm i -D @casoon/astro-post-audit
 ```
 
-## Usage
+## Astro Integration
 
-Add to your build pipeline:
+The recommended way to use astro-post-audit is as an Astro integration. It runs automatically after `astro build` via the `astro:build:done` hook.
+
+```js
+// astro.config.mjs
+import { defineConfig } from 'astro/config';
+import postAudit from '@casoon/astro-post-audit';
+
+export default defineConfig({
+  site: 'https://example.com', // auto-detected as --site
+  integrations: [
+    postAudit({
+      strict: true,
+      checkAssets: true,
+      rules: {
+        a11y: { require_skip_link: true },
+        canonical: { self_reference: true },
+        opengraph: { require_og_title: true, require_og_image: true },
+      },
+    }),
+  ],
+});
+```
+
+### Integration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `site` | `string` | auto from Astro `site` | Base URL for normalization |
+| `strict` | `boolean` | `false` | Treat warnings as errors |
+| `format` | `'text' \| 'json'` | `'text'` | Output format |
+| `config` | `string` | — | Path to rules.toml (mutually exclusive with `rules`) |
+| `rules` | `RulesConfig` | — | Inline rules config (see below) |
+| `maxErrors` | `number` | — | Stop after n errors |
+| `include` | `string[]` | — | Only check files matching patterns |
+| `exclude` | `string[]` | — | Skip files matching patterns |
+| `noSitemapCheck` | `boolean` | `false` | Skip sitemap checks |
+| `checkAssets` | `boolean` | `false` | Enable asset reference checking |
+| `checkStructuredData` | `boolean` | `false` | Enable JSON-LD validation |
+| `checkSecurity` | `boolean` | `false` | Enable security checks |
+| `checkDuplicates` | `boolean` | `false` | Enable duplicate detection |
+| `pageOverview` | `boolean` | `false` | Show overview instead of checks |
+| `throwOnError` | `boolean` | `false` | Fail the build on errors |
+| `disable` | `boolean` | `false` | Disable the integration |
+
+The `rules` option accepts the same structure as `rules.toml` — all sections (`a11y`, `canonical`, `links`, `security`, etc.) and their fields are optional. See `rules.toml` for all available options.
+
+## CLI Usage
+
+The CLI can also be used standalone (e.g., in CI without Astro):
 
 ```json
 {
   "scripts": {
-    "build": "astro build && astro-post-audit dist --site https://example.com"
+    "audit": "astro-post-audit dist --site https://example.com"
   }
 }
 ```
@@ -29,16 +77,21 @@ Arguments:
   [dist_path]  Path to the dist/ directory [default: dist]
 
 Options:
-  --site <url>         Base URL (for URL normalization + canonical checks)
-  --strict             Treat warnings as errors (exit 1)
-  --format <fmt>       Output format: text | json [default: text]
-  --config <path>      Path to rules.toml config file
-  --max-errors <n>     Stop after n errors
-  --include <glob>     Only check files matching pattern (repeatable)
-  --exclude <glob>     Skip files matching pattern (repeatable)
-  --no-sitemap-check   Skip sitemap.xml checks
-  -V, --version        Print version
-  -h, --help           Print help
+  --site <url>              Base URL (for URL normalization + canonical checks)
+  --strict                  Treat warnings as errors (exit 1)
+  --format <fmt>            Output format: text | json [default: text]
+  --config <path>           Path to rules.toml config file
+  --max-errors <n>          Stop after n errors
+  --include <glob>          Only check files matching pattern (repeatable)
+  --exclude <glob>          Skip files matching pattern (repeatable)
+  --no-sitemap-check        Skip sitemap.xml checks
+  --check-assets            Enable asset reference checking
+  --check-structured-data   Enable JSON-LD validation
+  --check-security          Enable security heuristic checks
+  --check-duplicates        Enable content duplicate detection
+  --page-overview           Show page properties overview (no checks)
+  -V, --version             Print version
+  -h, --help                Print help
 ```
 
 ### Exit Codes
@@ -87,6 +140,11 @@ a_accessible_name_required = true
 button_name_required = true
 label_for_required = true
 warn_generic_link_text = true
+require_skip_link = false
+
+[structured_data]
+check_json_ld = false
+require_json_ld = false
 ```
 
 See `rules.toml` in this repo for all options with documentation.
@@ -119,6 +177,48 @@ See `rules.toml` in this repo for all options with documentation.
 - Form control labels
 - Generic link text detection ("click here", "mehr", etc.)
 - Heading hierarchy (h1 presence, single h1, no level skip)
+- Skip navigation link (`require_skip_link`)
+- `aria-hidden` on focusable elements
+
+### Structured Data
+- JSON-LD presence check (`require_json_ld`)
+- JSON-LD syntax validation (`check_json_ld`)
+
+### Open Graph
+- `og:title`, `og:description`, `og:image`, `twitter:card` (all optional)
+
+### Security
+- `target="_blank"` without `rel="noopener"`
+- Mixed content detection (http in https pages)
+
+### Content Quality
+- Duplicate title, description, H1 detection
+- Duplicate page detection (content hash)
+
+## Page Properties Overview
+
+Run `--page-overview` to get an informational overview of all pages without running checks:
+
+```bash
+astro-post-audit dist --page-overview --site https://example.com
+```
+
+Output shows a table with per-page properties:
+
+```
+Page Properties Overview (23 pages)
+
+  File                          Title  Desc  Canon  OG  H1  Lang  LD  Skip  LD Types
+  ──────────────────────────────────────────────────────────────────────────────────
+  index.html                      ✓     ✓      ✓    ✓   1   de   ✓    ✓    ProfessionalService
+  about/index.html                ✓     ✓      ✓    ✗   1   de   ✗    ✓    —
+
+Summary:  Title 23/23 · Desc 22/23 · Canonical 23/23 · OG 20/23 · H1 23/23 · Lang 23/23 · JSON-LD 12/23 · Skip 23/23
+
+JSON-LD Types:  Article ×8 · WebPage ×23 · BreadcrumbList ×23
+```
+
+Also supports `--format json` for machine-readable output.
 
 ## CI Example
 

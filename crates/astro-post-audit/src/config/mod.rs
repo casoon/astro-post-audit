@@ -118,6 +118,7 @@ pub struct A11yConfig {
     pub label_for_required: bool,
     pub warn_generic_link_text: bool,
     pub aria_hidden_focusable_check: bool,
+    pub require_skip_link: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -280,6 +281,7 @@ impl Default for A11yConfig {
             label_for_required: true,
             warn_generic_link_text: true,
             aria_hidden_focusable_check: true,
+            require_skip_link: false,
         }
     }
 }

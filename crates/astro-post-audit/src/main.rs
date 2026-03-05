@@ -7,6 +7,7 @@ mod checks;
 mod config;
 mod discovery;
 mod normalize;
+mod overview;
 mod report;
 
 use config::Config;
@@ -71,6 +72,10 @@ struct Cli {
     /// Enable content duplicate detection
     #[arg(long)]
     check_duplicates: bool,
+
+    /// Show page properties overview (informational, no checks)
+    #[arg(long)]
+    page_overview: bool,
 }
 
 fn main() {
@@ -161,6 +166,14 @@ fn run() -> Result<i32> {
 
     // Discover HTML files and build site index
     let site_index = SiteIndex::build(&cli.dist_path, &config, &cli.include, &cli.exclude)?;
+
+    // Page properties overview mode (informational, exits before checks)
+    if cli.page_overview {
+        let ov = overview::collect(&site_index);
+        let reporter = Reporter::new(cli.format);
+        reporter.print_overview(&ov)?;
+        return Ok(0);
+    }
 
     // Run all checks, with early stop if --max-errors is exceeded
     let mut findings: Vec<Finding> = Vec::new();

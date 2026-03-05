@@ -5,11 +5,11 @@
 
 # Node
 node_modules/
-npm/package-lock.json
-npm/bin/astro-post-audit
-npm/bin/astro-post-audit.exe
-!npm/bin/run.cjs
-!npm/bin/install.cjs
+packages/astro-post-audit/package-lock.json
+packages/astro-post-audit/bin/astro-post-audit
+packages/astro-post-audit/bin/astro-post-audit.exe
+!packages/astro-post-audit/bin/run.cjs
+!packages/astro-post-audit/bin/install.cjs
 
 # OS
 .DS_Store

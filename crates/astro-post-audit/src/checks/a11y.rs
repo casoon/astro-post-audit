@@ -51,6 +51,11 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 check_aria_hidden_focusable(page, &html, &mut findings);
             }
 
+            // Skip navigation link
+            if config.a11y.require_skip_link {
+                check_skip_link(page, &html, &mut findings);
+            }
+
             findings
         })
         .collect()
@@ -236,6 +241,38 @@ fn check_form_labels(page: &crate::discovery::PageInfo, html: &Html, findings: &
                 help: "Add a <label for='id'>, aria-label, or aria-labelledby".into(),
             });
         }
+    }
+}
+
+fn check_skip_link(
+    page: &crate::discovery::PageInfo,
+    html: &Html,
+    findings: &mut Vec<Finding>,
+) {
+    // A skip link is an <a> early in the DOM linking to #main, #main-content, #content or similar
+    let sel = match Selector::parse("a[href^='#']") {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+
+    let has_skip = html.select(&sel).any(|el| {
+        let href = el.value().attr("href").unwrap_or("");
+        let target = href.trim_start_matches('#').to_lowercase();
+        matches!(
+            target.as_str(),
+            "main" | "main-content" | "maincontent" | "content" | "skip" | "inhalt"
+        )
+    });
+
+    if !has_skip {
+        findings.push(Finding {
+            level: Level::Warning,
+            rule_id: "a11y/skip-link".into(),
+            file: page.rel_path.clone(),
+            selector: "body".into(),
+            message: "No skip navigation link found".into(),
+            help: "Add a skip link like <a href=\"#main-content\" class=\"sr-only focus:not-sr-only\">Skip to content</a> as the first element in <body>".into(),
+        });
     }
 }
 

@@ -74,6 +74,7 @@ button_name_required = true
 label_for_required = true
 warn_generic_link_text = true    # "hier", "click here", "mehr", "weiter" etc.
 aria_hidden_focusable_check = true
+require_skip_link = false
 
 [assets]
 # Asset-Checks sind optional und per --check-assets oder hier aktivierbar
