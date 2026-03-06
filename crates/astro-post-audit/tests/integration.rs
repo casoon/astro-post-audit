@@ -7,83 +7,8 @@ use std::fs;
 use std::path::Path;
 use tempfile::TempDir;
 
-// We import from the binary crate's library modules.
-// Since astro-post-audit is a bin crate, integration tests need to test via CLI
-// or we restructure. Instead we'll test via CLI invocations.
-
-/// Helper: run the binary with JSON config on stdin and return raw stdout/stderr/code.
-fn run_audit(dist_path: &Path, config_json: &str) -> (String, String, i32) {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-
-    let bin = env!("CARGO_BIN_EXE_astro-post-audit");
-    let mut cmd = Command::new(bin);
-    cmd.arg(dist_path.to_str().unwrap())
-        .arg("--config-stdin")
-        .env("NO_COLOR", "1")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    let mut child = cmd.spawn().expect("failed to spawn binary");
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(config_json.as_bytes())
-        .expect("failed to write stdin");
-    let output = child.wait_with_output().expect("failed to wait");
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let code = output.status.code().unwrap_or(2);
-    (stdout, stderr, code)
-}
-
-/// Helper: run the binary with JSON config (format=json) and return parsed JSON output.
-fn run_audit_json(dist_path: &Path, config_json: &str) -> (serde_json::Value, i32) {
-    // Merge {"format":"json"} into the provided config
-    let mut config: serde_json::Value =
-        serde_json::from_str(config_json).unwrap_or(serde_json::json!({}));
-    config
-        .as_object_mut()
-        .unwrap()
-        .insert("format".to_string(), serde_json::json!("json"));
-    let merged = config.to_string();
-
-    let (stdout, _stderr, code) = run_audit(dist_path, &merged);
-    let json: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|e| {
-        panic!(
-            "Failed to parse JSON output: {}\nOutput was:\n{}",
-            e, stdout
-        );
-    });
-    (json, code)
-}
-
-/// Create a minimal valid page in a temp dir.
-fn write_valid_page(dir: &Path, rel_path: &str, title: &str, h1: &str, canonical_path: &str) {
-    let full = dir.join(rel_path);
-    if let Some(parent) = full.parent() {
-        fs::create_dir_all(parent).unwrap();
-    }
-    fs::write(
-        &full,
-        format!(
-            r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{title}</title>
-  <link rel="canonical" href="https://example.com{canonical_path}">
-</head>
-<body>
-  <h1>{h1}</h1>
-</body>
-</html>"#
-        ),
-    )
-    .unwrap();
-}
+mod common;
+use common::{run_audit, run_audit_json, write_valid_page};
 
 // ==========================================================================
 // Good fixtures: zero findings under default config
@@ -469,6 +394,20 @@ fn a11y_form_label_missing() {
         "Only the text input without label, not hidden or labeled ones"
     );
     assert_eq!(code, 1);
+}
+
+#[test]
+fn a11y_form_label_wrapped_input_ok() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1><label>Search<input type="text" name="q"></label></body></html>"#,
+    ).unwrap();
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    let has_form_label = findings.iter().any(|f| f["rule_id"] == "a11y/form-label");
+    assert!(!has_form_label, "Wrapped input should count as labeled");
+    assert_eq!(code, 0);
 }
 
 #[test]
@@ -1175,6 +1114,27 @@ fn max_errors_truncated_in_json() {
             "Summary should indicate truncation when errors were capped"
         );
     }
+}
+
+#[test]
+fn config_validation_rejects_zero_max_errors() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (_stdout, stderr, code) = run_audit(dir.path(), r#"{"max_errors":0}"#);
+    assert_eq!(code, 2);
+    assert!(stderr.contains("max_errors must be greater than 0"));
+}
+
+#[test]
+fn config_validation_rejects_invalid_external_links_settings() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (_stdout, stderr, code) = run_audit(
+        dir.path(),
+        r#"{"external_links":{"enabled":true,"timeout_ms":0,"max_concurrent":10}}"#,
+    );
+    assert_eq!(code, 2);
+    assert!(stderr.contains("external_links.timeout_ms must be greater than 0"));
 }
 
 // ==========================================================================
@@ -1884,7 +1844,9 @@ fn preset_relaxed_is_lenient() {
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        !findings.iter().any(|f| f["rule_id"] == "html/meta-description-missing"),
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "html/meta-description-missing"),
         "Relaxed preset should not require meta description"
     );
     assert_eq!(code, 0, "Relaxed preset on valid page should exit 0");
@@ -1920,12 +1882,11 @@ fn json_suggestion_present_for_lang_missing() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(
-        dir.path(),
-        r#"{"site":{"base_url":"https://example.com"}}"#,
-    );
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
-    let lang = findings.iter().find(|f| f["rule_id"] == "html/lang-missing");
+    let lang = findings
+        .iter()
+        .find(|f| f["rule_id"] == "html/lang-missing");
     assert!(lang.is_some());
     assert!(
         lang.unwrap()["suggestion"].is_string(),
@@ -1934,7 +1895,6 @@ fn json_suggestion_present_for_lang_missing() {
 }
 
 #[test]
-#[test]
 fn benchmark_json_output() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
@@ -1942,7 +1902,10 @@ fn benchmark_json_output() {
         dir.path(),
         r#"{"site":{"base_url":"https://example.com"},"benchmark":true}"#,
     );
-    assert!(json["benchmark"].is_object(), "benchmark should be present when enabled");
+    assert!(
+        json["benchmark"].is_object(),
+        "benchmark should be present when enabled"
+    );
     assert!(json["benchmark"]["total_ms"].is_number());
     assert!(json["benchmark"]["pages_checked"].is_number());
     assert!(json["benchmark"]["pages_per_second"].is_number());
@@ -1954,10 +1917,7 @@ fn benchmark_json_output() {
 fn benchmark_absent_by_default() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
-    let (json, _) = run_audit_json(
-        dir.path(),
-        r#"{"site":{"base_url":"https://example.com"}}"#,
-    );
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     assert!(
         json.get("benchmark").is_none() || json["benchmark"].is_null(),
         "benchmark should not be present by default"
@@ -1971,10 +1931,7 @@ fn json_suggestion_absent_for_broken_link() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1><a href="/nonexistent/">Bad</a></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(
-        dir.path(),
-        r#"{"site":{"base_url":"https://example.com"}}"#,
-    );
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     let broken = findings.iter().find(|f| f["rule_id"] == "links/broken");
     assert!(broken.is_some());

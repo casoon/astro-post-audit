@@ -19,7 +19,8 @@
   "scripts": {
     "build": "tsc && npm run generate-schema",
     "generate-schema": "typescript-json-schema tsconfig.json PostAuditOptions --noExtraProps -o schema.json",
-    "test": "tsc && node --test dist/integration.test.js",
+    "verify:binary": "node scripts/verify-binary.cjs",
+    "test": "tsc && node --test dist/*.test.js",
     "prepublishOnly": "tsc",
     "postinstall": "node bin/install.cjs"
   },

@@ -371,15 +371,15 @@ impl Config {
             };
 
             // Merge: preset defaults first, user values override
-            if let (Some(defaults), Some(user)) =
-                (preset_defaults.as_object(), raw.as_object_mut())
+            if let (Some(defaults), Some(user)) = (preset_defaults.as_object(), raw.as_object_mut())
             {
                 for (key, default_val) in defaults {
                     if !user.contains_key(key) {
                         user.insert(key.clone(), default_val.clone());
-                    } else if let (Some(default_obj), Some(user_obj)) =
-                        (default_val.as_object(), user.get_mut(key).and_then(|v| v.as_object_mut()))
-                    {
+                    } else if let (Some(default_obj), Some(user_obj)) = (
+                        default_val.as_object(),
+                        user.get_mut(key).and_then(|v| v.as_object_mut()),
+                    ) {
                         // Merge nested objects (e.g. canonical, links)
                         for (k, v) in default_obj {
                             if !user_obj.contains_key(k) {
@@ -393,6 +393,29 @@ impl Config {
 
         let config: Config = serde_json::from_value(raw)?;
         Ok(config)
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if matches!(self.max_errors, Some(0)) {
+            anyhow::bail!("max_errors must be greater than 0 when set");
+        }
+        if matches!(self.html_basics.title_max_length, Some(0)) {
+            anyhow::bail!("html_basics.title_max_length must be greater than 0 when set");
+        }
+        if matches!(self.html_basics.meta_description_max_length, Some(0)) {
+            anyhow::bail!(
+                "html_basics.meta_description_max_length must be greater than 0 when set"
+            );
+        }
+        if self.external_links.enabled {
+            if self.external_links.timeout_ms == 0 {
+                anyhow::bail!("external_links.timeout_ms must be greater than 0 when enabled");
+            }
+            if self.external_links.max_concurrent == 0 {
+                anyhow::bail!("external_links.max_concurrent must be greater than 0 when enabled");
+            }
+        }
+        Ok(())
     }
 
     /// Preset: strict — all checks enabled, strict mode on.

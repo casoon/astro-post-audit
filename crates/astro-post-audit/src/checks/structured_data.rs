@@ -16,6 +16,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         return Vec::new();
     }
 
+    let ld_sel = Selector::parse("script[type='application/ld+json']").unwrap();
+
     index
         .pages
         .par_iter()
@@ -23,8 +25,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             let mut findings = Vec::new();
             let html = page.parse_html();
 
-            let sel = Selector::parse("script[type='application/ld+json']").unwrap();
-            let scripts: Vec<_> = html.select(&sel).collect();
+            let scripts: Vec<_> = html.select(&ld_sel).collect();
 
             if scripts.is_empty() {
                 if config.structured_data.require_json_ld {

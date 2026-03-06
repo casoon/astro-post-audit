@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
 use scraper::Selector;
+use url::Url;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
+use crate::normalize;
 use crate::report::{Finding, Level};
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
@@ -12,6 +14,16 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     }
 
     let mut findings = Vec::new();
+    let norm_cfg = &config.url_normalization;
+    let route_by_abs_url: HashMap<String, String> = index
+        .pages
+        .iter()
+        .filter_map(|p| {
+            p.absolute_url
+                .as_ref()
+                .map(|u| (normalize_url_like(u, norm_cfg), p.route.clone()))
+        })
+        .collect();
 
     // Collect all hreflang declarations across pages
     // Map: page_route -> Vec<(lang, href)>
@@ -52,10 +64,14 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
         // Check self-reference
         if config.hreflang.require_self_reference {
+            let page_url_norm = page
+                .absolute_url
+                .as_ref()
+                .map(|u| normalize_url_like(u, norm_cfg));
             let has_self = entries.iter().any(|(_, href)| {
-                page.absolute_url
+                page_url_norm
                     .as_ref()
-                    .is_some_and(|page_url| href == page_url)
+                    .is_some_and(|page_url| normalize_url_like(href, norm_cfg) == *page_url)
             });
             if !has_self {
                 findings.push(Finding {
@@ -81,22 +97,21 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     continue;
                 }
                 // Try to find the target page and check it links back
-                // This is a simplified check - we look for the href in our page URLs
-                let target_page = index
-                    .pages
-                    .iter()
-                    .find(|p| p.absolute_url.as_ref().is_some_and(|url| url == href));
+                let target_route = route_by_abs_url.get(&normalize_url_like(href, norm_cfg));
 
-                if let Some(target) = target_page {
-                    if let Some(target_entries) = all_hreflangs.get(&target.route) {
+                if let Some(target_route) = target_route {
+                    if let Some(target_entries) = all_hreflangs.get(target_route) {
                         let source_url = index
                             .pages
                             .iter()
                             .find(|p| p.route == *source_route)
-                            .and_then(|p| p.absolute_url.as_ref());
+                            .and_then(|p| p.absolute_url.as_ref())
+                            .map(|u| normalize_url_like(u, norm_cfg));
 
                         let has_reciprocal = source_url.is_some_and(|source_url| {
-                            target_entries.iter().any(|(_, h)| h == source_url)
+                            target_entries
+                                .iter()
+                                .any(|(_, h)| normalize_url_like(h, norm_cfg) == source_url)
                         });
 
                         if !has_reciprocal {
@@ -126,4 +141,16 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     }
 
     findings
+}
+
+fn normalize_url_like(url_or_path: &str, norm: &crate::config::UrlNormalizationConfig) -> String {
+    if let Ok(parsed) = Url::parse(url_or_path) {
+        let mut rebuilt = parsed.clone();
+        rebuilt.set_path(&normalize::normalize_path(parsed.path(), norm));
+        rebuilt.set_query(None);
+        rebuilt.set_fragment(None);
+        rebuilt.to_string()
+    } else {
+        normalize::normalize_path(url_or_path, norm)
+    }
 }

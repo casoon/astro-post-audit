@@ -1,5 +1,6 @@
 use rayon::prelude::*;
 use scraper::{Html, Selector};
+use std::collections::HashSet;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
@@ -212,12 +213,14 @@ fn check_form_labels(page: &crate::discovery::PageInfo, html: &Html, findings: &
     };
 
     let label_sel = Selector::parse("label").unwrap();
+    let wrapped_label_sel = Selector::parse("label input, label select, label textarea").unwrap();
 
     // Collect all label[for] targets
-    let label_fors: std::collections::HashSet<String> = html
+    let label_fors: HashSet<String> = html
         .select(&label_sel)
         .filter_map(|l| l.value().attr("for").map(|s| s.to_string()))
         .collect();
+    let wrapped_controls: HashSet<_> = html.select(&wrapped_label_sel).map(|c| c.id()).collect();
 
     for el in html.select(&sel) {
         let attrs = el.value();
@@ -229,8 +232,9 @@ fn check_form_labels(page: &crate::discovery::PageInfo, html: &Html, findings: &
             .attr("aria-labelledby")
             .is_some_and(|v| !v.trim().is_empty());
         let has_id_with_label = attrs.attr("id").is_some_and(|id| label_fors.contains(id));
+        let has_wrapping_label = wrapped_controls.contains(&el.id());
 
-        if !has_aria_label && !has_aria_labelledby && !has_id_with_label {
+        if !has_aria_label && !has_aria_labelledby && !has_id_with_label && !has_wrapping_label {
             let input_type = attrs.attr("type").unwrap_or("text");
             let name = attrs.attr("name").unwrap_or("(unnamed)");
             findings.push(Finding {
@@ -256,13 +260,27 @@ fn check_skip_link(page: &crate::discovery::PageInfo, html: &Html, findings: &mu
         Err(_) => return,
     };
 
-    let has_skip = html.select(&sel).any(|el| {
+    let has_skip = html.select(&sel).take(8).any(|el| {
         let href = el.value().attr("href").unwrap_or("");
         let target = href.trim_start_matches('#').to_lowercase();
-        matches!(
+        let text = el.text().collect::<String>().to_lowercase();
+        let class_or_id = format!(
+            "{} {}",
+            el.value().attr("class").unwrap_or(""),
+            el.value().attr("id").unwrap_or("")
+        )
+        .to_lowercase();
+
+        let target_matches = matches!(
             target.as_str(),
             "main" | "main-content" | "maincontent" | "content" | "skip" | "inhalt"
-        )
+        );
+        let text_or_marker_matches = text.contains("skip")
+            || text.contains("zum inhalt")
+            || text.contains("skip to content")
+            || class_or_id.contains("skip");
+
+        target_matches && text_or_marker_matches
     });
 
     if !has_skip {

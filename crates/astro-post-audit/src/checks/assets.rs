@@ -28,6 +28,15 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 }
 
 fn check_broken_assets(index: &SiteIndex, config: &Config) -> Vec<Finding> {
+    let img_sel = Selector::parse("img[src]").unwrap();
+    let script_sel = Selector::parse("script[src]").unwrap();
+    let link_sel = Selector::parse("link[rel='stylesheet'][href]").unwrap();
+    let srcset_sel = Selector::parse("[srcset]").unwrap();
+    let img_all = config
+        .assets
+        .check_image_dimensions
+        .then(|| Selector::parse("img").unwrap());
+
     index
         .pages
         .par_iter()
@@ -36,7 +45,6 @@ fn check_broken_assets(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             let html = page.parse_html();
 
             // Check img[src]
-            let img_sel = Selector::parse("img[src]").unwrap();
             for el in html.select(&img_sel) {
                 if let Some(src) = el.value().attr("src") {
                     if should_check_asset(src) {
@@ -52,7 +60,6 @@ fn check_broken_assets(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             }
 
             // Check script[src]
-            let script_sel = Selector::parse("script[src]").unwrap();
             for el in html.select(&script_sel) {
                 if let Some(src) = el.value().attr("src") {
                     if should_check_asset(src) {
@@ -68,7 +75,6 @@ fn check_broken_assets(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             }
 
             // Check link[href] (stylesheets)
-            let link_sel = Selector::parse("link[rel='stylesheet'][href]").unwrap();
             for el in html.select(&link_sel) {
                 if let Some(href) = el.value().attr("href") {
                     if should_check_asset(href) {
@@ -84,7 +90,6 @@ fn check_broken_assets(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             }
 
             // Check source[srcset] / img[srcset]
-            let srcset_sel = Selector::parse("[srcset]").unwrap();
             for el in html.select(&srcset_sel) {
                 if let Some(srcset) = el.value().attr("srcset") {
                     for entry in srcset.split(',') {
@@ -104,8 +109,7 @@ fn check_broken_assets(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             // Check img width/height for CLS
             if config.assets.check_image_dimensions {
-                let img_all = Selector::parse("img").unwrap();
-                for el in html.select(&img_all) {
+                for el in html.select(img_all.as_ref().expect("img selector initialized")) {
                     let has_width = el.value().attr("width").is_some();
                     let has_height = el.value().attr("height").is_some();
                     if !has_width || !has_height {
@@ -174,6 +178,9 @@ fn check_asset_exists(
 /// A hashed filename contains a segment of 8+ hex/alphanumeric chars before the extension,
 /// e.g. `main.a1b2c3d4.js` or `style-DfQ4EE2a.css`.
 fn check_hashed_filenames(index: &SiteIndex, _config: &Config) -> Vec<Finding> {
+    let script_sel = Selector::parse("script[src]").unwrap();
+    let link_sel = Selector::parse("link[rel='stylesheet'][href]").unwrap();
+
     index
         .pages
         .par_iter()
@@ -182,7 +189,6 @@ fn check_hashed_filenames(index: &SiteIndex, _config: &Config) -> Vec<Finding> {
             let html = page.parse_html();
 
             // Check script[src] and link[rel=stylesheet][href]
-            let script_sel = Selector::parse("script[src]").unwrap();
             for el in html.select(&script_sel) {
                 if let Some(src) = el.value().attr("src") {
                     if should_check_asset(src) && !has_hash_in_filename(src) {
@@ -202,7 +208,6 @@ fn check_hashed_filenames(index: &SiteIndex, _config: &Config) -> Vec<Finding> {
                 }
             }
 
-            let link_sel = Selector::parse("link[rel='stylesheet'][href]").unwrap();
             for el in html.select(&link_sel) {
                 if let Some(href) = el.value().attr("href") {
                     if should_check_asset(href) && !has_hash_in_filename(href) {

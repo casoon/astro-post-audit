@@ -1,5 +1,4 @@
 use rayon::prelude::*;
-use scraper::{Html, Selector};
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
@@ -11,24 +10,23 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         .par_iter()
         .flat_map(|page| {
             let mut findings = Vec::new();
-            let html = page.parse_html();
 
             // lang attribute
             if config.html_basics.lang_attr_required {
-                check_lang(page, &html, &mut findings);
+                check_lang(page, &mut findings);
             }
 
             // title tag
             if config.html_basics.title_required {
-                check_title(page, &html, config, &mut findings);
+                check_title(page, config, &mut findings);
             }
 
             // meta description: presence check + length check (independent)
-            check_meta_description(page, &html, config, &mut findings);
+            check_meta_description(page, config, &mut findings);
 
             // viewport
             if config.html_basics.viewport_required {
-                check_viewport(page, &html, &mut findings);
+                check_viewport(page, &mut findings);
             }
 
             findings
@@ -36,17 +34,11 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         .collect()
 }
 
-fn check_lang(page: &crate::discovery::PageInfo, html: &Html, findings: &mut Vec<Finding>) {
-    let sel = match Selector::parse("html[lang]") {
-        Ok(s) => s,
-        Err(_) => return,
-    };
-
-    let has_lang = html.select(&sel).next().is_some_and(|el| {
-        el.value()
-            .attr("lang")
-            .is_some_and(|v| !v.trim().is_empty())
-    });
+fn check_lang(page: &crate::discovery::PageInfo, findings: &mut Vec<Finding>) {
+    let has_lang = page
+        .html_lang
+        .as_ref()
+        .is_some_and(|v| !v.trim().is_empty());
 
     if !has_lang {
         findings.push(Finding {
@@ -61,19 +53,8 @@ fn check_lang(page: &crate::discovery::PageInfo, html: &Html, findings: &mut Vec
     }
 }
 
-fn check_title(
-    page: &crate::discovery::PageInfo,
-    html: &Html,
-    config: &Config,
-    findings: &mut Vec<Finding>,
-) {
-    let sel = match Selector::parse("title") {
-        Ok(s) => s,
-        Err(_) => return,
-    };
-
-    let title_el = html.select(&sel).next();
-    match title_el {
+fn check_title(page: &crate::discovery::PageInfo, config: &Config, findings: &mut Vec<Finding>) {
+    match &page.title_text {
         None => {
             findings.push(Finding {
                 level: Level::Error,
@@ -85,9 +66,7 @@ fn check_title(
                 suggestion: Some("<title>Page Title</title>".into()),
             });
         }
-        Some(el) => {
-            let text: String = el.text().collect();
-            let trimmed = text.trim();
+        Some(trimmed) => {
             if trimmed.is_empty() {
                 findings.push(Finding {
                     level: Level::Error,
@@ -121,16 +100,10 @@ fn check_title(
 
 fn check_meta_description(
     page: &crate::discovery::PageInfo,
-    html: &Html,
     config: &Config,
     findings: &mut Vec<Finding>,
 ) {
-    let sel = match Selector::parse("meta[name='description']") {
-        Ok(s) => s,
-        Err(_) => return,
-    };
-
-    match html.select(&sel).next() {
+    match &page.meta_description {
         None => {
             // Only warn about missing description if required
             if config.html_basics.meta_description_required {
@@ -145,9 +118,7 @@ fn check_meta_description(
                 });
             }
         }
-        Some(el) => {
-            let content = el.value().attr("content").unwrap_or("");
-            let trimmed = content.trim();
+        Some(trimmed) => {
             if trimmed.is_empty() {
                 if config.html_basics.meta_description_required {
                     findings.push(Finding {
@@ -182,13 +153,8 @@ fn check_meta_description(
     }
 }
 
-fn check_viewport(page: &crate::discovery::PageInfo, html: &Html, findings: &mut Vec<Finding>) {
-    let sel = match Selector::parse("meta[name='viewport']") {
-        Ok(s) => s,
-        Err(_) => return,
-    };
-
-    if html.select(&sel).next().is_none() {
+fn check_viewport(page: &crate::discovery::PageInfo, findings: &mut Vec<Finding>) {
+    if !page.has_viewport {
         findings.push(Finding {
             level: Level::Error,
             rule_id: "html/viewport-missing".into(),
@@ -197,7 +163,9 @@ fn check_viewport(page: &crate::discovery::PageInfo, html: &Html, findings: &mut
             message: "Missing viewport meta tag".into(),
             help: "Add <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
                 .into(),
-            suggestion: Some("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">".into()),
+            suggestion: Some(
+                "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">".into(),
+            ),
         });
     }
 }

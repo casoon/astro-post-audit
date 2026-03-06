@@ -124,8 +124,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Build TypeScript
         working-directory: packages/astro-post-audit
@@ -139,9 +139,22 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           npm version "$VERSION" --no-git-tag-version --allow-same-version
 
+      - name: Verify binary compatibility
+        working-directory: packages/astro-post-audit
+        run: npm run verify:binary
+
+      - name: Package smoke test
+        working-directory: packages/astro-post-audit
+        run: |
+          TARBALL="$(npm pack | tail -n 1)"
+          mkdir -p .tmp-smoke
+          cd .tmp-smoke
+          npm init -y >/dev/null 2>&1
+          npm i "../$TARBALL" --ignore-scripts
+          node -e "import('@casoon/astro-post-audit').then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); })"
+
       - name: Publish to npm
         working-directory: packages/astro-post-audit
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-

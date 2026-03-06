@@ -48,6 +48,30 @@ Then run `npm run build:fast` (or `pnpm build:fast`) when you want to skip the a
 
 You can also disable the audit permanently via config: `postAudit({ disable: true })`.
 
+## Presets
+
+Use a preset to start with a predefined configuration. Individual `rules` override preset defaults.
+
+```js
+// Enable all checks with strict settings
+postAudit({ preset: 'strict' })
+
+// Core SEO only, lenient — good for existing sites
+postAudit({ preset: 'relaxed' })
+
+// Preset + custom overrides
+postAudit({
+  preset: 'strict',
+  rules: {
+    external_links: { enabled: true },
+    headings: { no_skip: false },       // relax one rule
+  },
+})
+```
+
+- **`strict`** — Enables all checks (canonical self-reference, fragment validation, orphan detection, skip link, Open Graph, JSON-LD, hreflang, sitemap, robots.txt, content quality, inline script warnings, etc.) and sets `strict: true`.
+- **`relaxed`** — Core SEO and link checks only. Skips advanced checks like fragment validation, orphan detection, heading gaps, Open Graph, structured data, and content quality. Broken links are warnings, not errors.
+
 ## Configuration
 
 All options are optional. Your editor provides autocomplete with descriptions and defaults for every field.
@@ -58,6 +82,8 @@ postAudit({
   throwOnError: true,        // Fail the build on errors
   maxErrors: 20,             // Stop after 20 errors
   output: 'audit-report.json', // Write JSON report to file
+  benchmark: true,           // Print per-check timing breakdown
+  pageOverview: true,        // Show page properties overview instead of checks
   rules: {
     filters: { exclude: ['404.html', 'drafts/**'] },
     canonical: { self_reference: true },
@@ -71,7 +97,7 @@ postAudit({
     headings: { no_skip: true },
     severity: {
       'html/title-too-long': 'off',
-      'a11y/img-alt-missing': 'error',
+      'a11y/img-alt': 'error',
     },
   },
 })
@@ -238,14 +264,16 @@ rules: {
 - **SEO** — Canonical tags (including cluster detection), robots meta, URL normalization (trailing slash, index.html)
 - **Links** — Broken internal links, query parameters, fragment validation, orphan pages
 - **External Links** — HEAD requests to verify external URLs return 2xx, with domain filtering and concurrency control
-- **Sitemap** — Cross-reference with canonical URLs, stale entries
+- **Sitemap** — Cross-reference with canonical URLs, stale entries, missing pages
+- **robots.txt** — Existence check, sitemap link verification
 - **HTML** — `<html lang>`, `<title>`, viewport, meta description, heading hierarchy
-- **Accessibility** — img alt, link/button names, form labels, generic link text, skip link, aria-hidden
+- **Accessibility** — img alt, link/button names, form labels (including wrapping labels), generic link text, skip link, aria-hidden on focusable elements
 - **Open Graph** — og:title, og:description, og:image, twitter:card
-- **Structured Data** — JSON-LD syntax, semantics, type-specific properties
+- **Structured Data** — JSON-LD syntax, semantics, duplicate type detection
+- **Hreflang** — Multilingual link validation, x-default, self-reference, reciprocal links
 - **Security** — target="_blank" without noopener, mixed content, inline scripts
 - **Assets** — Broken references, image dimensions, file size limits, cache-busting hashes
-- **Content Quality** — Duplicate titles, descriptions, H1s, pages
+- **Content Quality** — Duplicate titles, descriptions, H1s, near-identical pages
 
 ## Output
 
@@ -256,14 +284,16 @@ Rich diagnostic output with colored severity markers, location pointers, and act
   × error[canonical/missing] Missing canonical tag
     ╰─▶ head
     help: Add <link rel="canonical" href="..."> to <head>
-  ⚠ warning[a11y/img-alt-missing] <img> missing alt attribute
+  ⚠ warning[a11y/img-alt] <img> missing alt attribute
     ╰─▶ img[src='/photo.jpg']
     help: Add an alt attribute describing the image
 
   × 1 error, 1 warning (12 files checked)
 ```
 
-Set `output: 'audit-report.json'` to write a machine-readable JSON report.
+Set `output: 'audit-report.json'` to write a machine-readable JSON report. Each finding includes a rule ID, severity, file path, selector, and help text with a concrete fix suggestion.
+
+Set `benchmark: true` to see a per-check timing breakdown — useful for identifying slow checks on large sites.
 
 ## License
 

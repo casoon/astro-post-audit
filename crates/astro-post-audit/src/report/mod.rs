@@ -250,24 +250,11 @@ impl Reporter {
             format!("{}ms total", b.total_ms).dimmed(),
             b.pages_checked
         );
-        println!(
-            "    {} Discovery: {}ms",
-            "•".dimmed(),
-            b.discovery_ms
-        );
+        println!("    {} Discovery: {}ms", "•".dimmed(), b.discovery_ms);
         for t in &b.check_timings {
-            println!(
-                "    {} {}: {}ms",
-                "•".dimmed(),
-                t.name,
-                t.duration_ms
-            );
+            println!("    {} {}: {}ms", "•".dimmed(), t.name, t.duration_ms);
         }
-        println!(
-            "    {} {:.1} pages/sec",
-            "•".dimmed(),
-            b.pages_per_second
-        );
+        println!("    {} {:.1} pages/sec", "•".dimmed(), b.pages_per_second);
         println!();
         Ok(())
     }

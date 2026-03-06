@@ -1,9 +1,8 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::collections::HashSet;
 use std::time::Duration;
 
 use rayon::prelude::*;
-use scraper::Selector;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
@@ -17,22 +16,12 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     }
 
     let timeout = Duration::from_millis(config.external_links.timeout_ms);
-
     // Phase 1: Collect all external URLs and which pages reference them
-    let mut url_to_pages: HashMap<String, Vec<String>> = HashMap::new();
+    let mut url_to_pages: HashMap<String, HashSet<String>> = HashMap::new();
 
     for page in &index.pages {
-        let html = page.parse_html();
-        let sel = match Selector::parse("a[href]") {
-            Ok(s) => s,
-            Err(_) => continue,
-        };
-
-        for el in html.select(&sel) {
-            let href = match el.value().attr("href") {
-                Some(h) => h.trim(),
-                None => continue,
-            };
+        for href in &page.anchor_hrefs {
+            let href = href.trim();
 
             // Only external links (http/https, not internal)
             if !href.starts_with("http://") && !href.starts_with("https://") {
@@ -74,7 +63,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             url_to_pages
                 .entry(check_url)
                 .or_default()
-                .push(page.rel_path.clone());
+                .insert(page.rel_path.clone());
         }
     }
 
@@ -83,8 +72,15 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     }
 
     // Phase 2: Check URLs in parallel (bounded by max_concurrent via rayon thread pool)
-    let urls: Vec<(String, Vec<String>)> = url_to_pages.into_iter().collect();
-    let findings = Mutex::new(Vec::new());
+    let urls: Vec<(String, Vec<String>)> = url_to_pages
+        .into_iter()
+        .map(|(url, pages)| (url, pages.into_iter().collect()))
+        .collect();
+    let agent = ureq::config::Config::builder()
+        .timeout_global(Some(timeout))
+        .http_status_as_error(false)
+        .build()
+        .new_agent();
 
     // Use a custom thread pool to limit concurrency
     let pool = rayon::ThreadPoolBuilder::new()
@@ -93,18 +89,20 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         .unwrap_or_else(|_| rayon::ThreadPoolBuilder::new().build().unwrap());
 
     pool.install(|| {
-        urls.par_iter().for_each(|(url, pages)| {
-            let result = check_url(url, timeout);
-            if let Some((status, message)) = result {
+        urls.par_iter()
+            .flat_map(|(url, pages)| {
+                let Some((status, message)) = check_url(&agent, url) else {
+                    return Vec::new();
+                };
                 let level = if config.external_links.fail_on_broken {
                     Level::Error
                 } else {
                     Level::Warning
                 };
 
-                let mut f = findings.lock().unwrap();
-                for page in pages {
-                    f.push(Finding {
+                pages
+                    .iter()
+                    .map(|page| Finding {
                         level: level.clone(),
                         rule_id: "external-links/broken".into(),
                         file: page.clone(),
@@ -112,23 +110,15 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         message: format!("{} (status: {})", message, status),
                         help: "Fix or remove this broken external link".into(),
                         suggestion: None,
-                    });
-                }
-            }
-        });
-    });
-
-    findings.into_inner().unwrap()
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    })
 }
 
 /// Check a single URL. Returns Some((status_code, message)) if broken, None if OK.
-fn check_url(url: &str, timeout: Duration) -> Option<(String, String)> {
-    let agent = ureq::config::Config::builder()
-        .timeout_global(Some(timeout))
-        .http_status_as_error(false)
-        .build()
-        .new_agent();
-
+fn check_url(agent: &ureq::Agent, url: &str) -> Option<(String, String)> {
     // Try HEAD first, fall back to GET if HEAD is not allowed (405)
     match agent.head(url).call() {
         Ok(response) => {

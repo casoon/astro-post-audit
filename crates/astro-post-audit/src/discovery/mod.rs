@@ -27,6 +27,24 @@ pub struct PageInfo {
     pub canonical: Option<String>,
     /// Whether page has noindex meta
     pub noindex: bool,
+    /// All canonical href values found on the page (in document order).
+    pub canonical_hrefs: Vec<String>,
+    /// All anchor href attributes found on the page.
+    pub anchor_hrefs: Vec<String>,
+    /// All element IDs found on the page.
+    pub element_ids: HashSet<String>,
+    /// Value of <html lang>, if present.
+    pub html_lang: Option<String>,
+    /// Text content of <title>, if present.
+    pub title_text: Option<String>,
+    /// Content of <meta name="description">, if present.
+    pub meta_description: Option<String>,
+    /// Whether <meta name="viewport"> exists.
+    pub has_viewport: bool,
+    /// Number of <h1> elements on the page.
+    pub h1_count: usize,
+    /// Heading levels in document order (h1..h6).
+    pub heading_levels: Vec<u8>,
 }
 
 impl PageInfo {
@@ -119,6 +137,16 @@ impl SiteIndex {
 
         let base_url = config.site.base_url.clone();
         let norm_config = config.url_normalization.clone();
+        let canonical_sel = Selector::parse("link[rel='canonical']").ok();
+        let robots_sel = Selector::parse("meta[name='robots']").ok();
+        let anchor_sel = Selector::parse("a[href]").ok();
+        let id_sel = Selector::parse("[id]").ok();
+        let lang_sel = Selector::parse("html[lang]").ok();
+        let title_sel = Selector::parse("title").ok();
+        let desc_sel = Selector::parse("meta[name='description']").ok();
+        let viewport_sel = Selector::parse("meta[name='viewport']").ok();
+        let h1_sel = Selector::parse("h1").ok();
+        let headings_sel = Selector::parse("h1, h2, h3, h4, h5, h6").ok();
 
         // Read and pre-extract metadata in parallel
         let pages: Vec<PageInfo> = html_files
@@ -132,11 +160,75 @@ impl SiteIndex {
                     }
                 };
 
-                // Parse once to extract metadata, then drop the DOM
+                // Parse once and extract reusable metadata.
                 let html = Html::parse_document(&content);
-                let canonical = extract_canonical(&html);
-                let noindex = has_noindex(&html);
-                drop(html);
+                let canonical = canonical_sel
+                    .as_ref()
+                    .and_then(|sel| extract_canonical(&html, sel));
+                let canonical_hrefs = canonical_sel
+                    .as_ref()
+                    .map(|sel| {
+                        html.select(sel)
+                            .filter_map(|el| el.value().attr("href"))
+                            .map(|s| s.to_string())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let noindex = robots_sel
+                    .as_ref()
+                    .is_some_and(|sel| has_noindex(&html, sel));
+                let anchor_hrefs = anchor_sel
+                    .as_ref()
+                    .map(|sel| {
+                        html.select(sel)
+                            .filter_map(|el| el.value().attr("href"))
+                            .map(|s| s.to_string())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let element_ids = id_sel
+                    .as_ref()
+                    .map(|sel| {
+                        html.select(sel)
+                            .filter_map(|el| el.value().attr("id"))
+                            .map(|s| s.to_string())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let html_lang = lang_sel
+                    .as_ref()
+                    .and_then(|sel| html.select(sel).next())
+                    .and_then(|el| el.value().attr("lang"))
+                    .map(|s| s.to_string());
+                let title_text = title_sel
+                    .as_ref()
+                    .and_then(|sel| html.select(sel).next())
+                    .map(|el| el.text().collect::<String>().trim().to_string());
+                let meta_description = desc_sel
+                    .as_ref()
+                    .and_then(|sel| html.select(sel).next())
+                    .and_then(|el| el.value().attr("content"))
+                    .map(|s| s.trim().to_string());
+                let has_viewport = viewport_sel
+                    .as_ref()
+                    .is_some_and(|sel| html.select(sel).next().is_some());
+                let h1_count = h1_sel
+                    .as_ref()
+                    .map(|sel| html.select(sel).count())
+                    .unwrap_or(0);
+                let heading_levels = headings_sel
+                    .as_ref()
+                    .map(|sel| {
+                        html.select(sel)
+                            .filter_map(|el| {
+                                el.value()
+                                    .name()
+                                    .strip_prefix('h')
+                                    .and_then(|n| n.parse::<u8>().ok())
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
 
                 let route = normalize::file_path_to_route(rel, &norm_config);
                 let absolute_url = base_url
@@ -151,6 +243,15 @@ impl SiteIndex {
                     html_content: content,
                     canonical,
                     noindex,
+                    canonical_hrefs,
+                    anchor_hrefs,
+                    element_ids,
+                    html_lang,
+                    title_text,
+                    meta_description,
+                    has_viewport,
+                    h1_count,
+                    heading_levels,
                 })
             })
             .collect();
@@ -192,17 +293,12 @@ impl SiteIndex {
     }
 }
 
-fn extract_canonical(html: &Html) -> Option<String> {
-    let sel = Selector::parse("link[rel='canonical']").ok()?;
+fn extract_canonical(html: &Html, sel: &Selector) -> Option<String> {
     let element = html.select(&sel).next()?;
     element.value().attr("href").map(|s| s.to_string())
 }
 
-fn has_noindex(html: &Html) -> bool {
-    let sel = match Selector::parse("meta[name='robots']") {
-        Ok(s) => s,
-        Err(_) => return false,
-    };
+fn has_noindex(html: &Html, sel: &Selector) -> bool {
     html.select(&sel).any(|el| {
         el.value()
             .attr("content")

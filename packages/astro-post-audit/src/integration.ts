@@ -1,8 +1,8 @@
-import type { AstroIntegration } from 'astro';
-import { execFileSync } from 'node:child_process';
-import { existsSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import type { AstroIntegration } from "astro";
+import { execFileSync } from "node:child_process";
+import { existsSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /**
  * Inline rules config that mirrors the Rust config structure.
@@ -24,9 +24,9 @@ export interface RulesConfig {
   /** URL normalization rules for internal link and canonical consistency. */
   url_normalization?: {
     /** Trailing slash policy. `"always"`: require trailing slash, `"never"`: forbid, `"ignore"`: no check. @default "always" */
-    trailing_slash?: 'always' | 'never' | 'ignore';
+    trailing_slash?: "always" | "never" | "ignore";
     /** Whether `index.html` in URLs is allowed. `"forbid"`: warn on `/page/index.html` links, `"allow"`: permit them. @default "forbid" */
-    index_html?: 'forbid' | 'allow';
+    index_html?: "forbid" | "allow";
   };
   /** Canonical `<link rel="canonical">` tag checks. */
   canonical?: {
@@ -192,9 +192,9 @@ export interface RulesConfig {
   };
   /**
    * Override severity per rule ID.
-   * @example `{ "html/title-too-long": "off", "a11y/img-alt-missing": "error" }`
+   * @example `{ "html/title-too-long": "off", "a11y/img-alt": "error" }`
    */
-  severity?: Record<string, 'error' | 'warning' | 'info' | 'off'>;
+  severity?: Record<string, "error" | "warning" | "info" | "off">;
   /** External link checking (HEAD requests to verify URLs return 2xx). */
   external_links?: {
     /** Enable external link checking. @default false */
@@ -216,7 +216,7 @@ export interface PostAuditOptions {
   /** Inline rules config — all check settings go here. */
   rules?: RulesConfig;
   /** Preset to apply before user overrides. `"strict"` enables all checks, `"relaxed"` is lenient. */
-  preset?: 'strict' | 'relaxed';
+  preset?: "strict" | "relaxed";
   /** Base URL (auto-detected from Astro's `site` config if not set). */
   site?: string;
   /** Treat warnings as errors. */
@@ -235,22 +235,52 @@ export interface PostAuditOptions {
   throwOnError?: boolean;
 }
 
-function resolveBinaryPath(): string | null {
-  const binDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin');
-  const binaryName =
-    process.platform === 'win32' ? 'astro-post-audit.exe' : 'astro-post-audit';
-  const binaryPath = join(binDir, binaryName);
-  return existsSync(binaryPath) ? binaryPath : null;
+interface RuntimeDeps {
+  execFileSync: typeof execFileSync;
+  existsSync: typeof existsSync;
+  writeFileSync: typeof writeFileSync;
 }
 
-export default function postAudit(options: PostAuditOptions = {}): AstroIntegration {
+const defaultDeps: RuntimeDeps = {
+  execFileSync,
+  existsSync,
+  writeFileSync,
+};
+
+function resolveBinaryPath(exists: RuntimeDeps["existsSync"]): string | null {
+  const binDir = join(dirname(fileURLToPath(import.meta.url)), "..", "bin");
+  const binaryName =
+    process.platform === "win32" ? "astro-post-audit.exe" : "astro-post-audit";
+  const binaryPath = join(binDir, binaryName);
+  return exists(binaryPath) ? binaryPath : null;
+}
+
+function supportsConfigStdin(
+  binaryPath: string,
+  run: RuntimeDeps["execFileSync"],
+): boolean {
+  try {
+    const help = run(binaryPath, ["--help"], {
+      stdio: ["ignore", "pipe", "ignore"],
+      encoding: "utf-8",
+    });
+    return typeof help === "string" && help.includes("--config-stdin");
+  } catch {
+    return false;
+  }
+}
+
+export default function postAudit(
+  options: PostAuditOptions = {},
+  deps: RuntimeDeps = defaultDeps,
+): AstroIntegration {
   let siteUrl: string | undefined;
-  let astroTrailingSlash: 'always' | 'never' | 'ignore' | undefined;
+  let astroTrailingSlash: "always" | "never" | "ignore" | undefined;
 
   return {
-    name: 'astro-post-audit',
+    name: "astro-post-audit",
     hooks: {
-      'astro:config:done': ({ config }) => {
+      "astro:config:done": ({ config }) => {
         siteUrl = config.site?.toString();
         // Bridge Astro's trailingSlash config automatically
         if (config.trailingSlash) {
@@ -258,29 +288,45 @@ export default function postAudit(options: PostAuditOptions = {}): AstroIntegrat
         }
       },
 
-      'astro:build:done': ({ dir, logger }) => {
-        if (options.disable || process.env.SKIP_AUDIT === '1' || process.env.SKIP_AUDIT === 'true') {
+      "astro:build:done": ({ dir, logger }) => {
+        if (
+          options.disable ||
+          process.env.SKIP_AUDIT === "1" ||
+          process.env.SKIP_AUDIT === "true"
+        ) {
           if (process.env.SKIP_AUDIT) {
-            logger.info('Audit skipped (SKIP_AUDIT is set).');
+            logger.info("Audit skipped (SKIP_AUDIT is set).");
           }
           return;
         }
 
         // Validate that rules is a non-empty object if provided
-        if (options.rules && typeof options.rules === 'object' && Object.keys(options.rules).length === 0) {
-          logger.warn('astro-post-audit: "rules" is an empty object — using default config.');
+        if (
+          options.rules &&
+          typeof options.rules === "object" &&
+          Object.keys(options.rules).length === 0
+        ) {
+          logger.warn(
+            'astro-post-audit: "rules" is an empty object — using default config.',
+          );
         }
 
-        const binaryPath = resolveBinaryPath();
+        const binaryPath = resolveBinaryPath(deps.existsSync);
         if (!binaryPath) {
           logger.warn(
             'astro-post-audit binary not found. Run "npm rebuild @casoon/astro-post-audit".',
           );
           return;
         }
+        if (!supportsConfigStdin(binaryPath, deps.execFileSync)) {
+          logger.error(
+            'astro-post-audit binary is outdated and does not support --config-stdin. Run "npm rebuild @casoon/astro-post-audit".',
+          );
+          return;
+        }
 
         const distPath = fileURLToPath(dir);
-        const args: string[] = [distPath, '--config-stdin'];
+        const args: string[] = [distPath, "--config-stdin"];
 
         // Build the full JSON config for the Rust binary
         const site = options.site ?? siteUrl;
@@ -290,47 +336,58 @@ export default function postAudit(options: PostAuditOptions = {}): AstroIntegrat
         if (site) stdinConfig.site = { base_url: site };
         if (options.preset) stdinConfig.preset = options.preset;
         // Auto-bridge trailingSlash from Astro config if not explicitly set in rules
-        if (astroTrailingSlash && !options.rules?.url_normalization?.trailing_slash) {
+        if (
+          astroTrailingSlash &&
+          !options.rules?.url_normalization?.trailing_slash
+        ) {
           stdinConfig.url_normalization = {
-            ...(stdinConfig.url_normalization as Record<string, unknown> ?? {}),
+            ...((stdinConfig.url_normalization as Record<string, unknown>) ??
+              {}),
             trailing_slash: astroTrailingSlash,
           };
         }
         if (options.strict) stdinConfig.strict = true;
         if (options.benchmark) stdinConfig.benchmark = true;
-        if (options.maxErrors != null) stdinConfig.max_errors = options.maxErrors;
+        if (options.maxErrors != null)
+          stdinConfig.max_errors = options.maxErrors;
         if (options.pageOverview) stdinConfig.page_overview = true;
-        if (options.output) stdinConfig.format = 'json';
+        if (options.output) stdinConfig.format = "json";
         const stdinInput = JSON.stringify(stdinConfig);
 
-        logger.info('Running post-build audit...');
+        logger.info("Running post-build audit...");
 
         const captureOutput = !!options.output;
 
         try {
-          const result = execFileSync(binaryPath, args, {
-            stdio: ['pipe', captureOutput ? 'pipe' : 'inherit', 'inherit'],
+          const result = deps.execFileSync(binaryPath, args, {
+            stdio: ["pipe", captureOutput ? "pipe" : "inherit", "inherit"],
             input: stdinInput,
-            encoding: captureOutput ? 'utf-8' : undefined,
+            encoding: captureOutput ? "utf-8" : undefined,
           });
 
           if (captureOutput && result) {
-            writeFileSync(options.output!, result);
+            deps.writeFileSync(options.output!, result);
             logger.info(`Report written to ${options.output}`);
           }
 
-          logger.info('All checks passed!');
+          logger.info("All checks passed!");
         } catch (err: unknown) {
           const exitCode =
-            err && typeof err === 'object' && 'status' in err
+            err && typeof err === "object" && "status" in err
               ? (err as { status: number }).status
               : undefined;
 
           // Write output file even on exit code 1 (findings exist but run succeeded)
-          if (captureOutput && exitCode === 1 && err && typeof err === 'object' && 'stdout' in err) {
+          if (
+            captureOutput &&
+            exitCode === 1 &&
+            err &&
+            typeof err === "object" &&
+            "stdout" in err
+          ) {
             const stdout = (err as { stdout: string | Buffer }).stdout;
             if (stdout) {
-              writeFileSync(options.output!, stdout);
+              deps.writeFileSync(options.output!, stdout);
               logger.info(`Report written to ${options.output}`);
             }
           }
@@ -338,12 +395,14 @@ export default function postAudit(options: PostAuditOptions = {}): AstroIntegrat
           if (exitCode === 1) {
             if (options.throwOnError) {
               throw new Error(
-                'astro-post-audit found issues. See output above.',
+                "astro-post-audit found issues. See output above.",
               );
             }
-            logger.warn('Audit found issues. See output above.');
+            logger.warn("Audit found issues. See output above.");
           } else {
-            logger.error(`Audit failed with exit code ${exitCode ?? 'unknown'}`);
+            logger.error(
+              `Audit failed with exit code ${exitCode ?? "unknown"}`,
+            );
           }
         }
       },

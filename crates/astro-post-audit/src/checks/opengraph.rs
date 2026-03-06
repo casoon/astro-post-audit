@@ -15,6 +15,19 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         return Vec::new();
     }
 
+    let og_title_sel = og
+        .require_og_title
+        .then(|| Selector::parse("meta[property='og:title']").unwrap());
+    let og_desc_sel = og
+        .require_og_description
+        .then(|| Selector::parse("meta[property='og:description']").unwrap());
+    let og_image_sel = og
+        .require_og_image
+        .then(|| Selector::parse("meta[property='og:image']").unwrap());
+    let twitter_sel = og
+        .require_twitter_card
+        .then(|| Selector::parse("meta[name='twitter:card']").unwrap());
+
     index
         .pages
         .par_iter()
@@ -23,9 +36,12 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             let html = page.parse_html();
 
             if og.require_og_title {
-                let sel = Selector::parse("meta[property='og:title']").unwrap();
                 let has = html
-                    .select(&sel)
+                    .select(
+                        og_title_sel
+                            .as_ref()
+                            .expect("og:title selector initialized"),
+                    )
                     .next()
                     .and_then(|el| el.value().attr("content"))
                     .is_some_and(|v| !v.trim().is_empty());
@@ -43,9 +59,12 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             }
 
             if og.require_og_description {
-                let sel = Selector::parse("meta[property='og:description']").unwrap();
                 let has = html
-                    .select(&sel)
+                    .select(
+                        og_desc_sel
+                            .as_ref()
+                            .expect("og:description selector initialized"),
+                    )
                     .next()
                     .and_then(|el| el.value().attr("content"))
                     .is_some_and(|v| !v.trim().is_empty());
@@ -63,9 +82,12 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             }
 
             if og.require_og_image {
-                let sel = Selector::parse("meta[property='og:image']").unwrap();
                 let has = html
-                    .select(&sel)
+                    .select(
+                        og_image_sel
+                            .as_ref()
+                            .expect("og:image selector initialized"),
+                    )
                     .next()
                     .and_then(|el| el.value().attr("content"))
                     .is_some_and(|v| !v.trim().is_empty());
@@ -83,9 +105,12 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             }
 
             if og.require_twitter_card {
-                let sel = Selector::parse("meta[name='twitter:card']").unwrap();
                 let has = html
-                    .select(&sel)
+                    .select(
+                        twitter_sel
+                            .as_ref()
+                            .expect("twitter:card selector initialized"),
+                    )
                     .next()
                     .and_then(|el| el.value().attr("content"))
                     .is_some_and(|v| !v.trim().is_empty());

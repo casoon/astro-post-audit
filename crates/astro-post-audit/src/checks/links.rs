@@ -1,6 +1,5 @@
 use percent_encoding::percent_decode_str;
 use rayon::prelude::*;
-use scraper::Selector;
 use std::collections::HashSet;
 
 use crate::config::Config;
@@ -35,28 +34,16 @@ fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         .par_iter()
         .flat_map(|page| {
             let mut findings = Vec::new();
-            let html = page.parse_html();
-
-            let sel = match Selector::parse("a[href]") {
-                Ok(s) => s,
-                Err(_) => return findings,
-            };
 
             // Collect all IDs on this page for fragment checks
             let page_ids: HashSet<String> = if config.links.check_fragments {
-                let id_sel = Selector::parse("[id]").unwrap();
-                html.select(&id_sel)
-                    .filter_map(|el| el.value().attr("id").map(|s| s.to_string()))
-                    .collect()
+                page.element_ids.iter().cloned().collect()
             } else {
                 HashSet::new()
             };
 
-            for element in html.select(&sel) {
-                let href = match element.value().attr("href") {
-                    Some(h) => h,
-                    None => continue,
-                };
+            for href in &page.anchor_hrefs {
+                let href = href.as_str();
 
                 // Skip non-internal links
                 if !normalize::is_internal(href, index.base_url.as_deref()) {
@@ -164,22 +151,13 @@ fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                                 // Find the target page and check for the ID
                                 if let Some(&target_idx) = index.route_to_index.get(&normalized) {
                                     let target_page = &index.pages[target_idx];
-                                    let target_html = target_page.parse_html();
 
                                     // Try both raw and decoded fragment to handle
                                     // percent-encoded umlauts (e.g. %C3%A4 -> ä)
                                     let decoded = decode_fragment(fragment);
                                     let found = [fragment, decoded.as_str()]
                                         .iter()
-                                        .any(|frag| {
-                                            let id_selector_str =
-                                                format!("[id='{}']", frag);
-                                            Selector::parse(&id_selector_str)
-                                                .ok()
-                                                .is_some_and(|sel| {
-                                                    target_html.select(&sel).next().is_some()
-                                                })
-                                        });
+                                        .any(|frag| target_page.element_ids.contains(*frag));
 
                                     if !found {
                                         findings.push(Finding {
@@ -214,24 +192,20 @@ fn check_orphan_pages(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         .pages
         .par_iter()
         .map(|page| {
-            let html = page.parse_html();
-            let sel = Selector::parse("a[href]").unwrap();
             let mut routes = HashSet::new();
 
-            for el in html.select(&sel) {
-                if let Some(href) = el.value().attr("href") {
-                    if normalize::is_internal(href, index.base_url.as_deref())
-                        && !href.starts_with('#')
-                        && !href.starts_with("mailto:")
-                        && !href.starts_with("tel:")
+            for href in &page.anchor_hrefs {
+                if normalize::is_internal(href, index.base_url.as_deref())
+                    && !href.starts_with('#')
+                    && !href.starts_with("mailto:")
+                    && !href.starts_with("tel:")
+                {
+                    if let Some(resolved) =
+                        normalize::resolve_href(href, &page.route, index.base_url.as_deref())
                     {
-                        if let Some(resolved) =
-                            normalize::resolve_href(href, &page.route, index.base_url.as_deref())
-                        {
-                            let normalized =
-                                normalize::normalize_path(&resolved, &config.url_normalization);
-                            routes.insert(normalized);
-                        }
+                        let normalized =
+                            normalize::normalize_path(&resolved, &config.url_normalization);
+                        routes.insert(normalized);
                     }
                 }
             }

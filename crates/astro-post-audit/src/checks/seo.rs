@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use rayon::prelude::*;
-use scraper::{Html, Selector};
 use url::Url;
 
 use crate::config::Config;
@@ -15,11 +14,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         .par_iter()
         .flat_map(|page| {
             let mut findings = Vec::new();
-            let html = page.parse_html();
 
             // Canonical checks
             if config.canonical.require {
-                check_canonical(page, &html, index, config, &mut findings);
+                check_canonical(page, index, config, &mut findings);
             }
 
             // Robots meta checks
@@ -39,17 +37,11 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
 fn check_canonical(
     page: &crate::discovery::PageInfo,
-    html: &Html,
     index: &SiteIndex,
     config: &Config,
     findings: &mut Vec<Finding>,
 ) {
-    let sel = match Selector::parse("link[rel='canonical']") {
-        Ok(s) => s,
-        Err(_) => return,
-    };
-
-    let canonicals: Vec<_> = html.select(&sel).collect();
+    let canonicals = &page.canonical_hrefs;
 
     if canonicals.is_empty() {
         findings.push(Finding {
@@ -79,7 +71,7 @@ fn check_canonical(
         });
     }
 
-    let href = canonicals[0].value().attr("href").unwrap_or("");
+    let href = canonicals[0].as_str();
     if href.trim().is_empty() {
         findings.push(Finding {
             level: Level::Error,

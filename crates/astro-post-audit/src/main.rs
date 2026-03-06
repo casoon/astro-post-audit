@@ -61,6 +61,7 @@ fn run() -> Result<i32> {
     } else {
         Config::default()
     };
+    config.validate()?;
 
     // Validate dist path
     if !cli.dist_path.is_dir() {
@@ -122,17 +123,44 @@ fn run() -> Result<i32> {
     run_check!("seo", checks::seo::check_all(&site_index, &config));
     run_check!("links", checks::links::check_all(&site_index, &config));
     run_check!("a11y", checks::a11y::check_all(&site_index, &config));
-    run_check!("html_basics", checks::html_basics::check_all(&site_index, &config));
-    run_check!("headings", checks::headings::check_all(&site_index, &config));
+    run_check!(
+        "html_basics",
+        checks::html_basics::check_all(&site_index, &config)
+    );
+    run_check!(
+        "headings",
+        checks::headings::check_all(&site_index, &config)
+    );
     run_check!("sitemap", checks::sitemap::check_all(&site_index, &config));
-    run_check!("robots_txt", checks::robots_txt::check_all(&site_index, &config));
+    run_check!(
+        "robots_txt",
+        checks::robots_txt::check_all(&site_index, &config)
+    );
     run_check!("assets", checks::assets::check_all(&site_index, &config));
-    run_check!("opengraph", checks::opengraph::check_all(&site_index, &config));
-    run_check!("structured_data", checks::structured_data::check_all(&site_index, &config));
-    run_check!("hreflang", checks::hreflang::check_all(&site_index, &config));
-    run_check!("security", checks::security::check_all(&site_index, &config));
-    run_check!("content_quality", checks::content_quality::check_all(&site_index, &config));
-    run_check!("external_links", checks::external_links::check_all(&site_index, &config));
+    run_check!(
+        "opengraph",
+        checks::opengraph::check_all(&site_index, &config)
+    );
+    run_check!(
+        "structured_data",
+        checks::structured_data::check_all(&site_index, &config)
+    );
+    run_check!(
+        "hreflang",
+        checks::hreflang::check_all(&site_index, &config)
+    );
+    run_check!(
+        "security",
+        checks::security::check_all(&site_index, &config)
+    );
+    run_check!(
+        "content_quality",
+        checks::content_quality::check_all(&site_index, &config)
+    );
+    run_check!(
+        "external_links",
+        checks::external_links::check_all(&site_index, &config)
+    );
     let _ = error_count; // used by run_check! macro for early-stop
 
     // Apply severity overrides from [severity] config section

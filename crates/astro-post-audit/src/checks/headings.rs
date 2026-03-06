@@ -1,5 +1,4 @@
 use rayon::prelude::*;
-use scraper::Selector;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
@@ -11,10 +10,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         .par_iter()
         .flat_map(|page| {
             let mut findings = Vec::new();
-            let html = page.parse_html();
-
-            let h1_sel = Selector::parse("h1").unwrap();
-            let h1_count = html.select(&h1_sel).count();
+            let h1_count = page.h1_count;
 
             // Require H1
             if config.headings.require_h1 && h1_count == 0 {
@@ -44,17 +40,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             // No heading level skip
             if config.headings.no_skip {
-                let all_headings_sel = Selector::parse("h1, h2, h3, h4, h5, h6").unwrap();
-                let mut ordered_levels: Vec<u8> = Vec::new();
-
-                for el in html.select(&all_headings_sel) {
-                    let tag = el.value().name();
-                    if let Some(level) = tag.strip_prefix('h').and_then(|s| s.parse::<u8>().ok()) {
-                        ordered_levels.push(level);
-                    }
-                }
-
-                for window in ordered_levels.windows(2) {
+                for window in page.heading_levels.windows(2) {
                     let prev = window[0];
                     let curr = window[1];
                     if curr > prev + 1 {

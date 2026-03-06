@@ -1,4 +1,6 @@
-import type { AstroIntegration } from 'astro';
+import type { AstroIntegration } from "astro";
+import { execFileSync } from "node:child_process";
+import { existsSync, writeFileSync } from "node:fs";
 /**
  * Inline rules config that mirrors the Rust config structure.
  * All sections and fields are optional — only set what you want to override.
@@ -19,9 +21,9 @@ export interface RulesConfig {
     /** URL normalization rules for internal link and canonical consistency. */
     url_normalization?: {
         /** Trailing slash policy. `"always"`: require trailing slash, `"never"`: forbid, `"ignore"`: no check. @default "always" */
-        trailing_slash?: 'always' | 'never' | 'ignore';
+        trailing_slash?: "always" | "never" | "ignore";
         /** Whether `index.html` in URLs is allowed. `"forbid"`: warn on `/page/index.html` links, `"allow"`: permit them. @default "forbid" */
-        index_html?: 'forbid' | 'allow';
+        index_html?: "forbid" | "allow";
     };
     /** Canonical `<link rel="canonical">` tag checks. */
     canonical?: {
@@ -187,9 +189,9 @@ export interface RulesConfig {
     };
     /**
      * Override severity per rule ID.
-     * @example `{ "html/title-too-long": "off", "a11y/img-alt-missing": "error" }`
+     * @example `{ "html/title-too-long": "off", "a11y/img-alt": "error" }`
      */
-    severity?: Record<string, 'error' | 'warning' | 'info' | 'off'>;
+    severity?: Record<string, "error" | "warning" | "info" | "off">;
     /** External link checking (HEAD requests to verify URLs return 2xx). */
     external_links?: {
         /** Enable external link checking. @default false */
@@ -209,6 +211,8 @@ export interface RulesConfig {
 export interface PostAuditOptions {
     /** Inline rules config — all check settings go here. */
     rules?: RulesConfig;
+    /** Preset to apply before user overrides. `"strict"` enables all checks, `"relaxed"` is lenient. */
+    preset?: "strict" | "relaxed";
     /** Base URL (auto-detected from Astro's `site` config if not set). */
     site?: string;
     /** Treat warnings as errors. */
@@ -219,10 +223,18 @@ export interface PostAuditOptions {
     pageOverview?: boolean;
     /** Write the JSON report to this file path (relative to project root). */
     output?: string;
+    /** Print per-check timing benchmarks in the output. */
+    benchmark?: boolean;
     /** Disable the integration (useful for dev mode). */
     disable?: boolean;
     /** Throw an error when the audit finds issues (fails the build). Default: false */
     throwOnError?: boolean;
 }
-export default function postAudit(options?: PostAuditOptions): AstroIntegration;
+interface RuntimeDeps {
+    execFileSync: typeof execFileSync;
+    existsSync: typeof existsSync;
+    writeFileSync: typeof writeFileSync;
+}
+export default function postAudit(options?: PostAuditOptions, deps?: RuntimeDeps): AstroIntegration;
+export {};
 //# sourceMappingURL=integration.d.ts.map

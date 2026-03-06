@@ -54,12 +54,26 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
 
       - name: Install dependencies
         working-directory: packages/astro-post-audit
         run: npm ci
 
+      - name: Verify binary compatibility
+        working-directory: packages/astro-post-audit
+        run: npm run verify:binary
+
       - name: Type check
         working-directory: packages/astro-post-audit
         run: npx tsc --noEmit
+
+      - name: Package smoke test
+        working-directory: packages/astro-post-audit
+        run: |
+          TARBALL="$(npm pack | tail -n 1)"
+          mkdir -p .tmp-smoke
+          cd .tmp-smoke
+          npm init -y >/dev/null 2>&1
+          npm i "../$TARBALL" --ignore-scripts
+          node -e "import('@casoon/astro-post-audit').then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); })"
