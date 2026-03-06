@@ -294,12 +294,12 @@ impl SiteIndex {
 }
 
 fn extract_canonical(html: &Html, sel: &Selector) -> Option<String> {
-    let element = html.select(&sel).next()?;
+    let element = html.select(sel).next()?;
     element.value().attr("href").map(|s| s.to_string())
 }
 
 fn has_noindex(html: &Html, sel: &Selector) -> bool {
-    html.select(&sel).any(|el| {
+    html.select(sel).any(|el| {
         el.value()
             .attr("content")
             .is_some_and(|c| c.to_lowercase().contains("noindex"))

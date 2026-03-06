@@ -75,5 +75,5 @@ jobs:
           mkdir -p .tmp-smoke
           cd .tmp-smoke
           npm init -y >/dev/null 2>&1
-          npm i "../$TARBALL" --ignore-scripts
+          npm i "../$TARBALL" astro --ignore-scripts
           node -e "import('@casoon/astro-post-audit').then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); })"

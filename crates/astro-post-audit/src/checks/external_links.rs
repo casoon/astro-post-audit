@@ -125,7 +125,7 @@ fn check_url(agent: &ureq::Agent, url: &str) -> Option<(String, String)> {
             let status = response.status();
             if status.as_u16() == 405 {
                 // HEAD not allowed, try GET
-                return check_url_get(&agent, url);
+                return check_url_get(agent, url);
             }
             if status.as_u16() >= 400 {
                 Some((
