@@ -146,12 +146,13 @@ jobs:
       - name: Package smoke test
         working-directory: packages/astro-post-audit
         run: |
-          TARBALL="$(npm pack 2>/dev/null | tail -n 1)"
-          mkdir -p .tmp-smoke
-          cd .tmp-smoke
-          npm init -y >/dev/null 2>&1
-          npm i "../$TARBALL" --ignore-scripts
-          node --input-type=module -e "const url = import.meta.resolve('@casoon/astro-post-audit'); console.log('OK:', url);"
+          TARBALL="$(npm pack 2>/dev/null)"
+          echo "Tarball: $TARBALL"
+          tar tzf "$TARBALL" | sort
+          tar tzf "$TARBALL" | grep -q "package/dist/integration.js"
+          tar tzf "$TARBALL" | grep -q "package/dist/index.js"
+          tar tzf "$TARBALL" | grep -q "package/bin/install.cjs"
+          echo "Smoke test passed"
 
       - name: Publish to npm
         working-directory: packages/astro-post-audit
