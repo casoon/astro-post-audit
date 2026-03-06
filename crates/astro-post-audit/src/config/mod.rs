@@ -2,9 +2,18 @@ use anyhow::Result;
 use serde::Deserialize;
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum Preset {
+    Strict,
+    Relaxed,
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct Config {
+    /// Preset to apply before user overrides.
+    pub preset: Option<Preset>,
     /// Treat warnings as errors (exit code 1).
     pub strict: bool,
     /// Maximum number of errors before truncating output.
@@ -13,6 +22,8 @@ pub struct Config {
     pub page_overview: bool,
     /// Output format: "text" (default) or "json".
     pub format: Option<String>,
+    /// Print per-check timing benchmarks.
+    pub benchmark: bool,
     pub site: SiteConfig,
     pub filters: FilterConfig,
     pub url_normalization: UrlNormalizationConfig,
@@ -348,14 +359,173 @@ impl Default for ExternalLinksConfig {
 
 impl Config {
     pub fn from_json(json_str: &str) -> Result<Self> {
-        let config: Config = serde_json::from_str(json_str)?;
-        config.warn_deprecated();
+        // Two-pass deserialization: check which fields the user set,
+        // then inject preset defaults for missing fields.
+        let mut raw: serde_json::Value = serde_json::from_str(json_str)?;
+
+        if let Some(preset_val) = raw.get("preset").and_then(|v| v.as_str()) {
+            let preset_defaults = match preset_val {
+                "strict" => Self::strict_preset_json(),
+                "relaxed" => Self::relaxed_preset_json(),
+                _ => serde_json::Value::Object(serde_json::Map::new()),
+            };
+
+            // Merge: preset defaults first, user values override
+            if let (Some(defaults), Some(user)) =
+                (preset_defaults.as_object(), raw.as_object_mut())
+            {
+                for (key, default_val) in defaults {
+                    if !user.contains_key(key) {
+                        user.insert(key.clone(), default_val.clone());
+                    } else if let (Some(default_obj), Some(user_obj)) =
+                        (default_val.as_object(), user.get_mut(key).and_then(|v| v.as_object_mut()))
+                    {
+                        // Merge nested objects (e.g. canonical, links)
+                        for (k, v) in default_obj {
+                            if !user_obj.contains_key(k) {
+                                user_obj.insert(k.clone(), v.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let config: Config = serde_json::from_value(raw)?;
         Ok(config)
     }
 
-    /// Emit warnings for deprecated/unimplemented config sections.
-    pub fn warn_deprecated(&self) {
-        // Currently no deprecated sections
-        let _ = self;
+    /// Preset: strict — all checks enabled, strict mode on.
+    fn strict_preset_json() -> serde_json::Value {
+        serde_json::json!({
+            "strict": true,
+            "canonical": {
+                "require": true,
+                "absolute": true,
+                "same_origin": true,
+                "self_reference": true,
+                "detect_clusters": true
+            },
+            "links": {
+                "check_internal": true,
+                "fail_on_broken": true,
+                "forbid_query_params_internal": true,
+                "check_fragments": true,
+                "detect_orphan_pages": true,
+                "check_mixed_content": true
+            },
+            "html_basics": {
+                "lang_attr_required": true,
+                "title_required": true,
+                "meta_description_required": true,
+                "viewport_required": true,
+                "title_max_length": 60,
+                "meta_description_max_length": 160
+            },
+            "headings": {
+                "require_h1": true,
+                "single_h1": true,
+                "no_skip": true
+            },
+            "a11y": {
+                "img_alt_required": true,
+                "allow_decorative_images": true,
+                "a_accessible_name_required": true,
+                "button_name_required": true,
+                "label_for_required": true,
+                "warn_generic_link_text": true,
+                "aria_hidden_focusable_check": true,
+                "require_skip_link": true
+            },
+            "assets": {
+                "check_broken_assets": true,
+                "check_image_dimensions": true
+            },
+            "opengraph": {
+                "require_og_title": true,
+                "require_og_description": true,
+                "require_og_image": true,
+                "require_twitter_card": true
+            },
+            "structured_data": {
+                "check_json_ld": true,
+                "detect_duplicate_types": true
+            },
+            "hreflang": {
+                "check_hreflang": true,
+                "require_x_default": true,
+                "require_self_reference": true,
+                "require_reciprocal": true
+            },
+            "security": {
+                "check_target_blank": true,
+                "check_mixed_content": true,
+                "warn_inline_scripts": true
+            },
+            "content_quality": {
+                "detect_duplicate_titles": true,
+                "detect_duplicate_descriptions": true,
+                "detect_duplicate_h1": true,
+                "detect_duplicate_pages": true
+            },
+            "sitemap": {
+                "require": true,
+                "canonical_must_be_in_sitemap": true,
+                "forbid_noncanonical_in_sitemap": true,
+                "entries_must_exist_in_dist": true
+            },
+            "robots_txt": {
+                "require": true,
+                "require_sitemap_link": true
+            }
+        })
+    }
+
+    /// Preset: relaxed — core SEO only, lenient settings.
+    fn relaxed_preset_json() -> serde_json::Value {
+        serde_json::json!({
+            "strict": false,
+            "canonical": {
+                "require": true,
+                "absolute": true,
+                "same_origin": true,
+                "self_reference": false,
+                "detect_clusters": false
+            },
+            "links": {
+                "check_internal": true,
+                "fail_on_broken": false,
+                "forbid_query_params_internal": false,
+                "check_fragments": false,
+                "detect_orphan_pages": false,
+                "check_mixed_content": true
+            },
+            "html_basics": {
+                "lang_attr_required": true,
+                "title_required": true,
+                "meta_description_required": false,
+                "viewport_required": true
+            },
+            "headings": {
+                "require_h1": true,
+                "single_h1": false,
+                "no_skip": false
+            },
+            "a11y": {
+                "img_alt_required": true,
+                "allow_decorative_images": true,
+                "a_accessible_name_required": true,
+                "button_name_required": false,
+                "label_for_required": false,
+                "warn_generic_link_text": false,
+                "aria_hidden_focusable_check": false,
+                "require_skip_link": false
+            },
+            "security": {
+                "check_target_blank": true,
+                "check_mixed_content": true,
+                "warn_inline_scripts": false
+            }
+        })
     }
 }

@@ -36,6 +36,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         message: "No JSON-LD structured data found".into(),
                         help: "Add <script type=\"application/ld+json\"> with schema.org data"
                             .into(),
+                        suggestion: None,
                     });
                 }
                 return findings;
@@ -57,6 +58,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                             selector: selector_hint,
                             message: "JSON-LD script is empty".into(),
                             help: "Add valid JSON-LD content or remove the empty script tag".into(),
+                            suggestion: None,
                         });
                     }
                     continue;
@@ -72,6 +74,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                                 selector: selector_hint.clone(),
                                 message: format!("Invalid JSON in JSON-LD: {}", e),
                                 help: "Fix the JSON syntax in the structured data block".into(),
+                                suggestion: None,
                             });
                         }
                     }
@@ -108,6 +111,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                                 "Consolidate {} blocks into a single JSON-LD script or use @graph",
                                 type_name
                             ),
+                            suggestion: None,
                         });
                     }
                 }
@@ -164,6 +168,7 @@ fn check_semantics(json: &Value, file: &str, selector: &str, findings: &mut Vec<
             selector: selector.to_string(),
             message: "JSON-LD missing @context property".into(),
             help: "Add \"@context\": \"https://schema.org\" to the JSON-LD object".into(),
+            suggestion: None,
         });
     } else if let Some(ctx) = json.get("@context").and_then(|c| c.as_str()) {
         if !ctx.contains("schema.org") {
@@ -174,6 +179,7 @@ fn check_semantics(json: &Value, file: &str, selector: &str, findings: &mut Vec<
                 selector: selector.to_string(),
                 message: format!("JSON-LD @context '{}' is not schema.org", ctx),
                 help: "Use \"https://schema.org\" as the @context".into(),
+                suggestion: None,
             });
         }
     }
@@ -193,6 +199,7 @@ fn check_single_entity(entity: &Value, file: &str, selector: &str, findings: &mu
                     selector: selector.to_string(),
                     message: "JSON-LD entity missing @type property".into(),
                     help: "Add an @type property (e.g. \"Article\", \"WebPage\")".into(),
+                    suggestion: None,
                 });
             }
             return;
@@ -239,6 +246,7 @@ fn check_single_entity(entity: &Value, file: &str, selector: &str, findings: &mu
                     type_name, field
                 ),
                 help: format!("Add the '{}' property to the {} schema", field, type_name),
+                suggestion: None,
             });
         }
     }

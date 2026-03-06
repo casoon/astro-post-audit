@@ -215,6 +215,8 @@ export interface RulesConfig {
 export interface PostAuditOptions {
   /** Inline rules config — all check settings go here. */
   rules?: RulesConfig;
+  /** Preset to apply before user overrides. `"strict"` enables all checks, `"relaxed"` is lenient. */
+  preset?: 'strict' | 'relaxed';
   /** Base URL (auto-detected from Astro's `site` config if not set). */
   site?: string;
   /** Treat warnings as errors. */
@@ -225,6 +227,8 @@ export interface PostAuditOptions {
   pageOverview?: boolean;
   /** Write the JSON report to this file path (relative to project root). */
   output?: string;
+  /** Print per-check timing benchmarks in the output. */
+  benchmark?: boolean;
   /** Disable the integration (useful for dev mode). */
   disable?: boolean;
   /** Throw an error when the audit finds issues (fails the build). Default: false */
@@ -241,12 +245,17 @@ function resolveBinaryPath(): string | null {
 
 export default function postAudit(options: PostAuditOptions = {}): AstroIntegration {
   let siteUrl: string | undefined;
+  let astroTrailingSlash: 'always' | 'never' | 'ignore' | undefined;
 
   return {
     name: 'astro-post-audit',
     hooks: {
       'astro:config:done': ({ config }) => {
         siteUrl = config.site?.toString();
+        // Bridge Astro's trailingSlash config automatically
+        if (config.trailingSlash) {
+          astroTrailingSlash = config.trailingSlash;
+        }
       },
 
       'astro:build:done': ({ dir, logger }) => {
@@ -279,7 +288,16 @@ export default function postAudit(options: PostAuditOptions = {}): AstroIntegrat
           ...options.rules,
         };
         if (site) stdinConfig.site = { base_url: site };
+        if (options.preset) stdinConfig.preset = options.preset;
+        // Auto-bridge trailingSlash from Astro config if not explicitly set in rules
+        if (astroTrailingSlash && !options.rules?.url_normalization?.trailing_slash) {
+          stdinConfig.url_normalization = {
+            ...(stdinConfig.url_normalization as Record<string, unknown> ?? {}),
+            trailing_slash: astroTrailingSlash,
+          };
+        }
         if (options.strict) stdinConfig.strict = true;
+        if (options.benchmark) stdinConfig.benchmark = true;
         if (options.maxErrors != null) stdinConfig.max_errors = options.maxErrors;
         if (options.pageOverview) stdinConfig.page_overview = true;
         if (options.output) stdinConfig.format = 'json';

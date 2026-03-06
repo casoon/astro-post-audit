@@ -56,6 +56,7 @@ fn check_lang(page: &crate::discovery::PageInfo, html: &Html, findings: &mut Vec
             selector: "html".into(),
             message: "Missing lang attribute on <html> element".into(),
             help: "Add lang attribute, e.g., <html lang=\"en\">".into(),
+            suggestion: Some("<html lang=\"en\">".into()),
         });
     }
 }
@@ -81,6 +82,7 @@ fn check_title(
                 selector: "head".into(),
                 message: "Missing <title> tag".into(),
                 help: "Add a <title> tag inside <head>".into(),
+                suggestion: Some("<title>Page Title</title>".into()),
             });
         }
         Some(el) => {
@@ -94,6 +96,7 @@ fn check_title(
                     selector: "title".into(),
                     message: "Title tag is empty".into(),
                     help: "Add descriptive text to the <title> tag".into(),
+                    suggestion: Some("<title>Page Title</title>".into()),
                 });
             } else if let Some(max) = config.html_basics.title_max_length {
                 if trimmed.len() > max {
@@ -108,6 +111,7 @@ fn check_title(
                             max
                         ),
                         help: "Shorten the title for better display in search results".into(),
+                        suggestion: None,
                     });
                 }
             }
@@ -137,6 +141,7 @@ fn check_meta_description(
                     selector: "head".into(),
                     message: "Missing or empty meta description".into(),
                     help: "Add <meta name=\"description\" content=\"...\"> to <head>".into(),
+                    suggestion: Some("<meta name=\"description\" content=\"...\">".into()),
                 });
             }
         }
@@ -152,6 +157,7 @@ fn check_meta_description(
                         selector: "head".into(),
                         message: "Missing or empty meta description".into(),
                         help: "Add <meta name=\"description\" content=\"...\"> to <head>".into(),
+                        suggestion: Some("<meta name=\"description\" content=\"...\">".into()),
                     });
                 }
             } else if let Some(max) = config.html_basics.meta_description_max_length {
@@ -168,6 +174,7 @@ fn check_meta_description(
                             max
                         ),
                         help: "Shorten the description for better display in search results".into(),
+                        suggestion: None,
                     });
                 }
             }
@@ -190,6 +197,7 @@ fn check_viewport(page: &crate::discovery::PageInfo, html: &Html, findings: &mut
             message: "Missing viewport meta tag".into(),
             help: "Add <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
                 .into(),
+            suggestion: Some("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">".into()),
         });
     }
 }

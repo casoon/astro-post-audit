@@ -37,6 +37,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         selector: "head".into(),
                         message: "Missing og:title meta tag".into(),
                         help: "Add <meta property=\"og:title\" content=\"...\">".into(),
+                        suggestion: None,
                     });
                 }
             }
@@ -56,6 +57,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         selector: "head".into(),
                         message: "Missing og:description meta tag".into(),
                         help: "Add <meta property=\"og:description\" content=\"...\">".into(),
+                        suggestion: None,
                     });
                 }
             }
@@ -75,6 +77,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         selector: "head".into(),
                         message: "Missing og:image meta tag".into(),
                         help: "Add <meta property=\"og:image\" content=\"...\">".into(),
+                        suggestion: None,
                     });
                 }
             }
@@ -95,6 +98,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         message: "Missing twitter:card meta tag".into(),
                         help: "Add <meta name=\"twitter:card\" content=\"summary_large_image\">"
                             .into(),
+                        suggestion: None,
                     });
                 }
             }

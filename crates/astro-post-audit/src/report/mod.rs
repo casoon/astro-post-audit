@@ -22,6 +22,8 @@ pub struct Finding {
     pub selector: String,
     pub message: String,
     pub help: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suggestion: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -47,6 +49,21 @@ impl Summary {
             truncated: false,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BenchmarkData {
+    pub discovery_ms: u128,
+    pub check_timings: Vec<CheckTiming>,
+    pub total_ms: u128,
+    pub pages_checked: usize,
+    pub pages_per_second: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CheckTiming {
+    pub name: String,
+    pub duration_ms: u128,
 }
 
 #[derive(Debug, Clone)]
@@ -76,10 +93,21 @@ impl Reporter {
         Self { format }
     }
 
-    pub fn print(&self, findings: &[Finding], summary: &Summary) -> Result<()> {
+    pub fn print(
+        &self,
+        findings: &[Finding],
+        summary: &Summary,
+        benchmark: Option<&BenchmarkData>,
+    ) -> Result<()> {
         match self.format {
-            Format::Text => self.print_text(findings, summary),
-            Format::Json => self.print_json(findings, summary),
+            Format::Text => {
+                self.print_text(findings, summary)?;
+                if let Some(b) = benchmark {
+                    self.print_benchmark_text(b)?;
+                }
+                Ok(())
+            }
+            Format::Json => self.print_json(findings, summary, benchmark),
         }
     }
 
@@ -192,15 +220,55 @@ impl Reporter {
         Ok(())
     }
 
-    fn print_json(&self, findings: &[Finding], summary: &Summary) -> Result<()> {
+    fn print_json(
+        &self,
+        findings: &[Finding],
+        summary: &Summary,
+        benchmark: Option<&BenchmarkData>,
+    ) -> Result<()> {
         #[derive(Serialize)]
         struct Report<'a> {
             findings: &'a [Finding],
             summary: &'a Summary,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            benchmark: Option<&'a BenchmarkData>,
         }
 
-        let report = Report { findings, summary };
+        let report = Report {
+            findings,
+            summary,
+            benchmark,
+        };
         println!("{}", serde_json::to_string_pretty(&report)?);
+        Ok(())
+    }
+
+    fn print_benchmark_text(&self, b: &BenchmarkData) -> Result<()> {
+        println!(
+            "  {} {} ({} pages)",
+            "Benchmark".bold().underline(),
+            format!("{}ms total", b.total_ms).dimmed(),
+            b.pages_checked
+        );
+        println!(
+            "    {} Discovery: {}ms",
+            "•".dimmed(),
+            b.discovery_ms
+        );
+        for t in &b.check_timings {
+            println!(
+                "    {} {}: {}ms",
+                "•".dimmed(),
+                t.name,
+                t.duration_ms
+            );
+        }
+        println!(
+            "    {} {:.1} pages/sec",
+            "•".dimmed(),
+            b.pages_per_second
+        );
+        println!();
         Ok(())
     }
 

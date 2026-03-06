@@ -52,7 +52,7 @@
 - [x] Config file auto-discovery (rules.toml / .astro-post-audit.toml in CWD or dist parent)
 - [x] Bug fix: assets/img-dimensions check was always-on (hardcoded `if true`) regardless of config
 - [x] Code review: 15 fixes across P0/P1/P2 priorities (see below)
-- [ ] CI workflow green on all 3 OS
+- [x] CI workflow green on all 3 OS
 
 ### Phase 3b: Code Review Fixes -- DONE
 **P0 — Correctness:**
@@ -75,37 +75,29 @@
 - [x] One Finding per file in content_quality (was comma-joined paths)
 - [x] Symlink-loop protection: `follow_links(false)` in WalkDir
 
-## Phase 4: Packaging & Distribution -- READY
+## Phase 4: Packaging & Distribution -- DONE
 **Goal:** npm install works on all platforms.
 
 - [x] CI workflow: fmt, clippy (-D warnings), test on 3 OS
 - [x] Release workflow: 5 targets (mac-x64, mac-arm64, linux-x64, linux-arm64, win-x64)
 - [x] npm wrapper: postinstall downloads binary from GitHub Releases
-- [x] Version sync (Cargo.toml = package.json = 0.1.0)
+- [x] Version sync (Cargo.toml = package.json)
 - [x] Clippy clean (zero warnings with -D warnings)
 - [x] Release binary: 3.0 MB (1.3 MB gzipped), LTO + strip
-- [ ] Push to GitHub, verify CI green on all 3 OS
-- [ ] Tag v0.1.0 → triggers release workflow → GitHub Release + npm publish
+- [x] Push to GitHub, CI green on all 3 OS
+- [x] Astro integration package (`packages/astro-post-audit`)
+- [x] Canonical cluster analysis
+- [x] External link checker (ureq, sync)
+- [x] Colored output with miette for rich diagnostics
 
 ## Phase 5: Advanced Features
 **Goal:** Production-ready, opinionated presets, DX polish.
 
-- [ ] Presets: `--preset strict` / `--preset relaxed`
-- [ ] Canonical cluster analysis (multiple pages -> same canonical report)
+- [ ] Presets: `strict` / `relaxed` as integration option
 - [ ] Performance: benchmark with 500+ page site, ensure <1s
-- [ ] `--fix` suggestions (machine-readable fix hints in JSON)
-- [ ] Colored output with miette for rich diagnostics
-- [ ] External link checker implementation (async HTTP with reqwest/ureq)
-- [ ] Astro config bridge (read site/trailingSlash from astro.config.mjs)
-
-## Phase 6: Ecosystem Integration
-**Goal:** Seamless Astro/CI integration.
-
-- [ ] Astro integration package (`@astro-post-audit/astro`)
-- [ ] GitHub Action (`astro-post-audit/action`)
-- [ ] Markdown report output (for PR comments)
-- [ ] SARIF output (for GitHub Code Scanning)
-- [ ] Config schema (JSON Schema for IDE autocomplete)
+- [ ] `--fix` suggestions (machine-readable fix hints in JSON output)
+- [ ] Astro config bridge (read site/trailingSlash from astro.config.mjs automatically)
+- [ ] Config JSON Schema (for IDE autocomplete in astro.config.mjs)
 
 ---
 
@@ -115,22 +107,22 @@
 | Module | Checks |
 |---|---|
 | `seo` | canonical, robots meta |
-| `links` | broken links, query params, fragments, orphans, mixed content |
-| `a11y` | img alt, link/button names, form labels, generic text, aria-hidden |
+| `links` | broken links, query params, fragments, orphans, mixed content, external |
+| `a11y` | img alt, link/button names, form labels, generic text, aria-hidden, skip-link |
 | `html_basics` | lang, title, viewport, meta description, length heuristics |
 | `headings` | require h1, single h1, no skip |
 | `sitemap` | canonical cross-ref, stale entries |
 | `robots_txt` | existence, sitemap directive |
 | `security` | target_blank noopener, mixed content, inline scripts |
 
-### Optional (via flags/config)
-| Module | Flag | Checks |
-|---|---|---|
-| `assets` | `--check-assets` | broken references, dimensions, file sizes |
-| `opengraph` | config only | og:title, og:description, og:image, twitter:card |
-| `structured_data` | `--check-structured-data` | JSON-LD existence + syntax |
-| `hreflang` | config only | x-default, self-ref, reciprocal |
-| `content_quality` | `--check-duplicates` | duplicate titles, descriptions, h1, pages |
+### Optional (via config)
+| Module | Checks |
+|---|---|
+| `assets` | broken references, dimensions, file sizes |
+| `opengraph` | og:title, og:description, og:image, twitter:card |
+| `structured_data` | JSON-LD existence + syntax |
+| `hreflang` | x-default, self-ref, reciprocal |
+| `content_quality` | duplicate titles, descriptions, h1, pages |
 
 ---
 

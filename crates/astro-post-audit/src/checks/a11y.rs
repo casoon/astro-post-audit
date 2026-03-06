@@ -97,6 +97,7 @@ fn check_img_alt(
                 selector: format!("img[src='{}']", src),
                 message: format!("Image missing alt attribute: src='{}'", src),
                 help: "Add an alt attribute describing the image, or use alt=\"\" for decorative images".into(),
+                suggestion: Some("alt=\"...\"".into()),
             });
         }
     }
@@ -143,6 +144,7 @@ fn check_link_names(
                 selector: format!("a[href='{}']", href),
                 message: format!("Link has no accessible name: href='{}'", href),
                 help: "Add text content, aria-label, or aria-labelledby to the link".into(),
+                suggestion: None,
             });
             continue;
         }
@@ -165,6 +167,7 @@ fn check_link_names(
                         text_content.trim()
                     ),
                     help: "Use descriptive link text or add an aria-label".into(),
+                    suggestion: None,
                 });
             }
         }
@@ -196,6 +199,7 @@ fn check_button_names(page: &crate::discovery::PageInfo, html: &Html, findings: 
                 selector: "button".into(),
                 message: "Button has no accessible name".into(),
                 help: "Add text content, aria-label, or aria-labelledby to the button".into(),
+                suggestion: None,
             });
         }
     }
@@ -239,6 +243,7 @@ fn check_form_labels(page: &crate::discovery::PageInfo, html: &Html, findings: &
                     name, input_type
                 ),
                 help: "Add a <label for='id'>, aria-label, or aria-labelledby".into(),
+                suggestion: None,
             });
         }
     }
@@ -268,6 +273,7 @@ fn check_skip_link(page: &crate::discovery::PageInfo, html: &Html, findings: &mu
             selector: "body".into(),
             message: "No skip navigation link found".into(),
             help: "Add a skip link like <a href=\"#main-content\" class=\"sr-only focus:not-sr-only\">Skip to content</a> as the first element in <body>".into(),
+            suggestion: Some("<a href=\"#main-content\" class=\"sr-only\">Skip to content</a>".into()),
         });
     }
 }
@@ -293,6 +299,7 @@ fn check_aria_hidden_focusable(
                 selector: format!("{}[aria-hidden='true']", tag),
                 message: format!("Focusable element <{}> has aria-hidden=\"true\"", tag),
                 help: "Remove aria-hidden from focusable elements, or add tabindex=\"-1\"".into(),
+                suggestion: None,
             });
         }
     }

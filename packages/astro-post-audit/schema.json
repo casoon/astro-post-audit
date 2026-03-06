@@ -1,0 +1,567 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "additionalProperties": false,
+    "definitions": {
+        "SeverityOverrides": {
+            "additionalProperties": {
+                "enum": ["error", "warning", "info", "off"],
+                "type": "string"
+            },
+            "description": "Map of rule IDs to severity levels.",
+            "type": "object"
+        },
+        "RulesConfig": {
+            "additionalProperties": false,
+            "description": "Inline rules config that mirrors the Rust config structure.\nAll sections and fields are optional — only set what you want to override.",
+            "properties": {
+                "a11y": {
+                    "additionalProperties": false,
+                    "description": "Accessibility (a11y) heuristics — static checks, no layout computation.",
+                    "properties": {
+                        "a_accessible_name_required": {
+                            "default": true,
+                            "description": "`<a>` elements must have an accessible name (text, `aria-label`, or `aria-labelledby`).",
+                            "type": "boolean"
+                        },
+                        "allow_decorative_images": {
+                            "default": true,
+                            "description": "Allow images with `role=\"presentation\"` or `aria-hidden=\"true\"` to skip `alt`.",
+                            "type": "boolean"
+                        },
+                        "aria_hidden_focusable_check": {
+                            "default": true,
+                            "description": "Warn if `aria-hidden=\"true\"` is set on a focusable element.",
+                            "type": "boolean"
+                        },
+                        "button_name_required": {
+                            "default": true,
+                            "description": "`<button>` elements must have an accessible name.",
+                            "type": "boolean"
+                        },
+                        "img_alt_required": {
+                            "default": true,
+                            "description": "`<img>` elements must have an `alt` attribute.",
+                            "type": "boolean"
+                        },
+                        "label_for_required": {
+                            "default": true,
+                            "description": "Form controls must have an associated `<label>`.",
+                            "type": "boolean"
+                        },
+                        "require_skip_link": {
+                            "default": false,
+                            "description": "Require a skip navigation link (e.g. `<a href=\"#main-content\">`).",
+                            "type": "boolean"
+                        },
+                        "warn_generic_link_text": {
+                            "default": true,
+                            "description": "Warn on generic link text like \"click here\", \"mehr\", \"weiter\".",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
+                "assets": {
+                    "additionalProperties": false,
+                    "description": "Asset reference and size checks.",
+                    "properties": {
+                        "check_broken_assets": {
+                            "default": false,
+                            "description": "Check that `<img>`, `<script>`, `<link>` references resolve to files in `dist/`.",
+                            "type": "boolean"
+                        },
+                        "check_image_dimensions": {
+                            "default": false,
+                            "description": "Warn if `<img>` is missing `width`/`height` attributes (CLS prevention).",
+                            "type": "boolean"
+                        },
+                        "max_css_size_kb": {
+                            "description": "Warn if any CSS file exceeds this size in KB. Off by default.",
+                            "type": "number"
+                        },
+                        "max_image_size_kb": {
+                            "description": "Warn if any image file exceeds this size in KB. Off by default.",
+                            "type": "number"
+                        },
+                        "max_js_size_kb": {
+                            "description": "Warn if any JS file exceeds this size in KB. Off by default.",
+                            "type": "number"
+                        },
+                        "require_hashed_filenames": {
+                            "default": false,
+                            "description": "Warn if asset filenames lack a cache-busting hash.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
+                "canonical": {
+                    "additionalProperties": false,
+                    "description": "Canonical `<link rel=\"canonical\">` tag checks.",
+                    "properties": {
+                        "absolute": {
+                            "default": true,
+                            "description": "Canonical URL must be absolute (not relative).",
+                            "type": "boolean"
+                        },
+                        "detect_clusters": {
+                            "default": true,
+                            "description": "Warn when multiple pages share the same canonical URL (cluster detection).",
+                            "type": "boolean"
+                        },
+                        "require": {
+                            "default": true,
+                            "description": "Every page must have a canonical tag.",
+                            "type": "boolean"
+                        },
+                        "same_origin": {
+                            "default": true,
+                            "description": "Canonical must point to the same origin as `site`.",
+                            "type": "boolean"
+                        },
+                        "self_reference": {
+                            "default": false,
+                            "description": "Canonical must be a self-reference (point to the page itself).",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
+                "content_quality": {
+                    "additionalProperties": false,
+                    "description": "Duplicate content detection.",
+                    "properties": {
+                        "detect_duplicate_descriptions": {
+                            "default": false,
+                            "description": "Warn if multiple pages share the same meta description.",
+                            "type": "boolean"
+                        },
+                        "detect_duplicate_h1": {
+                            "default": false,
+                            "description": "Warn if multiple pages share the same `<h1>`.",
+                            "type": "boolean"
+                        },
+                        "detect_duplicate_pages": {
+                            "default": false,
+                            "description": "Warn if pages have identical content (by hash).",
+                            "type": "boolean"
+                        },
+                        "detect_duplicate_titles": {
+                            "default": false,
+                            "description": "Warn if multiple pages share the same `<title>`.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
+                "external_links": {
+                    "additionalProperties": false,
+                    "description": "External link checking (HEAD requests to verify URLs return 2xx).",
+                    "properties": {
+                        "allow_domains": {
+                            "description": "Only check links to these domains (empty = all).",
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        "block_domains": {
+                            "description": "Skip links to these domains.",
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        "enabled": {
+                            "default": false,
+                            "description": "Enable external link checking.",
+                            "type": "boolean"
+                        },
+                        "fail_on_broken": {
+                            "default": false,
+                            "description": "Broken external links are errors (not just warnings).",
+                            "type": "boolean"
+                        },
+                        "max_concurrent": {
+                            "default": 10,
+                            "description": "Maximum concurrent requests.",
+                            "type": "number"
+                        },
+                        "timeout_ms": {
+                            "default": 3000,
+                            "description": "Timeout per request in milliseconds.",
+                            "type": "number"
+                        }
+                    },
+                    "type": "object"
+                },
+                "filters": {
+                    "additionalProperties": false,
+                    "description": "File filters — glob patterns to include or exclude pages from all checks.",
+                    "properties": {
+                        "exclude": {
+                            "description": "Skip files matching these glob patterns (e.g. `[\"404.html\", \"drafts/**\"]`).",
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        "include": {
+                            "description": "Only check files matching these glob patterns.",
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        }
+                    },
+                    "type": "object"
+                },
+                "headings": {
+                    "additionalProperties": false,
+                    "description": "Heading hierarchy checks.",
+                    "properties": {
+                        "no_skip": {
+                            "default": false,
+                            "description": "No heading level gaps (e.g. `<h2>` followed by `<h4>`).",
+                            "type": "boolean"
+                        },
+                        "require_h1": {
+                            "default": true,
+                            "description": "Page must have at least one `<h1>`.",
+                            "type": "boolean"
+                        },
+                        "single_h1": {
+                            "default": true,
+                            "description": "Only one `<h1>` per page.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
+                "hreflang": {
+                    "additionalProperties": false,
+                    "description": "Hreflang checks for multilingual sites.",
+                    "properties": {
+                        "check_hreflang": {
+                            "default": false,
+                            "description": "Enable hreflang link checks.",
+                            "type": "boolean"
+                        },
+                        "require_reciprocal": {
+                            "default": false,
+                            "description": "Hreflang links must be reciprocal (A→B and B→A).",
+                            "type": "boolean"
+                        },
+                        "require_self_reference": {
+                            "default": false,
+                            "description": "Hreflang must include a self-referencing entry.",
+                            "type": "boolean"
+                        },
+                        "require_x_default": {
+                            "default": false,
+                            "description": "Require an `x-default` hreflang entry.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
+                "html_basics": {
+                    "additionalProperties": false,
+                    "description": "Basic HTML structure checks.",
+                    "properties": {
+                        "lang_attr_required": {
+                            "default": true,
+                            "description": "`<html lang=\"...\">` attribute is required.",
+                            "type": "boolean"
+                        },
+                        "meta_description_max_length": {
+                            "default": 160,
+                            "description": "Warn if meta description exceeds this character length.",
+                            "type": "number"
+                        },
+                        "meta_description_required": {
+                            "default": false,
+                            "description": "`<meta name=\"description\">` is required.",
+                            "type": "boolean"
+                        },
+                        "title_max_length": {
+                            "default": 60,
+                            "description": "Warn if `<title>` exceeds this character length.",
+                            "type": "number"
+                        },
+                        "title_required": {
+                            "default": true,
+                            "description": "`<title>` tag is required and must be non-empty.",
+                            "type": "boolean"
+                        },
+                        "viewport_required": {
+                            "default": true,
+                            "description": "`<meta name=\"viewport\">` is required.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
+                "links": {
+                    "additionalProperties": false,
+                    "description": "Internal link consistency checks.",
+                    "properties": {
+                        "check_fragments": {
+                            "default": false,
+                            "description": "Validate that `#fragment` targets exist in the linked page.",
+                            "type": "boolean"
+                        },
+                        "check_internal": {
+                            "default": true,
+                            "description": "Check that internal links resolve to existing pages.",
+                            "type": "boolean"
+                        },
+                        "check_mixed_content": {
+                            "default": true,
+                            "description": "Warn on `http://` in internal links (mixed content).",
+                            "type": "boolean"
+                        },
+                        "detect_orphan_pages": {
+                            "default": false,
+                            "description": "Warn about pages with no incoming internal links (orphan pages).",
+                            "type": "boolean"
+                        },
+                        "fail_on_broken": {
+                            "default": true,
+                            "description": "Broken internal links are errors (not just warnings).",
+                            "type": "boolean"
+                        },
+                        "forbid_query_params_internal": {
+                            "default": true,
+                            "description": "Warn on query parameters (`?foo=bar`) in internal links.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
+                "opengraph": {
+                    "additionalProperties": false,
+                    "description": "Open Graph and Twitter Card meta tag checks.",
+                    "properties": {
+                        "require_og_description": {
+                            "default": false,
+                            "description": "Require `og:description` meta tag.",
+                            "type": "boolean"
+                        },
+                        "require_og_image": {
+                            "default": false,
+                            "description": "Require `og:image` meta tag.",
+                            "type": "boolean"
+                        },
+                        "require_og_title": {
+                            "default": false,
+                            "description": "Require `og:title` meta tag.",
+                            "type": "boolean"
+                        },
+                        "require_twitter_card": {
+                            "default": false,
+                            "description": "Require `twitter:card` meta tag.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
+                "robots_meta": {
+                    "additionalProperties": false,
+                    "description": "Robots meta tag checks.",
+                    "properties": {
+                        "allow_noindex": {
+                            "default": true,
+                            "description": "Don't warn on pages with `noindex`.",
+                            "type": "boolean"
+                        },
+                        "fail_if_noindex": {
+                            "default": false,
+                            "description": "Treat any `noindex` page as an error.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
+                "robots_txt": {
+                    "additionalProperties": false,
+                    "description": "`robots.txt` file checks.",
+                    "properties": {
+                        "require": {
+                            "default": false,
+                            "description": "`robots.txt` must exist.",
+                            "type": "boolean"
+                        },
+                        "require_sitemap_link": {
+                            "default": false,
+                            "description": "`robots.txt` must contain a link to the sitemap.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
+                "security": {
+                    "additionalProperties": false,
+                    "description": "Security heuristic checks.",
+                    "properties": {
+                        "check_mixed_content": {
+                            "default": true,
+                            "description": "Warn on `http://` resource URLs (mixed content).",
+                            "type": "boolean"
+                        },
+                        "check_target_blank": {
+                            "default": true,
+                            "description": "Warn on `target=\"_blank\"` without `rel=\"noopener\"`.",
+                            "type": "boolean"
+                        },
+                        "warn_inline_scripts": {
+                            "default": false,
+                            "description": "Warn on inline `<script>` tags.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
+                "severity": {
+                    "$ref": "#/definitions/SeverityOverrides",
+                    "description": "Override severity per rule ID."
+                },
+                "site": {
+                    "additionalProperties": false,
+                    "description": "Site-level settings.",
+                    "properties": {
+                        "base_url": {
+                            "description": "Base URL for canonical/sitemap checks. Also settable via `site` option or Astro's `site` config.",
+                            "type": "string"
+                        }
+                    },
+                    "type": "object"
+                },
+                "sitemap": {
+                    "additionalProperties": false,
+                    "description": "Sitemap cross-reference checks.",
+                    "properties": {
+                        "canonical_must_be_in_sitemap": {
+                            "default": true,
+                            "description": "Canonical URLs should appear in the sitemap.",
+                            "type": "boolean"
+                        },
+                        "entries_must_exist_in_dist": {
+                            "default": true,
+                            "description": "Every sitemap URL must correspond to a page in `dist/`.",
+                            "type": "boolean"
+                        },
+                        "forbid_noncanonical_in_sitemap": {
+                            "default": false,
+                            "description": "Sitemap must not contain non-canonical URLs.",
+                            "type": "boolean"
+                        },
+                        "require": {
+                            "default": false,
+                            "description": "`sitemap.xml` must exist in `dist/`.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
+                "structured_data": {
+                    "additionalProperties": false,
+                    "description": "Structured data (JSON-LD) validation.",
+                    "properties": {
+                        "check_json_ld": {
+                            "default": false,
+                            "description": "Validate JSON-LD syntax and semantics (`@context`, `@type`, required properties).",
+                            "type": "boolean"
+                        },
+                        "detect_duplicate_types": {
+                            "default": false,
+                            "description": "Warn if a page has multiple JSON-LD blocks with the same `@type`.",
+                            "type": "boolean"
+                        },
+                        "require_json_ld": {
+                            "default": false,
+                            "description": "Every page must contain at least one JSON-LD block.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
+                "url_normalization": {
+                    "additionalProperties": false,
+                    "description": "URL normalization rules for internal link and canonical consistency.",
+                    "properties": {
+                        "index_html": {
+                            "default": "forbid",
+                            "description": "Whether `index.html` in URLs is allowed. `\"forbid\"`: warn on `/page/index.html` links, `\"allow\"`: permit them.",
+                            "enum": [
+                                "allow",
+                                "forbid"
+                            ],
+                            "type": "string"
+                        },
+                        "trailing_slash": {
+                            "default": "always",
+                            "description": "Trailing slash policy. `\"always\"`: require trailing slash, `\"never\"`: forbid, `\"ignore\"`: no check.",
+                            "enum": [
+                                "always",
+                                "ignore",
+                                "never"
+                            ],
+                            "type": "string"
+                        }
+                    },
+                    "type": "object"
+                }
+            },
+            "type": "object"
+        }
+    },
+    "properties": {
+        "benchmark": {
+            "description": "Print per-check timing benchmarks in the output.",
+            "type": "boolean"
+        },
+        "disable": {
+            "description": "Disable the integration (useful for dev mode).",
+            "type": "boolean"
+        },
+        "maxErrors": {
+            "description": "Maximum number of errors before aborting.",
+            "type": "number"
+        },
+        "output": {
+            "description": "Write the JSON report to this file path (relative to project root).",
+            "type": "string"
+        },
+        "pageOverview": {
+            "description": "Show page properties overview instead of running checks.",
+            "type": "boolean"
+        },
+        "preset": {
+            "description": "Preset to apply before user overrides. `\"strict\"` enables all checks, `\"relaxed\"` is lenient.",
+            "enum": [
+                "relaxed",
+                "strict"
+            ],
+            "type": "string"
+        },
+        "rules": {
+            "$ref": "#/definitions/RulesConfig",
+            "description": "Inline rules config — all check settings go here."
+        },
+        "site": {
+            "description": "Base URL (auto-detected from Astro's `site` config if not set).",
+            "type": "string"
+        },
+        "strict": {
+            "description": "Treat warnings as errors.",
+            "type": "boolean"
+        },
+        "throwOnError": {
+            "description": "Throw an error when the audit finds issues (fails the build). Default: false",
+            "type": "boolean"
+        }
+    },
+    "type": "object"
+}
+

@@ -10,20 +10,23 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./schema": "./schema.json"
   },
   "bin": {
     "astro-post-audit": "bin/run.cjs"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run generate-schema",
+    "generate-schema": "typescript-json-schema tsconfig.json PostAuditOptions --noExtraProps -o schema.json",
     "test": "tsc && node --test dist/integration.test.js",
     "prepublishOnly": "tsc",
     "postinstall": "node bin/install.cjs"
   },
   "files": [
     "bin/",
-    "dist/"
+    "dist/",
+    "schema.json"
   ],
   "keywords": [
     "astro",
@@ -58,6 +61,7 @@
   "devDependencies": {
     "@types/node": "^22.10.1",
     "astro": "^5.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-json-schema": "^0.67.1"
   }
 }

@@ -3,6 +3,7 @@ use clap::Parser;
 use std::io::Read;
 use std::path::PathBuf;
 use std::process;
+use std::time::Instant;
 
 mod checks;
 mod config;
@@ -70,9 +71,12 @@ fn run() -> Result<i32> {
     }
 
     // Discover HTML files and build site index
+    let bench = config.benchmark;
+    let t_start = Instant::now();
     let include = &config.filters.include;
     let exclude = &config.filters.exclude;
     let site_index = SiteIndex::build(&cli.dist_path, &config, include, exclude)?;
+    let discovery_ms = t_start.elapsed().as_millis();
 
     // Parse format from config
     let format = match config.format.as_deref() {
@@ -92,12 +96,20 @@ fn run() -> Result<i32> {
     let mut findings: Vec<Finding> = Vec::new();
     let max_errors = config.max_errors;
     let mut error_count: usize = 0;
+    let mut check_timings: Vec<report::CheckTiming> = Vec::new();
 
     // Core checks (always on by default)
     macro_rules! run_check {
-        ($check:expr) => {
+        ($name:expr, $check:expr) => {
             if !max_errors.is_some_and(|m| error_count >= m) {
+                let t = Instant::now();
                 let new_findings = $check;
+                if bench {
+                    check_timings.push(report::CheckTiming {
+                        name: $name.to_string(),
+                        duration_ms: t.elapsed().as_millis(),
+                    });
+                }
                 error_count += new_findings
                     .iter()
                     .filter(|f| f.level == report::Level::Error)
@@ -107,25 +119,20 @@ fn run() -> Result<i32> {
         };
     }
 
-    run_check!(checks::seo::check_all(&site_index, &config));
-    run_check!(checks::links::check_all(&site_index, &config));
-    run_check!(checks::a11y::check_all(&site_index, &config));
-    run_check!(checks::html_basics::check_all(&site_index, &config));
-    run_check!(checks::headings::check_all(&site_index, &config));
-
-    run_check!(checks::sitemap::check_all(&site_index, &config));
-
-    // robots.txt checks
-    run_check!(checks::robots_txt::check_all(&site_index, &config));
-
-    // Optional checks (enabled via flags or config)
-    run_check!(checks::assets::check_all(&site_index, &config));
-    run_check!(checks::opengraph::check_all(&site_index, &config));
-    run_check!(checks::structured_data::check_all(&site_index, &config));
-    run_check!(checks::hreflang::check_all(&site_index, &config));
-    run_check!(checks::security::check_all(&site_index, &config));
-    run_check!(checks::content_quality::check_all(&site_index, &config));
-    run_check!(checks::external_links::check_all(&site_index, &config));
+    run_check!("seo", checks::seo::check_all(&site_index, &config));
+    run_check!("links", checks::links::check_all(&site_index, &config));
+    run_check!("a11y", checks::a11y::check_all(&site_index, &config));
+    run_check!("html_basics", checks::html_basics::check_all(&site_index, &config));
+    run_check!("headings", checks::headings::check_all(&site_index, &config));
+    run_check!("sitemap", checks::sitemap::check_all(&site_index, &config));
+    run_check!("robots_txt", checks::robots_txt::check_all(&site_index, &config));
+    run_check!("assets", checks::assets::check_all(&site_index, &config));
+    run_check!("opengraph", checks::opengraph::check_all(&site_index, &config));
+    run_check!("structured_data", checks::structured_data::check_all(&site_index, &config));
+    run_check!("hreflang", checks::hreflang::check_all(&site_index, &config));
+    run_check!("security", checks::security::check_all(&site_index, &config));
+    run_check!("content_quality", checks::content_quality::check_all(&site_index, &config));
+    run_check!("external_links", checks::external_links::check_all(&site_index, &config));
     let _ = error_count; // used by run_check! macro for early-stop
 
     // Apply severity overrides from [severity] config section
@@ -172,8 +179,27 @@ fn run() -> Result<i32> {
     let mut summary = Summary::from_findings(&findings);
     summary.files_checked = site_index.pages.len();
     summary.truncated = truncated;
+
+    let benchmark_data = if bench {
+        let total_ms = t_start.elapsed().as_millis();
+        let pages = site_index.pages.len();
+        Some(report::BenchmarkData {
+            discovery_ms,
+            check_timings,
+            total_ms,
+            pages_checked: pages,
+            pages_per_second: if total_ms > 0 {
+                pages as f64 / (total_ms as f64 / 1000.0)
+            } else {
+                0.0
+            },
+        })
+    } else {
+        None
+    };
+
     let reporter = Reporter::new(format);
-    reporter.print(&findings, &summary)?;
+    reporter.print(&findings, &summary, benchmark_data.as_ref())?;
 
     // Determine exit code
     if summary.errors > 0 || (config.strict && summary.warnings > 0) {

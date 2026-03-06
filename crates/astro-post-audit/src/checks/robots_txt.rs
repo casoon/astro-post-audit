@@ -16,6 +16,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 selector: String::new(),
                 message: "robots.txt not found in dist directory".into(),
                 help: "Add a robots.txt file to your public/ directory".into(),
+                suggestion: None,
             });
         }
         return findings;
@@ -39,6 +40,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 selector: String::new(),
                 message: "robots.txt does not contain a Sitemap directive".into(),
                 help: "Add 'Sitemap: https://example.com/sitemap.xml' to robots.txt".into(),
+                suggestion: None,
             });
         }
     }

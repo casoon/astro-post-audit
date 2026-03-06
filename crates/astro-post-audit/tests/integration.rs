@@ -1843,3 +1843,143 @@ fn fragment_percent_encoded_umlaut_cross_page() {
         "Cross-page percent-encoded umlaut fragment should match decoded ID"
     );
 }
+
+// ==========================================================================
+// Presets
+// ==========================================================================
+
+#[test]
+fn preset_strict_enables_all_checks() {
+    let dir = TempDir::new().unwrap();
+    // Valid page but missing OG, structured data, skip-link etc.
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"preset":"strict"}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    // Strict should flag missing OG tags
+    assert!(
+        findings.iter().any(|f| f["rule_id"]
+            .as_str()
+            .unwrap_or("")
+            .starts_with("opengraph/")),
+        "Strict preset should enable opengraph checks"
+    );
+    // Strict should flag missing skip link
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "a11y/skip-link"),
+        "Strict preset should enable skip-link check"
+    );
+}
+
+#[test]
+fn preset_relaxed_is_lenient() {
+    let dir = TempDir::new().unwrap();
+    // Page missing meta description — relaxed should not require it
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (json, code) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"preset":"relaxed"}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"] == "html/meta-description-missing"),
+        "Relaxed preset should not require meta description"
+    );
+    assert_eq!(code, 0, "Relaxed preset on valid page should exit 0");
+}
+
+#[test]
+fn preset_with_user_override() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    // Use strict preset but disable opengraph
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"preset":"strict","opengraph":{"require_og_title":false,"require_og_description":false,"require_og_image":false,"require_twitter_card":false}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"]
+            .as_str()
+            .unwrap_or("")
+            .starts_with("opengraph/")),
+        "User override should disable opengraph even with strict preset"
+    );
+}
+
+// ==========================================================================
+// Fix suggestions in JSON output
+// ==========================================================================
+
+#[test]
+fn json_suggestion_present_for_lang_missing() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    let lang = findings.iter().find(|f| f["rule_id"] == "html/lang-missing");
+    assert!(lang.is_some());
+    assert!(
+        lang.unwrap()["suggestion"].is_string(),
+        "html/lang-missing should have a suggestion"
+    );
+}
+
+#[test]
+#[test]
+fn benchmark_json_output() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"benchmark":true}"#,
+    );
+    assert!(json["benchmark"].is_object(), "benchmark should be present when enabled");
+    assert!(json["benchmark"]["total_ms"].is_number());
+    assert!(json["benchmark"]["pages_checked"].is_number());
+    assert!(json["benchmark"]["pages_per_second"].is_number());
+    assert!(json["benchmark"]["discovery_ms"].is_number());
+    assert!(json["benchmark"]["check_timings"].is_array());
+}
+
+#[test]
+fn benchmark_absent_by_default() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"}}"#,
+    );
+    assert!(
+        json.get("benchmark").is_none() || json["benchmark"].is_null(),
+        "benchmark should not be present by default"
+    );
+}
+
+#[test]
+fn json_suggestion_absent_for_broken_link() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1><a href="/nonexistent/">Bad</a></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    let broken = findings.iter().find(|f| f["rule_id"] == "links/broken");
+    assert!(broken.is_some());
+    assert!(
+        broken.unwrap().get("suggestion").is_none() || broken.unwrap()["suggestion"].is_null(),
+        "links/broken should not have a suggestion"
+    );
+}

@@ -111,6 +111,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         selector: format!("a[href='{}']", url),
                         message: format!("{} (status: {})", message, status),
                         help: "Fix or remove this broken external link".into(),
+                        suggestion: None,
                     });
                 }
             }

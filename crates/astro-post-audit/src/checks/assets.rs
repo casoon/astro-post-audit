@@ -121,6 +121,7 @@ fn check_broken_assets(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                             ),
                             help: "Add explicit width and height to prevent layout shift (CLS)"
                                 .into(),
+                            suggestion: None,
                         });
                     }
                 }
@@ -164,6 +165,7 @@ fn check_asset_exists(
             selector: format!("{}='{}'", selector_hint, src),
             message: format!("Broken asset reference: '{}'", src),
             help: "Fix the path or add the missing asset file".into(),
+            suggestion: None,
         });
     }
 }
@@ -194,6 +196,7 @@ fn check_hashed_filenames(index: &SiteIndex, _config: &Config) -> Vec<Finding> {
                                 src
                             ),
                             help: "Use content hashing in filenames for cache busting (e.g. main.a1b2c3.js)".into(),
+                            suggestion: None,
                         });
                     }
                 }
@@ -213,6 +216,7 @@ fn check_hashed_filenames(index: &SiteIndex, _config: &Config) -> Vec<Finding> {
                                 href
                             ),
                             help: "Use content hashing in filenames for cache busting (e.g. style.a1b2c3.css)".into(),
+                            suggestion: None,
                         });
                     }
                 }
@@ -287,6 +291,7 @@ fn check_asset_sizes(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                             message: format!("Image is {}KB (max: {}KB)", size_kb, max),
                             help: "Optimize/compress the image or use a more efficient format"
                                 .into(),
+                            suggestion: None,
                         });
                     }
                 }
@@ -302,6 +307,7 @@ fn check_asset_sizes(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                             message: format!("JavaScript file is {}KB (max: {}KB)", size_kb, max),
                             help: "Consider code splitting or tree-shaking to reduce bundle size"
                                 .into(),
+                            suggestion: None,
                         });
                     }
                 }
@@ -316,6 +322,7 @@ fn check_asset_sizes(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                             selector: String::new(),
                             message: format!("CSS file is {}KB (max: {}KB)", size_kb, max),
                             help: "Consider splitting CSS or removing unused styles".into(),
+                            suggestion: None,
                         });
                     }
                 }
