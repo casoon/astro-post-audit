@@ -207,6 +207,31 @@ export interface RulesConfig {
         /** Skip links to these domains. */
         block_domains?: string[];
     };
+    /** I18n consistency audit across route locale, lang, hreflang, and canonical signals. */
+    i18n_audit?: {
+        /** Enable i18n consistency checks in dist output. @default false */
+        enabled?: boolean;
+    };
+    /** Crawl budget audit for URL variants, indexability mismatches, and duplicate clusters. */
+    crawl_budget?: {
+        /** Enable crawl budget checks in dist output. @default false */
+        enabled?: boolean;
+    };
+    /** Static render-blocking audit for critical resources and connection hints. */
+    render_blocking?: {
+        /** Enable render-blocking checks in dist output. @default false */
+        enabled?: boolean;
+    };
+    /** Static privacy and security posture audit (third-party, SRI, CSP readiness, consent indicators). */
+    privacy_security?: {
+        /** Enable privacy/security checks in dist output. @default false */
+        enabled?: boolean;
+    };
+    /** Cross-page structured-data graph consistency checks. */
+    structured_data_graph?: {
+        /** Enable cross-page JSON-LD consistency checks in dist output. @default false */
+        enabled?: boolean;
+    };
 }
 export interface PostAuditOptions {
     /** Inline rules config — all check settings go here. */

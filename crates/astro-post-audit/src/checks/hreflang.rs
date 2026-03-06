@@ -64,25 +64,25 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
         // Check self-reference
         if config.hreflang.require_self_reference {
-            let page_url_norm = page
+            if let Some(page_url_norm) = page
                 .absolute_url
                 .as_ref()
-                .map(|u| normalize_url_like(u, norm_cfg));
-            let has_self = entries.iter().any(|(_, href)| {
-                page_url_norm
-                    .as_ref()
-                    .is_some_and(|page_url| normalize_url_like(href, norm_cfg) == *page_url)
-            });
-            if !has_self {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "hreflang/no-self-reference".into(),
-                    file: page.rel_path.clone(),
-                    selector: "link[rel='alternate'][hreflang]".into(),
-                    message: "Hreflang tags don't include a self-reference".into(),
-                    help: "Include the current page URL in hreflang annotations".into(),
-                    suggestion: None,
-                });
+                .map(|u| normalize_url_like(u, norm_cfg))
+            {
+                let has_self = entries
+                    .iter()
+                    .any(|(_, href)| normalize_url_like(href, norm_cfg) == page_url_norm);
+                if !has_self {
+                    findings.push(Finding {
+                        level: Level::Warning,
+                        rule_id: "hreflang/no-self-reference".into(),
+                        file: page.rel_path.clone(),
+                        selector: "link[rel='alternate'][hreflang]".into(),
+                        message: "Hreflang tags don't include a self-reference".into(),
+                        help: "Include the current page URL in hreflang annotations".into(),
+                        suggestion: None,
+                    });
+                }
             }
         }
 

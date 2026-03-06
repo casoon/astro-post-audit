@@ -104,7 +104,21 @@ fn run() -> Result<i32> {
         ($name:expr, $check:expr) => {
             if !max_errors.is_some_and(|m| error_count >= m) {
                 let t = Instant::now();
-                let new_findings = $check;
+                let mut new_findings = $check;
+                if !config.severity.overrides.is_empty() {
+                    use config::SeverityLevel;
+                    new_findings.retain_mut(|f| {
+                        if let Some(override_level) = config.severity.overrides.get(&f.rule_id) {
+                            match override_level {
+                                SeverityLevel::Off => return false,
+                                SeverityLevel::Error => f.level = report::Level::Error,
+                                SeverityLevel::Warning => f.level = report::Level::Warning,
+                                SeverityLevel::Info => f.level = report::Level::Info,
+                            }
+                        }
+                        true
+                    });
+                }
                 if bench {
                     check_timings.push(report::CheckTiming {
                         name: $name.to_string(),
@@ -158,26 +172,30 @@ fn run() -> Result<i32> {
         checks::content_quality::check_all(&site_index, &config)
     );
     run_check!(
+        "i18n_audit",
+        checks::i18n_audit::check_all(&site_index, &config)
+    );
+    run_check!(
+        "crawl_budget",
+        checks::crawl_budget::check_all(&site_index, &config)
+    );
+    run_check!(
+        "render_blocking",
+        checks::render_blocking::check_all(&site_index, &config)
+    );
+    run_check!(
+        "privacy_security",
+        checks::privacy_security::check_all(&site_index, &config)
+    );
+    run_check!(
+        "structured_data_graph",
+        checks::structured_data_graph::check_all(&site_index, &config)
+    );
+    run_check!(
         "external_links",
         checks::external_links::check_all(&site_index, &config)
     );
     let _ = error_count; // used by run_check! macro for early-stop
-
-    // Apply severity overrides from [severity] config section
-    if !config.severity.overrides.is_empty() {
-        use config::SeverityLevel;
-        findings.retain_mut(|f| {
-            if let Some(override_level) = config.severity.overrides.get(&f.rule_id) {
-                match override_level {
-                    SeverityLevel::Off => return false, // remove finding entirely
-                    SeverityLevel::Error => f.level = report::Level::Error,
-                    SeverityLevel::Warning => f.level = report::Level::Warning,
-                    SeverityLevel::Info => f.level = report::Level::Info,
-                }
-            }
-            true
-        });
-    }
 
     // Enforce exact --max-errors cap: keep only the first N errors (plus all non-errors before them)
     let truncated = if let Some(max) = max_errors {

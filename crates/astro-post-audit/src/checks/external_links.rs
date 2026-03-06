@@ -123,8 +123,8 @@ fn check_url(agent: &ureq::Agent, url: &str) -> Option<(String, String)> {
     match agent.head(url).call() {
         Ok(response) => {
             let status = response.status();
-            if status.as_u16() == 405 {
-                // HEAD not allowed, try GET
+            if should_retry_with_get(status.as_u16()) {
+                // Some hosts block/rate-limit HEAD although GET is fine.
                 return check_url_get(agent, url);
             }
             if status.as_u16() >= 400 {
@@ -141,6 +141,10 @@ fn check_url(agent: &ureq::Agent, url: &str) -> Option<(String, String)> {
             format!("External link '{}' failed: {}", url, e),
         )),
     }
+}
+
+fn should_retry_with_get(status_code: u16) -> bool {
+    matches!(status_code, 403 | 405 | 429)
 }
 
 fn check_url_get(agent: &ureq::Agent, url: &str) -> Option<(String, String)> {
@@ -160,5 +164,19 @@ fn check_url_get(agent: &ureq::Agent, url: &str) -> Option<(String, String)> {
             "timeout/error".into(),
             format!("External link '{}' failed: {}", url, e),
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retry_with_get_for_head_blocker_statuses() {
+        assert!(should_retry_with_get(403));
+        assert!(should_retry_with_get(405));
+        assert!(should_retry_with_get(429));
+        assert!(!should_retry_with_get(404));
+        assert!(!should_retry_with_get(500));
     }
 }

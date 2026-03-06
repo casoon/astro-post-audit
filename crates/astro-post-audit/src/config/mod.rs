@@ -42,6 +42,11 @@ pub struct Config {
     pub content_quality: ContentQualityConfig,
     pub external_links: ExternalLinksConfig,
     pub robots_txt: RobotsTxtConfig,
+    pub i18n_audit: I18nAuditConfig,
+    pub crawl_budget: CrawlBudgetConfig,
+    pub render_blocking: RenderBlockingConfig,
+    pub privacy_security: PrivacySecurityConfig,
+    pub structured_data_graph: StructuredDataGraphConfig,
     pub severity: SeverityConfig,
 }
 
@@ -238,6 +243,36 @@ pub struct ExternalLinksConfig {
 pub struct RobotsTxtConfig {
     pub require: bool,
     pub require_sitemap_link: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct I18nAuditConfig {
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct CrawlBudgetConfig {
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct RenderBlockingConfig {
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct PrivacySecurityConfig {
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct StructuredDataGraphConfig {
+    pub enabled: bool,
 }
 
 // --- Defaults (only for structs with non-zero defaults) ---
@@ -500,6 +535,21 @@ impl Config {
             "robots_txt": {
                 "require": true,
                 "require_sitemap_link": true
+            },
+            "i18n_audit": {
+                "enabled": true
+            },
+            "crawl_budget": {
+                "enabled": true
+            },
+            "render_blocking": {
+                "enabled": true
+            },
+            "privacy_security": {
+                "enabled": true
+            },
+            "structured_data_graph": {
+                "enabled": true
             }
         })
     }

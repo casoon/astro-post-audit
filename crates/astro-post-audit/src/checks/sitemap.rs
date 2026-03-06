@@ -38,6 +38,22 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         return findings;
     }
 
+    if let Some(parse_error) = &index.sitemap_parse_error {
+        findings.push(Finding {
+            level: if config.sitemap.require {
+                Level::Error
+            } else {
+                Level::Warning
+            },
+            rule_id: "sitemap/parse-error".into(),
+            file: "sitemap.xml".into(),
+            selector: String::new(),
+            message: format!("Could not parse sitemap.xml: {}", parse_error),
+            help: "Fix sitemap.xml syntax and regenerate the file".into(),
+            suggestion: None,
+        });
+    }
+
     if index.sitemap_urls.is_empty() {
         return findings;
     }

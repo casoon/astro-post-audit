@@ -991,6 +991,30 @@ fn sitemap_stale_entry() {
 }
 
 #[test]
+fn sitemap_parse_error_reported() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    fs::write(
+        dir.path().join("sitemap.xml"),
+        r#"<?xml version="1.0" encoding="UTF-8"?><urlset><url><loc>https://example.com/</loc></url"#,
+    )
+    .unwrap();
+
+    let (json, code) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"sitemap":{"require":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "sitemap/parse-error"));
+    assert_eq!(
+        code, 1,
+        "With sitemap.require=true parse errors should fail"
+    );
+}
+
+#[test]
 fn no_sitemap_check_via_config() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
@@ -1114,6 +1138,24 @@ fn max_errors_truncated_in_json() {
             "Summary should indicate truncation when errors were capped"
         );
     }
+}
+
+#[test]
+fn max_errors_respects_severity_overrides_before_early_stop() {
+    let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/bad");
+    let (json, _code) = run_audit_json(
+        &fixture_path,
+        r#"{"max_errors":1,"severity":{"canonical/missing":"off"}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.is_empty(),
+        "max_errors should not hide unrelated findings after severity override"
+    );
+    assert!(
+        !findings.iter().any(|f| f["rule_id"] == "canonical/missing"),
+        "severity=off must still suppress canonical/missing"
+    );
 }
 
 #[test]
@@ -1675,6 +1717,197 @@ fn structured_data_different_types_no_warning() {
 }
 
 // ==========================================================================
+// Innovative dist-only audits
+// ==========================================================================
+
+#[test]
+fn i18n_audit_detects_route_lang_mismatch() {
+    let dir = TempDir::new().unwrap();
+    let de_dir = dir.path().join("de");
+    fs::create_dir_all(&de_dir).unwrap();
+    fs::write(
+        de_dir.join("index.html"),
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Deutsch</title>
+  <link rel="canonical" href="https://example.com/de/">
+  <link rel="alternate" hreflang="en" href="https://example.com/de/">
+</head>
+<body><h1>Deutsch</h1></body>
+</html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"i18n_audit":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "i18n/lang-locale-mismatch"),
+        "Should detect mismatch between /de/ route and lang='en'"
+    );
+}
+
+#[test]
+fn crawl_budget_detects_query_and_variant_links() {
+    let dir = TempDir::new().unwrap();
+    let about_dir = dir.path().join("about");
+    fs::create_dir_all(&about_dir).unwrap();
+    fs::write(
+        about_dir.join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>About</title><link rel="canonical" href="https://example.com/about/"></head><body><h1>About</h1></body></html>"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home</title><link rel="canonical" href="https://example.com/"></head><body><h1>Home</h1><a href="/about/?ref=nav">About</a><a href="/about/index.html">About variant</a></body></html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"crawl_budget":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "crawl-budget/query-variants"));
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "crawl-budget/non-canonical-link-variant"));
+}
+
+#[test]
+fn render_blocking_detects_sync_scripts_and_missing_hints() {
+    let dir = TempDir::new().unwrap();
+    fs::create_dir_all(dir.path().join("styles")).unwrap();
+    fs::write(dir.path().join("styles/main.css"), "body{}").unwrap();
+    fs::create_dir_all(dir.path().join("js")).unwrap();
+    fs::write(dir.path().join("js/app.js"), "console.log('x');").unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Home</title>
+  <link rel="canonical" href="https://example.com/">
+  <script src="/js/app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link rel="stylesheet" href="/styles/main.css">
+</head>
+<body><h1>Home</h1></body>
+</html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"render_blocking":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "render-blocking/sync-head-scripts"));
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "render-blocking/missing-style-preload"));
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "render-blocking/missing-preconnect"));
+}
+
+#[test]
+fn privacy_security_detects_third_party_sri_and_consent_gaps() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Home</title>
+  <link rel="canonical" href="https://example.com/">
+  <script src="https://www.googletagmanager.com/gtm.js"></script>
+  <script>window.inline = true;</script>
+</head>
+<body><h1>Home</h1></body>
+</html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"privacy_security":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "privacy-security/third-party-domains"));
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "privacy-security/missing-sri-script"));
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "privacy-security/csp-readiness-inline-script"));
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "privacy-security/missing-consent-indicator"));
+}
+
+#[test]
+fn structured_data_graph_detects_cross_page_conflicts() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Home</title>
+  <link rel="canonical" href="https://example.com/">
+  <script type="application/ld+json">{"@context":"https://schema.org","@id":"https://example.com/#org","@type":"Organization","name":"Example Org","url":"https://example.com/"}</script>
+</head>
+<body><h1>Home</h1></body>
+</html>"#,
+    )
+    .unwrap();
+    let about_dir = dir.path().join("about");
+    fs::create_dir_all(&about_dir).unwrap();
+    fs::write(
+        about_dir.join("index.html"),
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>About</title>
+  <link rel="canonical" href="https://example.com/about/">
+  <script type="application/ld+json">{"@context":"https://schema.org","@id":"https://example.com/#org","@type":"Person","name":"Example Person","url":"https://example.com/missing/"}</script>
+</head>
+<body><h1>About</h1></body>
+</html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"structured_data_graph":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "structured-data-graph/type-conflict"));
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "structured-data-graph/internal-url-missing"));
+}
+
+// ==========================================================================
 // Canonical cluster detection
 // ==========================================================================
 
@@ -1868,6 +2101,38 @@ fn preset_with_user_override() {
             .unwrap_or("")
             .starts_with("opengraph/")),
         "User override should disable opengraph even with strict preset"
+    );
+}
+
+#[test]
+fn hreflang_self_reference_not_checked_without_base_url() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Home</title>
+  <link rel="canonical" href="https://example.com/">
+  <link rel="alternate" hreflang="en" href="/">
+</head>
+<body><h1>Home</h1></body>
+</html>"#,
+    )
+    .unwrap();
+
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"hreflang":{"check_hreflang":true,"require_self_reference":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "hreflang/no-self-reference"),
+        "Self-reference hreflang check should be skipped without site.base_url"
     );
 }
 

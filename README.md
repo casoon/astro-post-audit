@@ -72,6 +72,55 @@ postAudit({
 - **`strict`** — Enables all checks (canonical self-reference, fragment validation, orphan detection, skip link, Open Graph, JSON-LD, hreflang, sitemap, robots.txt, content quality, inline script warnings, etc.) and sets `strict: true`.
 - **`relaxed`** — Core SEO and link checks only. Skips advanced checks like fragment validation, orphan detection, heading gaps, Open Graph, structured data, and content quality. Broken links are warnings, not errors.
 
+## Production rollout
+
+The new dist-only audits (`i18n_audit`, `crawl_budget`, `render_blocking`, `privacy_security`, `structured_data_graph`) are intentionally heuristic. They are useful in production, but best rolled out in two steps.
+
+### Step 1: Recommended baseline (warn-first)
+
+```js
+postAudit({
+  strict: false,
+  throwOnError: false,
+  output: 'audit-report.json',
+  rules: {
+    i18n_audit: { enabled: true },
+    crawl_budget: { enabled: true },
+    render_blocking: { enabled: true },
+    privacy_security: { enabled: true },
+    structured_data_graph: { enabled: true },
+    severity: {
+      'render-blocking/missing-style-preload': 'info',
+      'privacy-security/third-party-domains': 'info',
+      'crawl-budget/noindex-with-internal-demand': 'info',
+    },
+  },
+})
+```
+
+### Step 2: Strict gate (after tuning)
+
+```js
+postAudit({
+  strict: true,
+  throwOnError: true,
+  maxErrors: 50,
+  rules: {
+    i18n_audit: { enabled: true },
+    crawl_budget: { enabled: true },
+    render_blocking: { enabled: true },
+    privacy_security: { enabled: true },
+    structured_data_graph: { enabled: true },
+    severity: {
+      'privacy-security/missing-sri-script': 'error',
+      'privacy-security/missing-sri-stylesheet': 'error',
+      'structured-data-graph/type-conflict': 'error',
+      'crawl-budget/redirect-target-missing': 'error',
+    },
+  },
+})
+```
+
 ## Configuration
 
 All options are optional. Your editor provides autocomplete with descriptions and defaults for every field.
@@ -252,6 +301,23 @@ rules: {
     block_domains: [],                  // Skip links to these domains
   },
 
+  // Innovative dist-only audits
+  i18n_audit: {
+    enabled: false,                     // lang/hreflang/canonical consistency by locale route
+  },
+  crawl_budget: {
+    enabled: false,                     // URL variants, duplicate clusters, indexability mismatches
+  },
+  render_blocking: {
+    enabled: false,                     // Sync head scripts, missing preload/preconnect hints
+  },
+  privacy_security: {
+    enabled: false,                     // Third-party domains, SRI/CSP readiness, consent indicators
+  },
+  structured_data_graph: {
+    enabled: false,                     // Cross-page JSON-LD entity consistency and missing internal URLs
+  },
+
   // Override severity per rule ID
   severity: {
     // 'rule-id': 'error' | 'warning' | 'info' | 'off'
@@ -261,6 +327,7 @@ rules: {
 
 ## What it checks
 
+- **Note on signal type** — Most checks are deterministic (broken links, missing tags). The five dist-only audits are heuristic by design and should be tuned via `severity` for your project.
 - **SEO** — Canonical tags (including cluster detection), robots meta, URL normalization (trailing slash, index.html)
 - **Links** — Broken internal links, query parameters, fragment validation, orphan pages
 - **External Links** — HEAD requests to verify external URLs return 2xx, with domain filtering and concurrency control
@@ -274,6 +341,11 @@ rules: {
 - **Security** — target="_blank" without noopener, mixed content, inline scripts
 - **Assets** — Broken references, image dimensions, file size limits, cache-busting hashes
 - **Content Quality** — Duplicate titles, descriptions, H1s, near-identical pages
+- **I18n Audit** — Consistency between localized routes, `html[lang]`, `hreflang`, and canonical
+- **Crawl Budget** — Query/variant URL dilution, duplicate canonical clusters, and indexability mismatches
+- **Render Blocking** — Sync `<head>` scripts and missing `preload`/`preconnect` hints for critical resources
+- **Privacy/Security (Static)** — Third-party domain inventory, missing SRI, CSP-readiness, consent signals
+- **Structured Data Graph** — Cross-page JSON-LD entity conflicts (`@id`, type/name/url) and missing internal entity URLs
 
 ## Output
 

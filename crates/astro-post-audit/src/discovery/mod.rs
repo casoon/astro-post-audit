@@ -63,6 +63,8 @@ pub struct SiteIndex {
     pub route_to_index: HashMap<String, usize>,
     /// Sitemap entries (absolute URLs) if sitemap.xml exists
     pub sitemap_urls: HashSet<String>,
+    /// Parse error for sitemap.xml, if parsing failed.
+    pub sitemap_parse_error: Option<String>,
     /// Path to the dist directory
     pub dist_path: PathBuf,
     /// Base URL (if provided)
@@ -264,19 +266,21 @@ impl SiteIndex {
 
         // Parse sitemap
         let sitemap_path = dist_path.join("sitemap.xml");
-        let sitemap_urls: HashSet<String> = if sitemap_path.exists() {
-            parse_sitemap(&sitemap_path)
-                .unwrap_or_default()
-                .into_iter()
-                .collect()
-        } else {
-            HashSet::new()
-        };
+        let (sitemap_urls, sitemap_parse_error): (HashSet<String>, Option<String>) =
+            if sitemap_path.exists() {
+                match parse_sitemap(&sitemap_path) {
+                    Ok(urls) => (urls.into_iter().collect(), None),
+                    Err(e) => (HashSet::new(), Some(e.to_string())),
+                }
+            } else {
+                (HashSet::new(), None)
+            };
 
         Ok(Self {
             pages,
             route_to_index,
             sitemap_urls,
+            sitemap_parse_error,
             dist_path,
             base_url,
         })
@@ -331,7 +335,7 @@ fn parse_sitemap(path: &Path) -> Result<Vec<String>> {
                 in_loc = false;
             }
             Ok(Event::Eof) => break,
-            Err(_) => break,
+            Err(e) => anyhow::bail!("invalid sitemap.xml: {e}"),
             _ => {}
         }
     }
