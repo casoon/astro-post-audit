@@ -18,14 +18,15 @@
     "generate-schema": "typescript-json-schema tsconfig.json PostAuditOptions --noExtraProps -o schema.json",
     "verify:binary": "node scripts/verify-binary.cjs",
     "test": "tsc && node --test dist/*.test.js",
-    "prepublishOnly": "tsc",
+    "prepublishOnly": "node -e \"require('fs').copyFileSync('../../README.md','README.md')\" && tsc && npm run generate-schema",
     "postinstall": "node bin/install.cjs"
   },
   "files": [
     "bin/install.cjs",
     "bin/run.cjs",
     "dist/",
-    "schema.json"
+    "schema.json",
+    "README.md"
   ],
   "keywords": [
     "astro",
