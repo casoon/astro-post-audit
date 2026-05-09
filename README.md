@@ -53,24 +53,26 @@ You can also disable the audit permanently via config: `postAudit({ disable: tru
 Use a preset to start with a predefined configuration. Individual `rules` override preset defaults.
 
 ```js
-// Enable all checks with strict settings
-postAudit({ preset: 'strict' })
-
-// Core SEO only, lenient — good for existing sites
-postAudit({ preset: 'relaxed' })
+postAudit({ preset: 'standard' })
 
 // Preset + custom overrides
 postAudit({
-  preset: 'strict',
+  preset: 'seo',
   rules: {
-    external_links: { enabled: true },
-    headings: { no_skip: false },       // relax one rule
+    headings: { no_skip: true },   // add a rule on top of the preset
   },
 })
 ```
 
-- **`strict`** — Enables all checks (canonical self-reference, fragment validation, orphan detection, skip link, Open Graph, JSON-LD, hreflang, sitemap, robots.txt, content quality, inline script warnings, etc.) and sets `strict: true`.
-- **`relaxed`** — Core SEO and link checks only. Skips advanced checks like fragment validation, orphan detection, heading gaps, Open Graph, structured data, and content quality. Broken links are warnings, not errors.
+| Preset | What it enables |
+|--------|----------------|
+| `standard` | Comprehensive quality checks without aggressive extras. Canonical self-reference, heading gaps, meta description, Open Graph (title/description/image), a11y (skip link, img alt, button/label names), fragment validation, sitemap, security (target-blank), hreflang, assets, JSON-LD, content quality (duplicate titles/descriptions/H1). Warnings stay warnings. |
+| `strict` | Everything in `standard` plus orphan detection, fragment validation, inline-script warnings, robots.txt, Twitter Card, i18n audit, crawl budget, render blocking, privacy/security, structured data graph. Sets `strict: true` (warnings become errors). |
+| `production` | Alias for `strict`. |
+| `seo` | SEO signals only — canonical (self-reference, clusters), html basics (lang, title, meta description, viewport, length limits), Open Graph (all four tags), JSON-LD syntax, sitemap. |
+| `accessibility` | WCAG heuristics — lang attr, title, viewport, heading hierarchy (H1 required, single, no gaps), full a11y ruleset (img alt, link/button names, form labels, generic link text, aria-hidden, skip link), fragment validation. |
+| `performance` | Static performance signals — broken asset references, missing image dimensions (CLS), hashed filenames, render blocking scripts. |
+| `relaxed` | Core SEO and link checks only. No heading gaps, no Open Graph, no structured data, no content quality. Broken links are warnings, not errors. Good starting point for existing sites with known issues. |
 
 ## Example configurations
 
@@ -78,15 +80,15 @@ A working reference implementation can be found in [casoon/astro-v6-template](ht
 
 ### Simple site
 
-Minimal config for a small personal or marketing site. Core SEO and broken link detection — no noise.
+Minimal config for a small personal or marketing site — the `relaxed` preset covers core SEO with lenient settings, then we add a meta description requirement on top.
 
 ```js
 postAudit({
+  preset: 'relaxed',
   failOn: 'errors',
   rules: {
     filters: { exclude: ['404.html'] },
     html_basics: { meta_description_required: true },
-    links: { check_internal: true },
     sitemap: { require: true },
   },
 })
@@ -94,86 +96,61 @@ postAudit({
 
 ### Blog with Content Collections
 
-Excludes the listing page (which intentionally has no unique canonical) and enables source-file hints so MDX path shows up next to dist/ findings.
+The `seo` preset handles canonical, html basics, Open Graph, JSON-LD and sitemap. Source-file hints show MDX paths next to `dist/` findings.
 
 ```js
 postAudit({
+  preset: 'seo',
   failOn: 'errors',
   hints: { sourceFiles: true },
   rules: {
     filters: { exclude: ['404.html', 'blog/index.html'] },
-    canonical: { self_reference: true },
-    html_basics: { meta_description_required: true },
     headings: { no_skip: true },
-    opengraph: {
-      require_og_title: true,
-      require_og_description: true,
-      require_og_image: true,
-    },
-    structured_data: { check_json_ld: true },
     content_quality: {
       detect_duplicate_titles: true,
       detect_duplicate_descriptions: true,
     },
-    sitemap: { require: true, canonical_must_be_in_sitemap: true },
   },
 })
 ```
 
 ### Multilingual site (hreflang)
 
-For sites with locale-prefixed routes (e.g. `/en/`, `/de/`). Validates that every page has a self-referencing hreflang, an `x-default`, and reciprocal pairs.
+The `standard` preset already includes hreflang (self-reference, x-default, reciprocal). Only exclusions and `failOn` need to be set.
 
 ```js
 postAudit({
+  preset: 'standard',
   failOn: 'errors',
   rules: {
     filters: { exclude: ['404.html'] },
-    canonical: { self_reference: true },
-    html_basics: { meta_description_required: true },
-    sitemap: { require: true, canonical_must_be_in_sitemap: true },
-    hreflang: {
-      check_hreflang: true,
-      require_x_default: true,
-      require_self_reference: true,
-      require_reciprocal: true,
-    },
   },
 })
 ```
 
 ### Accessibility-focused
 
-Full a11y ruleset with skip-link enforcement. Useful for public-sector or WCAG-compliance projects.
+The `accessibility` preset covers the full WCAG heuristic ruleset. Add `seo` rules on top if needed.
 
 ```js
 postAudit({
+  preset: 'accessibility',
   failOn: 'errors',
   rules: {
     filters: { exclude: ['404.html'] },
-    headings: { require_h1: true, single_h1: true, no_skip: true },
-    a11y: {
-      img_alt_required: true,
-      a_accessible_name_required: true,
-      button_name_required: true,
-      label_for_required: true,
-      warn_generic_link_text: true,
-      aria_hidden_focusable_check: true,
-      require_skip_link: true,
-    },
-    links: { check_fragments: true },
-    html_basics: { lang_attr_required: true },
+    html_basics: { meta_description_required: true },
+    sitemap: { require: true },
   },
 })
 ```
 
 ### Strict production gate
 
-Everything on, build fails on any error. Suitable as the final gate in a CI pipeline after the site is fully tuned.
+`production` (= `strict`) enables everything. Only additional opt-in checks and output config need to be specified.
 
 ```js
 postAudit({
-  preset: 'strict',
+  preset: 'production',
   failOn: 'errors',
   maxWarnings: 0,
   hints: { sourceFiles: true },
@@ -184,10 +161,6 @@ postAudit({
   rules: {
     filters: { exclude: ['404.html'] },
     external_links: { enabled: true, fail_on_broken: true },
-    assets: { check_broken_assets: true, check_image_dimensions: true },
-    privacy_security: { enabled: true },
-    render_blocking: { enabled: true },
-    structured_data_graph: { enabled: true },
   },
 })
 ```
@@ -200,8 +173,7 @@ The new dist-only audits (`i18n_audit`, `crawl_budget`, `render_blocking`, `priv
 
 ```js
 postAudit({
-  strict: false,
-  throwOnError: false,
+  failOn: 'never',
   reports: { json: 'audit-report.json' },
   rules: {
     i18n_audit: { enabled: true },
@@ -222,8 +194,7 @@ postAudit({
 
 ```js
 postAudit({
-  strict: true,
-  throwOnError: true,
+  failOn: 'errors',
   maxErrors: 50,
   rules: {
     i18n_audit: { enabled: true },
@@ -247,8 +218,8 @@ All options are optional. Your editor provides autocomplete with descriptions an
 
 ```js
 postAudit({
-  strict: true,              // Treat warnings as errors
-  throwOnError: true,        // Fail the build on errors
+  preset: 'standard',        // Apply a predefined config (see Presets)
+  failOn: 'errors',          // Fail the build on errors (or 'warnings' / 'never')
   maxErrors: 20,             // Stop after 20 errors
   reports: {                 // Write report files (multiple formats at once)
     json: 'audit-report.json',
@@ -280,7 +251,7 @@ postAudit({
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `preset` | `'strict' \| 'relaxed'` | — | Apply a predefined config before your `rules` overrides. |
+| `preset` | `'standard' \| 'strict' \| 'production' \| 'seo' \| 'accessibility' \| 'performance' \| 'relaxed'` | — | Apply a predefined config before your `rules` overrides. See [Presets](#presets). |
 | `strict` | `boolean` | `false` | Treat warnings as errors (exit code 1). |
 | `throwOnError` | `boolean` | `false` | Throw an error (fail the build) when the audit finds issues. |
 | `failOn` | `'errors' \| 'warnings' \| 'never'` | — | Fail the build on errors only (`'errors'`), on any finding (`'warnings'`), or never. Implies `throwOnError`. |
