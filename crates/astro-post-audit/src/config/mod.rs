@@ -11,6 +11,7 @@ pub enum Preset {
     Accessibility,
     Performance,
     Production,
+    Standard,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -426,6 +427,7 @@ impl Config {
                 "accessibility" => Self::accessibility_preset_json(),
                 "performance" => Self::performance_preset_json(),
                 "production" => Self::production_preset_json(),
+                "standard" => Self::standard_preset_json(),
                 _ => serde_json::Value::Object(serde_json::Map::new()),
             };
 
@@ -711,5 +713,62 @@ impl Config {
     /// Preset: production gate. Equivalent to strict.
     fn production_preset_json() -> serde_json::Value {
         Self::strict_preset_json()
+    }
+
+    /// Preset: standard — comprehensive quality checks without aggressive extras.
+    /// Covers SEO, a11y, hreflang, content quality, assets and structured data.
+    /// Does NOT enable orphan-page detection, inline-script warnings, CSP readiness,
+    /// or strict mode (warnings remain warnings).
+    fn standard_preset_json() -> serde_json::Value {
+        serde_json::json!({
+            "canonical": {
+                "self_reference": true
+            },
+            "headings": {
+                "no_skip": true
+            },
+            "html_basics": {
+                "meta_description_required": true
+            },
+            "opengraph": {
+                "require_og_title": true,
+                "require_og_description": true,
+                "require_og_image": true
+            },
+            "a11y": {
+                "require_skip_link": true,
+                "img_alt_required": true,
+                "button_name_required": true,
+                "label_for_required": true
+            },
+            "links": {
+                "check_fragments": true
+            },
+            "sitemap": {
+                "require": true,
+                "canonical_must_be_in_sitemap": true,
+                "entries_must_exist_in_dist": true
+            },
+            "security": {
+                "check_target_blank": true
+            },
+            "hreflang": {
+                "check_hreflang": true,
+                "require_x_default": true,
+                "require_self_reference": true,
+                "require_reciprocal": true
+            },
+            "assets": {
+                "check_broken_assets": true
+            },
+            "structured_data": {
+                "check_json_ld": true
+            },
+            "content_quality": {
+                "detect_duplicate_titles": true,
+                "detect_duplicate_descriptions": true,
+                "detect_duplicate_h1": true
+            }
+        })
     }
 }

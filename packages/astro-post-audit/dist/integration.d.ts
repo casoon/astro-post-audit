@@ -258,7 +258,7 @@ export interface PostAuditOptions {
     /** Inline rules config — all check settings go here. */
     rules?: RulesConfig;
     /** Preset to apply before user overrides. `"strict"` enables all checks, `"relaxed"` is lenient. */
-    preset?: "strict" | "relaxed" | "seo" | "accessibility" | "performance" | "production";
+    preset?: "strict" | "relaxed" | "seo" | "accessibility" | "performance" | "production" | "standard";
     /** Base URL (auto-detected from Astro's `site` config if not set). */
     site?: string;
     /** Treat warnings as errors. */
