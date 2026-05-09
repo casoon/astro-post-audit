@@ -72,6 +72,84 @@ postAudit({
 - **`strict`** — Enables all checks (canonical self-reference, fragment validation, orphan detection, skip link, Open Graph, JSON-LD, hreflang, sitemap, robots.txt, content quality, inline script warnings, etc.) and sets `strict: true`.
 - **`relaxed`** — Core SEO and link checks only. Skips advanced checks like fragment validation, orphan detection, heading gaps, Open Graph, structured data, and content quality. Broken links are warnings, not errors.
 
+## Example configurations
+
+Real-world configs from the [casoon/astro-v6-template](https://github.com/casoon/astro-v6-template) — a production Astro v6 monorepo with two apps (starter and blog) that run the audit as part of every build.
+
+### Starter site (single language)
+
+A solid baseline for any single-language Astro site. Enables strict canonical checks, fragment validation, sitemap cross-referencing, OG tags, and `target="_blank"` security.
+
+```js
+postAudit({
+  throwOnError: true,
+  rules: {
+    filters: { exclude: ['404.html'] },
+    canonical: { self_reference: true },
+    headings: { no_skip: true },
+    html_basics: { meta_description_required: true },
+    opengraph: {
+      require_og_title: true,
+      require_og_description: true,
+      require_og_image: true,
+    },
+    a11y: {
+      require_skip_link: true,
+      img_alt_required: true,
+      button_name_required: true,
+      label_for_required: true,
+    },
+    links: { check_fragments: true },
+    sitemap: {
+      require: true,
+      canonical_must_be_in_sitemap: true,
+      entries_must_exist_in_dist: true,
+    },
+    security: { check_target_blank: true },
+  },
+})
+```
+
+### Multilingual blog (with hreflang)
+
+Extends the starter config with hreflang validation for a bilingual site (e.g. `en` + `de`). Requires reciprocal hreflang links and an `x-default` entry. Also excludes the blog index page which aggregates all posts and intentionally shares no canonical with individual posts.
+
+```js
+postAudit({
+  throwOnError: true,
+  rules: {
+    filters: { exclude: ['blog/index.html', '404.html'] },
+    canonical: { self_reference: true },
+    headings: { no_skip: true },
+    html_basics: { meta_description_required: true },
+    opengraph: {
+      require_og_title: true,
+      require_og_description: true,
+      require_og_image: true,
+    },
+    a11y: {
+      require_skip_link: true,
+      img_alt_required: true,
+      button_name_required: true,
+      label_for_required: true,
+    },
+    links: { check_fragments: true },
+    sitemap: {
+      require: true,
+      canonical_must_be_in_sitemap: true,
+      entries_must_exist_in_dist: true,
+    },
+    security: { check_target_blank: true },
+    hreflang: {
+      check_hreflang: true,
+      require_x_default: true,
+      require_self_reference: true,
+      require_reciprocal: true,
+    },
+  },
+})
+```
+
 ## Production rollout
 
 The new dist-only audits (`i18n_audit`, `crawl_budget`, `render_blocking`, `privacy_security`, `structured_data_graph`) are intentionally heuristic. They are useful in production, but best rolled out in two steps.
