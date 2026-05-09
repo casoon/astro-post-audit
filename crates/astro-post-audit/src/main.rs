@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::process;
 use std::time::Instant;
 
+mod baseline;
 mod checks;
 mod config;
 mod discovery;
@@ -215,6 +216,18 @@ fn run() -> Result<i32> {
         }
     }
 
+    let baseline_written = if let Some(ref baseline_path) = config.baseline {
+        if config.write_baseline {
+            baseline::write(&findings, baseline_path)?;
+            true
+        } else {
+            findings = baseline::filter(findings, baseline_path)?.0;
+            false
+        }
+    } else {
+        false
+    };
+
     // Enforce exact --max-errors cap: keep only the first N errors (plus all non-errors before them)
     let truncated = if let Some(max) = max_errors {
         let total_errors = findings
@@ -266,7 +279,14 @@ fn run() -> Result<i32> {
     reporter.print(&findings, &summary, benchmark_data.as_ref())?;
 
     // Determine exit code
-    if summary.errors > 0 || (config.strict && summary.warnings > 0) {
+    if baseline_written {
+        Ok(0)
+    } else if summary.errors > 0
+        || (config.strict && summary.warnings > 0)
+        || config
+            .max_warnings
+            .is_some_and(|max| summary.warnings > max)
+    {
         Ok(1)
     } else {
         Ok(0)

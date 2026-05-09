@@ -9,6 +9,8 @@ use crate::report::Finding;
 struct BaselineEntry {
     rule_id: String,
     file: String,
+    #[serde(default)]
+    selector: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -24,6 +26,7 @@ pub fn write(findings: &[Finding], path: &str) -> Result<usize> {
         .map(|f| BaselineEntry {
             rule_id: f.rule_id.clone(),
             file: f.file.clone(),
+            selector: f.selector.clone(),
         })
         .collect();
     let count = entries.len();
@@ -44,15 +47,18 @@ pub fn filter(findings: Vec<Finding>, path: &str) -> Result<(Vec<Finding>, usize
     }
     let raw = std::fs::read_to_string(path)?;
     let baseline: BaselineFile = serde_json::from_str(&raw)?;
-    let known: HashSet<(String, String)> = baseline
+    let known: HashSet<(String, String, String)> = baseline
         .findings
         .into_iter()
-        .map(|e| (e.rule_id, e.file))
+        .map(|e| (e.rule_id, e.file, e.selector))
         .collect();
     let before = findings.len();
     let filtered: Vec<Finding> = findings
         .into_iter()
-        .filter(|f| !known.contains(&(f.rule_id.clone(), f.file.clone())))
+        .filter(|f| {
+            !known.contains(&(f.rule_id.clone(), f.file.clone(), f.selector.clone()))
+                && !known.contains(&(f.rule_id.clone(), f.file.clone(), String::new()))
+        })
         .collect();
     let suppressed = before - filtered.len();
     Ok((filtered, suppressed))

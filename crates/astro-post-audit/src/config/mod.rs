@@ -7,6 +7,10 @@ use std::collections::HashMap;
 pub enum Preset {
     Strict,
     Relaxed,
+    Seo,
+    Accessibility,
+    Performance,
+    Production,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -18,6 +22,8 @@ pub struct Config {
     pub strict: bool,
     /// Maximum number of errors before truncating output.
     pub max_errors: Option<usize>,
+    /// Maximum number of warnings before returning exit code 1.
+    pub max_warnings: Option<usize>,
     /// Show page properties overview instead of running checks.
     pub page_overview: bool,
     /// Output format: "text" (default) or "json".
@@ -51,6 +57,10 @@ pub struct Config {
     pub hints: HintsConfig,
     /// Project root directory, used for source-file hint resolution.
     pub project_root: Option<String>,
+    /// Baseline file path. Existing findings in this file are suppressed.
+    pub baseline: Option<String>,
+    /// Write the current findings to the baseline file and exit successfully.
+    pub write_baseline: bool,
 }
 
 /// Custom severity overrides per rule ID.
@@ -412,6 +422,10 @@ impl Config {
             let preset_defaults = match preset_val {
                 "strict" => Self::strict_preset_json(),
                 "relaxed" => Self::relaxed_preset_json(),
+                "seo" => Self::seo_preset_json(),
+                "accessibility" => Self::accessibility_preset_json(),
+                "performance" => Self::performance_preset_json(),
+                "production" => Self::production_preset_json(),
                 _ => serde_json::Value::Object(serde_json::Map::new()),
             };
 
@@ -443,6 +457,9 @@ impl Config {
     pub fn validate(&self) -> Result<()> {
         if matches!(self.max_errors, Some(0)) {
             anyhow::bail!("max_errors must be greater than 0 when set");
+        }
+        if self.write_baseline && self.baseline.is_none() {
+            anyhow::bail!("baseline must be set when write_baseline is true");
         }
         if matches!(self.html_basics.title_max_length, Some(0)) {
             anyhow::bail!("html_basics.title_max_length must be greater than 0 when set");
@@ -610,5 +627,89 @@ impl Config {
                 "warn_inline_scripts": false
             }
         })
+    }
+
+    /// Preset: SEO-focused checks.
+    fn seo_preset_json() -> serde_json::Value {
+        serde_json::json!({
+            "canonical": {
+                "require": true,
+                "absolute": true,
+                "same_origin": true,
+                "self_reference": true,
+                "detect_clusters": true
+            },
+            "html_basics": {
+                "lang_attr_required": true,
+                "title_required": true,
+                "meta_description_required": true,
+                "viewport_required": true,
+                "title_max_length": 60,
+                "meta_description_max_length": 160
+            },
+            "opengraph": {
+                "require_og_title": true,
+                "require_og_description": true,
+                "require_og_image": true,
+                "require_twitter_card": true
+            },
+            "structured_data": {
+                "check_json_ld": true,
+                "detect_duplicate_types": true
+            },
+            "sitemap": {
+                "require": true,
+                "canonical_must_be_in_sitemap": true,
+                "entries_must_exist_in_dist": true
+            }
+        })
+    }
+
+    /// Preset: accessibility-focused checks.
+    fn accessibility_preset_json() -> serde_json::Value {
+        serde_json::json!({
+            "html_basics": {
+                "lang_attr_required": true,
+                "title_required": true,
+                "viewport_required": true
+            },
+            "headings": {
+                "require_h1": true,
+                "single_h1": true,
+                "no_skip": true
+            },
+            "a11y": {
+                "img_alt_required": true,
+                "allow_decorative_images": true,
+                "a_accessible_name_required": true,
+                "button_name_required": true,
+                "label_for_required": true,
+                "warn_generic_link_text": true,
+                "aria_hidden_focusable_check": true,
+                "require_skip_link": true
+            },
+            "links": {
+                "check_fragments": true
+            }
+        })
+    }
+
+    /// Preset: static performance checks.
+    fn performance_preset_json() -> serde_json::Value {
+        serde_json::json!({
+            "assets": {
+                "check_broken_assets": true,
+                "check_image_dimensions": true,
+                "require_hashed_filenames": true
+            },
+            "render_blocking": {
+                "enabled": true
+            }
+        })
+    }
+
+    /// Preset: production gate. Equivalent to strict.
+    fn production_preset_json() -> serde_json::Value {
+        Self::strict_preset_json()
     }
 }

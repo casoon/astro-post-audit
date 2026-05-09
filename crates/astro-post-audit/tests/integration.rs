@@ -2105,6 +2105,93 @@ fn preset_with_user_override() {
 }
 
 #[test]
+fn preset_seo_is_supported() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (json, code) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"preset":"seo"}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert_eq!(code, 1, "SEO preset should run without config parse errors");
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "html/meta-description-missing"),
+        "SEO preset should require meta descriptions"
+    );
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "opengraph/title-missing"),
+        "SEO preset should enable Open Graph checks"
+    );
+}
+
+#[test]
+fn preset_accessibility_is_supported() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (json, code) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"preset":"accessibility"}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert_eq!(
+        code, 0,
+        "Accessibility preset should run without config parse errors"
+    );
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "a11y/skip-link"),
+        "Accessibility preset should require skip links"
+    );
+}
+
+#[test]
+fn max_warnings_fails_when_threshold_exceeded() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>This title is intentionally much longer than sixty characters to trigger warning</title><link rel="canonical" href="https://example.com/"></head><body><h1>Home</h1></body></html>"#,
+    ).unwrap();
+    let (json, code) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"max_warnings":0}"#,
+    );
+    assert_eq!(json["summary"]["warnings"].as_u64(), Some(1));
+    assert_eq!(code, 1, "max_warnings=0 should fail on any warning");
+}
+
+#[test]
+fn baseline_write_and_filter() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html><head><title></title></head><body><img src="/x.png"></body></html>"#,
+    ).unwrap();
+    let baseline_path = dir.path().join("baseline.json");
+    let baseline_str = baseline_path.to_string_lossy();
+
+    let (_, _, write_code) = run_audit(
+        dir.path(),
+        &format!(
+            r#"{{"format":"json","baseline":"{}","write_baseline":true}}"#,
+            baseline_str
+        ),
+    );
+    assert_eq!(write_code, 0, "writing a baseline should exit successfully");
+    assert!(baseline_path.exists(), "baseline file should be written");
+
+    let (json, code) = run_audit_json(dir.path(), &format!(r#"{{"baseline":"{}"}}"#, baseline_str));
+    assert_eq!(
+        json["findings"].as_array().unwrap().len(),
+        0,
+        "baseline should suppress existing findings"
+    );
+    assert_eq!(code, 0, "baseline-suppressed findings should not fail");
+}
+
+#[test]
 fn hreflang_self_reference_not_checked_without_base_url() {
     let dir = TempDir::new().unwrap();
     fs::write(
