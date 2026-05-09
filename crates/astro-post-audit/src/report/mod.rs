@@ -158,9 +158,7 @@ impl Reporter {
         for (file, file_findings) in &by_file {
             // File header with miette-style location marker
             // Show source hint if present (same hint for all findings in this file)
-            let source_hint = file_findings
-                .first()
-                .and_then(|f| f.source_hint.as_deref());
+            let source_hint = file_findings.first().and_then(|f| f.source_hint.as_deref());
             println!();
             println!("  {} {}", "──▶".dimmed(), file.bold().underline());
             if let Some(hint) = source_hint {
@@ -418,9 +416,7 @@ impl Reporter {
 
     pub fn print_overview(&self, overview: &PageOverview) -> Result<()> {
         match self.format {
-            Format::Text | Format::Markdown | Format::Sarif => {
-                self.print_overview_text(overview)
-            }
+            Format::Text | Format::Markdown | Format::Sarif => self.print_overview_text(overview),
             Format::Json => self.print_overview_json(overview),
         }
     }
