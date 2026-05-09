@@ -2170,7 +2170,7 @@ fn baseline_write_and_filter() {
         r#"<!DOCTYPE html><html><head><title></title></head><body><img src="/x.png"></body></html>"#,
     ).unwrap();
     let baseline_path = dir.path().join("baseline.json");
-    let baseline_str = baseline_path.to_string_lossy();
+    let baseline_str = baseline_path.to_string_lossy().replace('\\', "/");
 
     let (_, _, write_code) = run_audit(
         dir.path(),
