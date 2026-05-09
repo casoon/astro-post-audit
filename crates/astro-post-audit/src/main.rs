@@ -8,6 +8,7 @@ use std::time::Instant;
 mod checks;
 mod config;
 mod discovery;
+mod hints;
 mod normalize;
 mod overview;
 mod report;
@@ -82,6 +83,8 @@ fn run() -> Result<i32> {
     // Parse format from config
     let format = match config.format.as_deref() {
         Some("json") => report::Format::Json,
+        Some("markdown") => report::Format::Markdown,
+        Some("sarif") => report::Format::Sarif,
         _ => report::Format::Text,
     };
 
@@ -196,6 +199,21 @@ fn run() -> Result<i32> {
         checks::external_links::check_all(&site_index, &config)
     );
     let _ = error_count; // used by run_check! macro for early-stop
+
+    // Populate source-file hints when enabled
+    if config.hints.source_files {
+        if let Some(ref root) = config.project_root {
+            // Build hint map per unique file to avoid redundant filesystem lookups
+            let mut hint_cache: std::collections::HashMap<String, Option<String>> =
+                std::collections::HashMap::new();
+            for f in &mut findings {
+                let hint = hint_cache
+                    .entry(f.file.clone())
+                    .or_insert_with(|| hints::find_source(&f.file, root));
+                f.source_hint = hint.clone();
+            }
+        }
+    }
 
     // Enforce exact --max-errors cap: keep only the first N errors (plus all non-errors before them)
     let truncated = if let Some(max) = max_errors {

@@ -82,7 +82,7 @@ The new dist-only audits (`i18n_audit`, `crawl_budget`, `render_blocking`, `priv
 postAudit({
   strict: false,
   throwOnError: false,
-  output: 'audit-report.json',
+  reports: { json: 'audit-report.json' },
   rules: {
     i18n_audit: { enabled: true },
     crawl_budget: { enabled: true },
@@ -130,7 +130,11 @@ postAudit({
   strict: true,              // Treat warnings as errors
   throwOnError: true,        // Fail the build on errors
   maxErrors: 20,             // Stop after 20 errors
-  output: 'audit-report.json', // Write JSON report to file
+  reports: {                 // Write report files (multiple formats at once)
+    json: 'audit-report.json',
+    markdown: 'audit-summary.md',
+    sarif: 'audit.sarif',
+  },
   benchmark: true,           // Print per-check timing breakdown
   pageOverview: true,        // Show page properties overview instead of checks
   rules: {
@@ -148,6 +152,54 @@ postAudit({
       'html/title-too-long': 'off',
       'a11y/img-alt': 'error',
     },
+  },
+})
+```
+
+### Top-level options reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `preset` | `'strict' \| 'relaxed'` | — | Apply a predefined config before your `rules` overrides. |
+| `strict` | `boolean` | `false` | Treat warnings as errors (exit code 1). |
+| `throwOnError` | `boolean` | `false` | Throw an error (fail the build) when the audit finds issues. |
+| `failOn` | `'errors' \| 'warnings' \| 'never'` | — | Fail the build on errors only (`'errors'`), on any finding (`'warnings'`), or never. Implies `throwOnError`. |
+| `maxErrors` | `number` | — | Truncate output after this many errors. |
+| `maxWarnings` | `number` | — | Fail the build if the warning count exceeds this number. |
+| `site` | `string` | auto | Base URL — auto-detected from Astro's `site` config. |
+| `reports` | `ReportsConfig` | — | Write report files. See [Report files](#report-files). |
+| `output` | `string` | — | Write a JSON report to this path. Legacy alias for `reports.json`. |
+| `baseline` | `string` | — | Path to a baseline file. Only new findings since the baseline are reported. |
+| `writeBaseline` | `boolean` | `false` | Write current findings as the new baseline and exit 0. Run once to adopt the plugin on a site with existing issues. |
+| `hints.sourceFiles` | `boolean` | `false` | Show likely source file paths (e.g. `src/content/blog/post.mdx`) next to `dist/` findings. Heuristic — may not always match. |
+| `groups` | `GroupsConfig` | — | Enable rule groups: `seo`, `a11y`, `links`, `performance`, `privacy`. `true` enables the group, `"warn"` enables but downgrades all findings to warnings. |
+| `pageOverview` | `boolean` | `false` | Print a page properties table (title, description, canonical, OG, H1, lang, JSON-LD) instead of running checks. |
+| `benchmark` | `boolean` | `false` | Print per-check timing breakdown. |
+| `disable` | `boolean` | `false` | Disable the integration entirely. |
+| `rules` | `RulesConfig` | — | Inline check configuration — see full reference below. |
+
+#### Baseline workflow
+
+Use `baseline` + `writeBaseline` to adopt the plugin on a site that already has findings:
+
+```js
+// Step 1: write the current state as a baseline (run once)
+postAudit({ writeBaseline: true, baseline: '.audit-baseline.json' })
+
+// Step 2: from now on, only new findings are reported
+postAudit({ baseline: '.audit-baseline.json' })
+```
+
+Commit `.audit-baseline.json` to version control. Delete entries from it to re-enable specific checks.
+
+#### Groups shorthand
+
+```js
+postAudit({
+  groups: {
+    seo: true,           // enable all SEO rules
+    a11y: 'warn',        // enable a11y rules but never block the build
+    performance: true,
   },
 })
 ```
@@ -363,7 +415,36 @@ Rich diagnostic output with colored severity markers, location pointers, and act
   × 1 error, 1 warning (12 files checked)
 ```
 
-Set `output: 'audit-report.json'` to write a machine-readable JSON report. Each finding includes a rule ID, severity, file path, selector, and help text with a concrete fix suggestion.
+### Report files
+
+Use `reports` to write one or more report files alongside the terminal output. All three formats can be active at the same time:
+
+```js
+postAudit({
+  reports: {
+    json:     'audit-report.json',   // Machine-readable, one finding per entry
+    markdown: 'audit-summary.md',    // Human-readable table, useful as CI artifact or PR comment
+    sarif:    'audit.sarif',         // SARIF 2.1.0 — consumed by GitHub Code Scanning
+  },
+})
+```
+
+The legacy `output` option (JSON only) remains supported for backwards compatibility.
+
+#### GitHub Code Scanning (SARIF)
+
+Upload the SARIF file with the `github/codeql-action/upload-sarif` action to get inline PR annotations:
+
+```yaml
+- name: Build
+  run: npm run build
+
+- name: Upload SARIF
+  if: always()
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: audit.sarif
+```
 
 Set `benchmark: true` to see a per-check timing breakdown — useful for identifying slow checks on large sites.
 

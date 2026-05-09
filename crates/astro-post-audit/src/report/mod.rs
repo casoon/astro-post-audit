@@ -14,6 +14,13 @@ pub enum Level {
     Info,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Confidence {
+    Medium,
+    Low,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Finding {
     pub level: Level,
@@ -24,6 +31,10 @@ pub struct Finding {
     pub help: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub suggestion: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_hint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<Confidence>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -70,6 +81,8 @@ pub struct CheckTiming {
 pub enum Format {
     Text,
     Json,
+    Markdown,
+    Sarif,
 }
 
 impl FromStr for Format {
@@ -79,7 +92,12 @@ impl FromStr for Format {
         match s.to_lowercase().as_str() {
             "text" => Ok(Format::Text),
             "json" => Ok(Format::Json),
-            _ => Err(format!("Invalid format '{}'. Use 'text' or 'json'.", s)),
+            "markdown" => Ok(Format::Markdown),
+            "sarif" => Ok(Format::Sarif),
+            _ => Err(format!(
+                "Invalid format '{}'. Use 'text', 'json', 'markdown', or 'sarif'.",
+                s
+            )),
         }
     }
 }
@@ -108,6 +126,14 @@ impl Reporter {
                 Ok(())
             }
             Format::Json => self.print_json(findings, summary, benchmark),
+            Format::Markdown => {
+                print!("{}", self.render_markdown(findings, summary));
+                Ok(())
+            }
+            Format::Sarif => {
+                println!("{}", self.render_sarif(findings)?);
+                Ok(())
+            }
         }
     }
 
@@ -131,8 +157,20 @@ impl Reporter {
 
         for (file, file_findings) in &by_file {
             // File header with miette-style location marker
+            // Show source hint if present (same hint for all findings in this file)
+            let source_hint = file_findings
+                .first()
+                .and_then(|f| f.source_hint.as_deref());
             println!();
             println!("  {} {}", "──▶".dimmed(), file.bold().underline());
+            if let Some(hint) = source_hint {
+                println!(
+                    "       {} {} {}",
+                    "source:".dimmed(),
+                    hint.dimmed(),
+                    "(heuristic)".dimmed()
+                );
+            }
 
             for f in file_findings {
                 // Severity marker with miette-style symbols
@@ -143,12 +181,18 @@ impl Reporter {
                 };
 
                 // Rule ID and message
+                let confidence_tag = match &f.confidence {
+                    Some(Confidence::Medium) => " (confidence: medium)".dimmed().to_string(),
+                    Some(Confidence::Low) => " (confidence: low)".dimmed().to_string(),
+                    None => String::new(),
+                };
                 println!(
-                    "  {} {}{} {}",
+                    "  {} {}{} {}{}",
                     marker,
                     level_label,
                     format!("[{}]", f.rule_id).dimmed(),
-                    f.message
+                    f.message,
+                    confidence_tag
                 );
 
                 // Selector (location within the HTML)
@@ -243,6 +287,119 @@ impl Reporter {
         Ok(())
     }
 
+    fn render_markdown(&self, findings: &[Finding], summary: &Summary) -> String {
+        let mut out = String::new();
+
+        out.push_str("# astro-post-audit\n\n");
+        out.push_str(&format!(
+            "{} pages checked · {} errors · {} warnings · {} info\n",
+            summary.files_checked, summary.errors, summary.warnings, summary.info
+        ));
+
+        if findings.is_empty() {
+            out.push_str("\nAll checks passed!\n");
+            return out;
+        }
+
+        let escape = |s: &str| s.replace('|', "\\|");
+
+        for (level, heading) in &[
+            (Level::Error, "## Errors"),
+            (Level::Warning, "## Warnings"),
+            (Level::Info, "## Info"),
+        ] {
+            let level_findings: Vec<&Finding> =
+                findings.iter().filter(|f| f.level == *level).collect();
+            if level_findings.is_empty() {
+                continue;
+            }
+            out.push('\n');
+            out.push_str(heading);
+            out.push_str("\n\n");
+            out.push_str("| File | Rule | Message |\n");
+            out.push_str("|------|------|----------|\n");
+            for f in &level_findings {
+                out.push_str(&format!(
+                    "| {} | `{}` | {} |\n",
+                    escape(&f.file),
+                    escape(&f.rule_id),
+                    escape(&f.message)
+                ));
+            }
+        }
+
+        if summary.truncated {
+            out.push_str("\n> **Note:** Output truncated due to max-errors limit.\n");
+        }
+
+        out
+    }
+
+    fn render_sarif(&self, findings: &[Finding]) -> Result<String> {
+        // Collect unique rules (stable order via BTreeMap)
+        let mut rule_map: std::collections::BTreeMap<&str, &Finding> =
+            std::collections::BTreeMap::new();
+        for f in findings {
+            rule_map.entry(&f.rule_id).or_insert(f);
+        }
+        let rule_ids: Vec<&str> = rule_map.keys().copied().collect();
+        let rule_index: std::collections::HashMap<&str, usize> =
+            rule_ids.iter().enumerate().map(|(i, r)| (*r, i)).collect();
+
+        let sarif_rules: Vec<serde_json::Value> = rule_ids
+            .iter()
+            .map(|id| {
+                let f = rule_map[id];
+                serde_json::json!({
+                    "id": id,
+                    "shortDescription": { "text": f.help.as_str() }
+                })
+            })
+            .collect();
+
+        let sarif_results: Vec<serde_json::Value> = findings
+            .iter()
+            .map(|f| {
+                let level = match f.level {
+                    Level::Error => "error",
+                    Level::Warning => "warning",
+                    Level::Info => "note",
+                };
+                serde_json::json!({
+                    "ruleId": f.rule_id,
+                    "ruleIndex": rule_index[f.rule_id.as_str()],
+                    "level": level,
+                    "message": { "text": f.message },
+                    "locations": [{
+                        "physicalLocation": {
+                            "artifactLocation": {
+                                "uri": f.file,
+                                "uriBaseId": "%SRCROOT%"
+                            }
+                        }
+                    }]
+                })
+            })
+            .collect();
+
+        let sarif = serde_json::json!({
+            "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
+            "version": "2.1.0",
+            "runs": [{
+                "tool": {
+                    "driver": {
+                        "name": "astro-post-audit",
+                        "informationUri": "https://github.com/casoon/astro-post-audit",
+                        "rules": sarif_rules
+                    }
+                },
+                "results": sarif_results
+            }]
+        });
+
+        Ok(serde_json::to_string_pretty(&sarif)?)
+    }
+
     fn print_benchmark_text(&self, b: &BenchmarkData) -> Result<()> {
         println!(
             "  {} {} ({} pages)",
@@ -261,7 +418,9 @@ impl Reporter {
 
     pub fn print_overview(&self, overview: &PageOverview) -> Result<()> {
         match self.format {
-            Format::Text => self.print_overview_text(overview),
+            Format::Text | Format::Markdown | Format::Sarif => {
+                self.print_overview_text(overview)
+            }
             Format::Json => self.print_overview_json(overview),
         }
     }

@@ -1,7 +1,7 @@
 import type { AstroIntegration } from "astro";
 import { execFileSync } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
@@ -237,11 +237,35 @@ export interface RulesConfig {
   };
 }
 
+export type GroupValue = boolean | "warn";
+
+export interface GroupsConfig {
+  /** Enable SEO-focused rules (canonical, meta description, OG tags, structured data). */
+  seo?: GroupValue;
+  /** Enable accessibility rules (a11y, headings, lang attribute). */
+  a11y?: GroupValue;
+  /** Enable link-integrity rules (broken links, fragments, orphan pages). */
+  links?: GroupValue;
+  /** Enable performance rules (image dimensions, hashed filenames, render blocking). */
+  performance?: GroupValue;
+  /** Enable privacy/security rules (third-party domains, SRI, inline scripts). */
+  privacy?: GroupValue;
+}
+
+export interface ReportsConfig {
+  /** Write a JSON report to this file path (relative to project root). */
+  json?: string;
+  /** Write a Markdown summary report to this file path (relative to project root). */
+  markdown?: string;
+  /** Write a SARIF 2.1.0 report to this file path (relative to project root). For use with GitHub Code Scanning. */
+  sarif?: string;
+}
+
 export interface PostAuditOptions {
   /** Inline rules config — all check settings go here. */
   rules?: RulesConfig;
   /** Preset to apply before user overrides. `"strict"` enables all checks, `"relaxed"` is lenient. */
-  preset?: "strict" | "relaxed";
+  preset?: "strict" | "relaxed" | "seo" | "accessibility" | "performance" | "production";
   /** Base URL (auto-detected from Astro's `site` config if not set). */
   site?: string;
   /** Treat warnings as errors. */
@@ -252,12 +276,44 @@ export interface PostAuditOptions {
   pageOverview?: boolean;
   /** Write the JSON report to this file path (relative to project root). */
   output?: string;
+  /** Write a Markdown summary report to this file path (relative to project root). */
+  outputMarkdown?: string;
+  /**
+   * Write one or more report files. Supports `json`, `markdown`, and `sarif` (SARIF 2.1.0) formats.
+   * Multiple formats can be active simultaneously. Takes precedence over `output`/`outputMarkdown` when both are set.
+   */
+  reports?: ReportsConfig;
+  /** Heuristic hints for source file locations in Content Collections / MDX projects. */
+  hints?: {
+    /** Show likely source file paths next to dist/ findings. Heuristic — may not always match. @default false */
+    sourceFiles?: boolean;
+  };
   /** Print per-check timing benchmarks in the output. */
   benchmark?: boolean;
   /** Disable the integration (useful for dev mode). */
   disable?: boolean;
   /** Throw an error when the audit finds issues (fails the build). Default: false */
   throwOnError?: boolean;
+  /**
+   * Path to a baseline file (relative to project root). When set, only findings that are
+   * *new* since the baseline was written will be reported. If the file does not exist,
+   * a warning is logged and the audit runs normally.
+   */
+  baseline?: string;
+  /**
+   * Write current findings as the new baseline and exit with code 0.
+   * Use this once to adopt the plugin on a site with existing issues.
+   */
+  writeBaseline?: boolean;
+  /**
+   * Build fail strategy. `'errors'`: fail on errors only (default when `throwOnError` is true).
+   * `'warnings'`: fail on any finding (implies `strict`). `'never'`: never fail the build.
+   */
+  failOn?: "never" | "errors" | "warnings";
+  /** Fail the build if the warning count exceeds this number. */
+  maxWarnings?: number;
+  /** Shorthand rule groups. `true` enables the group, `"warn"` enables but downgrades all findings to warnings. */
+  groups?: GroupsConfig;
 }
 
 interface RuntimeDeps {
@@ -295,11 +351,175 @@ function supportsConfigStdin(
   }
 }
 
+function logJsonSummary(
+  json: string,
+  logger: { info: (msg: string) => void; warn: (msg: string) => void },
+): void {
+  try {
+    const report = JSON.parse(json) as {
+      summary?: {
+        errors?: number;
+        warnings?: number;
+        info?: number;
+        files_checked?: number;
+      };
+    };
+    const s = report.summary;
+    if (!s) return;
+    const parts: string[] = [];
+    if (s.errors) parts.push(`${s.errors} error${s.errors === 1 ? "" : "s"}`);
+    if (s.warnings)
+      parts.push(`${s.warnings} warning${s.warnings === 1 ? "" : "s"}`);
+    if (s.info) parts.push(`${s.info} info`);
+    const filesMsg =
+      s.files_checked !== undefined ? ` (${s.files_checked} files checked)` : "";
+    if (parts.length === 0) {
+      logger.info(`Audit passed${filesMsg}.`);
+    } else {
+      logger.warn(`Audit: ${parts.join(", ")}${filesMsg}.`);
+    }
+  } catch {
+    // non-JSON output, skip summary
+  }
+}
+
+const GROUP_DEFS: Record<
+  keyof GroupsConfig,
+  { rules: Partial<RulesConfig>; ruleIds: string[] }
+> = {
+  seo: {
+    rules: {
+      html_basics: { meta_description_required: true },
+      opengraph: {
+        require_og_title: true,
+        require_og_description: true,
+        require_og_image: true,
+      },
+      structured_data: { check_json_ld: true },
+    },
+    ruleIds: [
+      "canonical/missing", "canonical/multiple", "canonical/empty",
+      "canonical/not-absolute", "canonical/cross-origin", "canonical/not-self",
+      "canonical/target-missing", "canonical/cluster", "robots/noindex",
+      "sitemap/missing", "sitemap/canonical-missing", "sitemap/entry-not-in-dist",
+      "sitemap/non-canonical-entry", "opengraph/title-missing",
+      "opengraph/description-missing", "opengraph/image-missing",
+      "html/title-missing", "html/meta-description-missing",
+      "html/meta-description-too-long", "structured-data/missing",
+      "structured-data/invalid-json",
+    ],
+  },
+  a11y: {
+    rules: {
+      a11y: { require_skip_link: true },
+      headings: { no_skip: true },
+    },
+    ruleIds: [
+      "a11y/img-alt", "a11y/link-name", "a11y/generic-link-text",
+      "a11y/button-name", "a11y/form-label", "a11y/skip-link",
+      "a11y/aria-hidden-focusable", "headings/no-h1", "headings/multiple-h1",
+      "headings/skip-level", "html/lang-missing",
+    ],
+  },
+  links: {
+    rules: {
+      links: { detect_orphan_pages: true, check_fragments: true },
+    },
+    ruleIds: [
+      "links/broken", "links/broken-fragment", "links/query-params",
+      "links/mixed-content", "links/orphan-page", "external-links/broken",
+    ],
+  },
+  performance: {
+    rules: {
+      assets: { check_image_dimensions: true, require_hashed_filenames: true },
+      render_blocking: { enabled: true },
+    },
+    ruleIds: [
+      "assets/img-dimensions", "assets/unhashed-filename", "assets/large-image",
+      "assets/large-js", "assets/large-css", "render-blocking/sync-head-scripts",
+      "render-blocking/missing-style-preload", "render-blocking/missing-preconnect",
+    ],
+  },
+  privacy: {
+    rules: {
+      privacy_security: { enabled: true },
+      security: { warn_inline_scripts: true },
+    },
+    ruleIds: [
+      "privacy-security/third-party-domains", "privacy-security/missing-sri-script",
+      "privacy-security/missing-sri-stylesheet",
+      "privacy-security/csp-readiness-inline-script",
+      "privacy-security/missing-consent-indicator",
+      "security/target-blank-noopener", "security/inline-scripts",
+      "security/mixed-content",
+    ],
+  },
+};
+
+function deepMerge(
+  base: Record<string, unknown>,
+  override: Record<string, unknown>,
+): Record<string, unknown> {
+  const result = { ...base };
+  for (const [key, val] of Object.entries(override)) {
+    if (
+      val !== null &&
+      typeof val === "object" &&
+      !Array.isArray(val) &&
+      typeof result[key] === "object" &&
+      result[key] !== null
+    ) {
+      result[key] = deepMerge(
+        result[key] as Record<string, unknown>,
+        val as Record<string, unknown>,
+      );
+    } else {
+      result[key] = val;
+    }
+  }
+  return result;
+}
+
+function expandGroups(
+  groups: GroupsConfig,
+  userRules: RulesConfig,
+): RulesConfig {
+  let accumulated: Record<string, unknown> = {};
+  const warnOverrides: Record<string, "warning"> = {};
+
+  for (const [name, value] of Object.entries(groups) as [
+    keyof GroupsConfig,
+    GroupValue | undefined,
+  ][]) {
+    if (!value) continue;
+    const def = GROUP_DEFS[name];
+    accumulated = deepMerge(accumulated, def.rules as Record<string, unknown>);
+    if (value === "warn") {
+      for (const id of def.ruleIds) {
+        warnOverrides[id] = "warning";
+      }
+    }
+  }
+
+  const merged = deepMerge(
+    accumulated,
+    userRules as Record<string, unknown>,
+  ) as RulesConfig;
+
+  if (Object.keys(warnOverrides).length > 0) {
+    merged.severity = { ...warnOverrides, ...userRules.severity };
+  }
+
+  return merged;
+}
+
 export default function postAudit(
   options: PostAuditOptions = {},
   deps: RuntimeDeps = defaultDeps,
 ): AstroIntegration {
   let siteUrl: string | undefined;
+  let rootDir: string | undefined;
   let astroTrailingSlash: "always" | "never" | "ignore" | undefined;
 
   return {
@@ -307,6 +527,7 @@ export default function postAudit(
     hooks: {
       "astro:config:done": ({ config }) => {
         siteUrl = config.site?.toString();
+        rootDir = fileURLToPath(config.root);
         // Bridge Astro's trailingSlash config automatically
         if (config.trailingSlash) {
           astroTrailingSlash = config.trailingSlash;
@@ -325,6 +546,14 @@ export default function postAudit(
           return;
         }
 
+        const shouldFail =
+          options.throwOnError === true ||
+          (options.failOn !== undefined && options.failOn !== "never");
+
+        const resolvedRules: RulesConfig = options.groups
+          ? expandGroups(options.groups, options.rules ?? {})
+          : (options.rules ?? {});
+
         // Validate that rules is a non-empty object if provided
         if (
           options.rules &&
@@ -336,27 +565,56 @@ export default function postAudit(
           );
         }
 
+        // Warn: `site` missing but canonical/sitemap checks active
+        const effectiveSite = options.site ?? siteUrl;
+        if (!effectiveSite) {
+          const canonicalActive = resolvedRules.canonical?.require !== false;
+          const sitemapActive =
+            resolvedRules.sitemap?.canonical_must_be_in_sitemap !== false;
+          if (canonicalActive || sitemapActive) {
+            logger.warn(
+              "`site` is not set in astro.config.mjs. Canonical and sitemap URL checks will be limited — set `site` to enable full URL verification.",
+            );
+          }
+        }
+
         const binaryPath = resolveBinaryPath(deps.existsSync);
         if (!binaryPath) {
-          logger.warn(
-            'astro-post-audit binary not found. Run "npm rebuild @casoon/astro-post-audit".',
-          );
+          const msg =
+            'astro-post-audit binary not found. Run "npm rebuild @casoon/astro-post-audit".';
+          if (shouldFail) throw new Error(msg);
+          logger.warn(msg);
           return;
         }
         if (!supportsConfigStdin(binaryPath, deps.execFileSync)) {
-          logger.error(
-            'astro-post-audit binary is outdated and does not support --config-stdin. Run "npm rebuild @casoon/astro-post-audit".',
-          );
+          const msg =
+            'astro-post-audit binary is outdated and does not support --config-stdin. Run "npm rebuild @casoon/astro-post-audit".';
+          if (shouldFail) throw new Error(msg);
+          logger.error(msg);
           return;
         }
 
         const distPath = fileURLToPath(dir);
         const args: string[] = [distPath, "--config-stdin"];
 
+        // Info: sitemap checks active but no sitemap.xml in dist
+        const sitemapChecksActive =
+          resolvedRules.sitemap?.canonical_must_be_in_sitemap !== false ||
+          resolvedRules.sitemap?.entries_must_exist_in_dist !== false;
+        if (
+          sitemapChecksActive &&
+          !deps.existsSync(join(distPath, "sitemap.xml")) &&
+          !deps.existsSync(join(distPath, "sitemap-index.xml"))
+        ) {
+          logger.info(
+            "No sitemap.xml found in dist/. Sitemap checks are limited. Add @astrojs/sitemap or @casoon/astro-sitemap to generate a sitemap.",
+          );
+        }
+
         // Build the full JSON config for the Rust binary
-        const site = options.site ?? siteUrl;
+        const site = effectiveSite;
         const stdinConfig: Record<string, unknown> = {
-          ...options.rules,
+          ...resolvedRules,
         };
         if (site) stdinConfig.site = { base_url: site };
         if (options.preset) stdinConfig.preset = options.preset;
@@ -371,17 +629,104 @@ export default function postAudit(
             trailing_slash: astroTrailingSlash,
           };
         }
-        if (options.strict) stdinConfig.strict = true;
-        if (options.benchmark) stdinConfig.benchmark = true;
+        if (options.failOn === "warnings" && options.strict !== false) {
+          stdinConfig.strict = true;
+        } else if (options.strict !== undefined) {
+          stdinConfig.strict = options.strict;
+        }
+        if (options.benchmark !== undefined) stdinConfig.benchmark = options.benchmark;
+        if (options.maxWarnings != null) stdinConfig.max_warnings = options.maxWarnings;
+        if (options.baseline)
+          stdinConfig.baseline = resolve(
+            rootDir ?? process.cwd(),
+            options.baseline,
+          );
+        if (options.writeBaseline) stdinConfig.write_baseline = true;
+        if (options.hints?.sourceFiles && rootDir) {
+          stdinConfig.hints = { source_files: true };
+          stdinConfig.project_root = rootDir;
+        }
         if (options.maxErrors != null)
           stdinConfig.max_errors = options.maxErrors;
-        if (options.pageOverview) stdinConfig.page_overview = true;
-        if (options.output) stdinConfig.format = "json";
+        if (options.pageOverview !== undefined) stdinConfig.page_overview = options.pageOverview;
+        const root = rootDir ?? process.cwd();
+        const outputPath = options.reports?.json
+          ? resolve(root, options.reports.json)
+          : options.output
+            ? resolve(root, options.output)
+            : undefined;
+        if (outputPath) stdinConfig.format = "json";
+        const outputMarkdownPath = options.reports?.markdown
+          ? resolve(root, options.reports.markdown)
+          : options.outputMarkdown
+            ? resolve(root, options.outputMarkdown)
+            : undefined;
+        const outputSarifPath = options.reports?.sarif
+          ? resolve(root, options.reports.sarif)
+          : undefined;
         const stdinInput = JSON.stringify(stdinConfig);
+
+        // Run Markdown report if requested (separate invocation, captures stdout)
+        if (outputMarkdownPath) {
+          const mdConfig = { ...stdinConfig, format: "markdown" };
+          try {
+            const mdResult = deps.execFileSync(binaryPath, args, {
+              stdio: ["pipe", "pipe", "inherit"],
+              input: JSON.stringify(mdConfig),
+              encoding: "utf-8",
+            });
+            if (mdResult) {
+              deps.writeFileSync(outputMarkdownPath, mdResult as string);
+              logger.info(`Markdown report written to ${outputMarkdownPath}`);
+            }
+          } catch (mdErr: unknown) {
+            if (
+              mdErr &&
+              typeof mdErr === "object" &&
+              "stdout" in mdErr &&
+              (mdErr as { stdout: string | null }).stdout
+            ) {
+              deps.writeFileSync(
+                outputMarkdownPath,
+                (mdErr as { stdout: string }).stdout,
+              );
+              logger.info(`Markdown report written to ${outputMarkdownPath}`);
+            }
+          }
+        }
+
+        // Run SARIF report if requested (separate invocation, captures stdout)
+        if (outputSarifPath) {
+          const sarifConfig = { ...stdinConfig, format: "sarif" };
+          try {
+            const sarifResult = deps.execFileSync(binaryPath, args, {
+              stdio: ["pipe", "pipe", "inherit"],
+              input: JSON.stringify(sarifConfig),
+              encoding: "utf-8",
+            });
+            if (sarifResult) {
+              deps.writeFileSync(outputSarifPath, sarifResult as string);
+              logger.info(`SARIF report written to ${outputSarifPath}`);
+            }
+          } catch (sarifErr: unknown) {
+            if (
+              sarifErr &&
+              typeof sarifErr === "object" &&
+              "stdout" in sarifErr &&
+              (sarifErr as { stdout: string | null }).stdout
+            ) {
+              deps.writeFileSync(
+                outputSarifPath,
+                (sarifErr as { stdout: string }).stdout,
+              );
+              logger.info(`SARIF report written to ${outputSarifPath}`);
+            }
+          }
+        }
 
         logger.info("Running post-build audit...");
 
-        const captureOutput = !!options.output;
+        const captureOutput = !!outputPath;
 
         try {
           const result = deps.execFileSync(binaryPath, args, {
@@ -391,8 +736,9 @@ export default function postAudit(
           });
 
           if (captureOutput && result) {
-            deps.writeFileSync(options.output!, result);
-            logger.info(`Report written to ${options.output}`);
+            deps.writeFileSync(outputPath!, result as string);
+            logger.info(`Report written to ${outputPath}`);
+            logJsonSummary(result as string, logger);
           }
 
           logger.info("All checks passed!");
@@ -412,13 +758,16 @@ export default function postAudit(
           ) {
             const stdout = (err as { stdout: string | Buffer }).stdout;
             if (stdout) {
-              deps.writeFileSync(options.output!, stdout);
-              logger.info(`Report written to ${options.output}`);
+              const stdoutStr =
+                typeof stdout === "string" ? stdout : stdout.toString("utf-8");
+              deps.writeFileSync(outputPath!, stdoutStr);
+              logger.info(`Report written to ${outputPath}`);
+              logJsonSummary(stdoutStr, logger);
             }
           }
 
           if (exitCode === 1) {
-            if (options.throwOnError) {
+            if (shouldFail) {
               throw new Error(
                 "astro-post-audit found issues. See output above.",
               );

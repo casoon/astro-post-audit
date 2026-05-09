@@ -31,6 +31,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                             ),
                             help: "Add rel=\"noopener noreferrer\" to external links with target=\"_blank\"".into(),
                             suggestion: None,
+                            source_hint: None,
+                            confidence: None,
                         });
                     }
                 }
@@ -58,6 +60,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         help: "Move inline scripts to external files for better CSP compatibility"
                             .into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: None,
                     });
                 }
             }
@@ -99,6 +103,8 @@ fn check_mixed_content(
                         message: format!("HTTP resource on potentially HTTPS page: '{}'", value),
                         help: "Use HTTPS URLs or protocol-relative URLs for all resources".into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: None,
                     });
                 }
             }

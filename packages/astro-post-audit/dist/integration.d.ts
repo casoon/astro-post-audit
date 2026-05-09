@@ -233,11 +233,32 @@ export interface RulesConfig {
         enabled?: boolean;
     };
 }
+export type GroupValue = boolean | "warn";
+export interface GroupsConfig {
+    /** Enable SEO-focused rules (canonical, meta description, OG tags, structured data). */
+    seo?: GroupValue;
+    /** Enable accessibility rules (a11y, headings, lang attribute). */
+    a11y?: GroupValue;
+    /** Enable link-integrity rules (broken links, fragments, orphan pages). */
+    links?: GroupValue;
+    /** Enable performance rules (image dimensions, hashed filenames, render blocking). */
+    performance?: GroupValue;
+    /** Enable privacy/security rules (third-party domains, SRI, inline scripts). */
+    privacy?: GroupValue;
+}
+export interface ReportsConfig {
+    /** Write a JSON report to this file path (relative to project root). */
+    json?: string;
+    /** Write a Markdown summary report to this file path (relative to project root). */
+    markdown?: string;
+    /** Write a SARIF 2.1.0 report to this file path (relative to project root). For use with GitHub Code Scanning. */
+    sarif?: string;
+}
 export interface PostAuditOptions {
     /** Inline rules config — all check settings go here. */
     rules?: RulesConfig;
     /** Preset to apply before user overrides. `"strict"` enables all checks, `"relaxed"` is lenient. */
-    preset?: "strict" | "relaxed";
+    preset?: "strict" | "relaxed" | "seo" | "accessibility" | "performance" | "production";
     /** Base URL (auto-detected from Astro's `site` config if not set). */
     site?: string;
     /** Treat warnings as errors. */
@@ -248,12 +269,44 @@ export interface PostAuditOptions {
     pageOverview?: boolean;
     /** Write the JSON report to this file path (relative to project root). */
     output?: string;
+    /** Write a Markdown summary report to this file path (relative to project root). */
+    outputMarkdown?: string;
+    /**
+     * Write one or more report files. Supports `json`, `markdown`, and `sarif` (SARIF 2.1.0) formats.
+     * Multiple formats can be active simultaneously. Takes precedence over `output`/`outputMarkdown` when both are set.
+     */
+    reports?: ReportsConfig;
+    /** Heuristic hints for source file locations in Content Collections / MDX projects. */
+    hints?: {
+        /** Show likely source file paths next to dist/ findings. Heuristic — may not always match. @default false */
+        sourceFiles?: boolean;
+    };
     /** Print per-check timing benchmarks in the output. */
     benchmark?: boolean;
     /** Disable the integration (useful for dev mode). */
     disable?: boolean;
     /** Throw an error when the audit finds issues (fails the build). Default: false */
     throwOnError?: boolean;
+    /**
+     * Path to a baseline file (relative to project root). When set, only findings that are
+     * *new* since the baseline was written will be reported. If the file does not exist,
+     * a warning is logged and the audit runs normally.
+     */
+    baseline?: string;
+    /**
+     * Write current findings as the new baseline and exit with code 0.
+     * Use this once to adopt the plugin on a site with existing issues.
+     */
+    writeBaseline?: boolean;
+    /**
+     * Build fail strategy. `'errors'`: fail on errors only (default when `throwOnError` is true).
+     * `'warnings'`: fail on any finding (implies `strict`). `'never'`: never fail the build.
+     */
+    failOn?: "never" | "errors" | "warnings";
+    /** Fail the build if the warning count exceeds this number. */
+    maxWarnings?: number;
+    /** Shorthand rule groups. `true` enables the group, `"warn"` enables but downgrades all findings to warnings. */
+    groups?: GroupsConfig;
 }
 interface RuntimeDeps {
     execFileSync: typeof execFileSync;

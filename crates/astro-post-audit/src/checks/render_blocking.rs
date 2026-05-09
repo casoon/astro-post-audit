@@ -5,7 +5,7 @@ use url::Url;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Finding, Level};
+use crate::report::{Confidence, Finding, Level};
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     if !config.render_blocking.enabled {
@@ -54,6 +54,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 ),
                 help: "Use defer/async (or type=module) for non-critical scripts in <head>".into(),
                 suggestion: None,
+                source_hint: None,
+                confidence: Some(Confidence::Medium),
             });
         }
 
@@ -74,6 +76,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                             "Preload critical above-the-fold styles when they are render-critical"
                                 .into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: Some(Confidence::Medium),
                     });
                 }
             }
@@ -113,6 +117,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     help: "Add <link rel=\"preconnect\"> (or dns-prefetch) for critical third-party origins"
                         .into(),
                     suggestion: None,
+                    source_hint: None,
+                    confidence: Some(Confidence::Medium),
                 });
             }
         }

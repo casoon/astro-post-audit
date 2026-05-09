@@ -48,6 +48,9 @@ pub struct Config {
     pub privacy_security: PrivacySecurityConfig,
     pub structured_data_graph: StructuredDataGraphConfig,
     pub severity: SeverityConfig,
+    pub hints: HintsConfig,
+    /// Project root directory, used for source-file hint resolution.
+    pub project_root: Option<String>,
 }
 
 /// Custom severity overrides per rule ID.
@@ -273,6 +276,13 @@ pub struct PrivacySecurityConfig {
 #[serde(default)]
 pub struct StructuredDataGraphConfig {
     pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct HintsConfig {
+    /// Show heuristic source-file hints in output (e.g. "Likely source: src/content/blog/post.mdx").
+    pub source_files: bool,
 }
 
 // --- Defaults (only for structs with non-zero defaults) ---

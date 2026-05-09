@@ -54,6 +54,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         message: "Missing og:title meta tag".into(),
                         help: "Add <meta property=\"og:title\" content=\"...\">".into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: None,
                     });
                 }
             }
@@ -77,6 +79,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         message: "Missing og:description meta tag".into(),
                         help: "Add <meta property=\"og:description\" content=\"...\">".into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: None,
                     });
                 }
             }
@@ -100,6 +104,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         message: "Missing og:image meta tag".into(),
                         help: "Add <meta property=\"og:image\" content=\"...\">".into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: None,
                     });
                 }
             }
@@ -124,6 +130,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         help: "Add <meta name=\"twitter:card\" content=\"summary_large_image\">"
                             .into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: None,
                     });
                 }
             }

@@ -33,6 +33,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 message: "sitemap.xml not found in dist directory".into(),
                 help: "Configure Astro to generate a sitemap (e.g., @astrojs/sitemap)".into(),
                 suggestion: None,
+                source_hint: None,
+                confidence: None,
             });
         }
         return findings;
@@ -51,6 +53,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             message: format!("Could not parse sitemap.xml: {}", parse_error),
             help: "Fix sitemap.xml syntax and regenerate the file".into(),
             suggestion: None,
+            source_hint: None,
+            confidence: None,
         });
     }
 
@@ -88,6 +92,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         ),
                         help: "Add this URL to your sitemap or check the canonical".into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: None,
                     });
                 }
             }
@@ -111,6 +117,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         ),
                         help: "Remove stale entries from sitemap or add the missing page".into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: None,
                     });
                 }
             }
@@ -141,6 +149,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                                 ),
                                 help: "Use the canonical URL in the sitemap".into(),
                                 suggestion: None,
+                                source_hint: None,
+                                confidence: None,
                             });
                         }
                     }

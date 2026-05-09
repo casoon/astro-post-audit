@@ -52,6 +52,8 @@ fn check_canonical(
             message: "Missing canonical tag".into(),
             help: "Add <link rel=\"canonical\" href=\"...\"> to <head>".into(),
             suggestion: Some("<link rel=\"canonical\" href=\"https://...\">".into()),
+            source_hint: None,
+            confidence: None,
         });
         return;
     }
@@ -68,6 +70,8 @@ fn check_canonical(
             ),
             help: "Remove duplicate canonical tags, keep only one".into(),
             suggestion: None,
+            source_hint: None,
+            confidence: None,
         });
     }
 
@@ -81,6 +85,8 @@ fn check_canonical(
             message: "Canonical tag has empty href".into(),
             help: "Set the href to the canonical URL of this page".into(),
             suggestion: None,
+            source_hint: None,
+            confidence: None,
         });
         return;
     }
@@ -95,6 +101,8 @@ fn check_canonical(
             message: "Canonical URL is not absolute".into(),
             help: "Use a full URL including protocol and domain".into(),
             suggestion: None,
+            source_hint: None,
+            confidence: None,
         });
         return;
     }
@@ -116,6 +124,8 @@ fn check_canonical(
                         ),
                         help: "Canonical should point to the same origin as --site".into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: None,
                     });
                 }
             }
@@ -139,6 +149,8 @@ fn check_canonical(
                     ),
                     help: "If this page should self-canonicalize, update the canonical href".into(),
                     suggestion: None,
+                    source_hint: None,
+                    confidence: None,
                 });
             }
         }
@@ -159,6 +171,8 @@ fn check_canonical(
                 ),
                 help: "Ensure the canonical URL points to an existing page".into(),
                 suggestion: None,
+                source_hint: None,
+                confidence: None,
             });
         }
     }
@@ -175,6 +189,8 @@ fn check_robots(page: &crate::discovery::PageInfo, config: &Config, findings: &m
                 message: "Page has noindex directive".into(),
                 help: "Remove noindex if this page should be indexed".into(),
                 suggestion: None,
+                source_hint: None,
+                confidence: None,
             });
         } else if !config.robots_meta.allow_noindex {
             findings.push(Finding {
@@ -185,6 +201,8 @@ fn check_robots(page: &crate::discovery::PageInfo, config: &Config, findings: &m
                 message: "Page has noindex directive".into(),
                 help: "Remove noindex if this page should be indexed".into(),
                 suggestion: None,
+                source_hint: None,
+                confidence: None,
             });
         }
     }
@@ -227,6 +245,8 @@ fn check_canonical_clusters(index: &SiteIndex) -> Vec<Finding> {
                     ),
                     help: "Multiple pages pointing to the same canonical may indicate a copy-paste error. If intentional (AMP, variants), disable with detect_clusters: false".into(),
                     suggestion: None,
+                    source_hint: None,
+                    confidence: None,
                 });
             }
         }

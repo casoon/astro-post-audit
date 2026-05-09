@@ -113,6 +113,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         ),
                         help: "Each page should have a unique title tag".into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: None,
                     });
                 }
             }
@@ -136,6 +138,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         ),
                         help: "Each page should have a unique meta description".into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: None,
                     });
                 }
             }
@@ -159,6 +163,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         ),
                         help: "Each page should have a unique H1 heading".into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: None,
                     });
                 }
             }
@@ -180,6 +186,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         ),
                         help: "These pages have identical content - consider using canonical tags or redirects".into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: None,
                     });
                 }
             }

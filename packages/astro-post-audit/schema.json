@@ -2,12 +2,72 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "additionalProperties": false,
     "definitions": {
-        "SeverityOverrides": {
-            "additionalProperties": {
-                "enum": ["error", "warning", "info", "off"],
-                "type": "string"
+        "GroupsConfig": {
+            "additionalProperties": false,
+            "properties": {
+                "a11y": {
+                    "description": "Enable accessibility rules (a11y, headings, lang attribute).",
+                    "enum": [
+                        false,
+                        true,
+                        "warn"
+                    ]
+                },
+                "links": {
+                    "description": "Enable link-integrity rules (broken links, fragments, orphan pages).",
+                    "enum": [
+                        false,
+                        true,
+                        "warn"
+                    ]
+                },
+                "performance": {
+                    "description": "Enable performance rules (image dimensions, hashed filenames, render blocking).",
+                    "enum": [
+                        false,
+                        true,
+                        "warn"
+                    ]
+                },
+                "privacy": {
+                    "description": "Enable privacy/security rules (third-party domains, SRI, inline scripts).",
+                    "enum": [
+                        false,
+                        true,
+                        "warn"
+                    ]
+                },
+                "seo": {
+                    "description": "Enable SEO-focused rules (canonical, meta description, OG tags, structured data).",
+                    "enum": [
+                        false,
+                        true,
+                        "warn"
+                    ]
+                }
             },
-            "description": "Map of rule IDs to severity levels.",
+            "type": "object"
+        },
+        "Record<string,\"error\"|\"warning\"|\"info\"|\"off\">": {
+            "additionalProperties": false,
+            "type": "object"
+        },
+        "ReportsConfig": {
+            "additionalProperties": false,
+            "properties": {
+                "json": {
+                    "description": "Write a JSON report to this file path (relative to project root).",
+                    "type": "string"
+                },
+                "markdown": {
+                    "description": "Write a Markdown summary report to this file path (relative to project root).",
+                    "type": "string"
+                },
+                "sarif": {
+                    "description": "Write a SARIF 2.1.0 report to this file path (relative to project root). For use with GitHub Code Scanning.",
+                    "type": "string"
+                }
+            },
             "type": "object"
         },
         "RulesConfig": {
@@ -149,6 +209,18 @@
                         "detect_duplicate_titles": {
                             "default": false,
                             "description": "Warn if multiple pages share the same `<title>`.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
+                "crawl_budget": {
+                    "additionalProperties": false,
+                    "description": "Crawl budget audit for URL variants, indexability mismatches, and duplicate clusters.",
+                    "properties": {
+                        "enabled": {
+                            "default": false,
+                            "description": "Enable crawl budget checks in dist output.",
                             "type": "boolean"
                         }
                     },
@@ -302,6 +374,18 @@
                     },
                     "type": "object"
                 },
+                "i18n_audit": {
+                    "additionalProperties": false,
+                    "description": "I18n consistency audit across route locale, lang, hreflang, and canonical signals.",
+                    "properties": {
+                        "enabled": {
+                            "default": false,
+                            "description": "Enable i18n consistency checks in dist output.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
                 "links": {
                     "additionalProperties": false,
                     "description": "Internal link consistency checks.",
@@ -366,6 +450,30 @@
                     },
                     "type": "object"
                 },
+                "privacy_security": {
+                    "additionalProperties": false,
+                    "description": "Static privacy and security posture audit (third-party, SRI, CSP readiness, consent indicators).",
+                    "properties": {
+                        "enabled": {
+                            "default": false,
+                            "description": "Enable privacy/security checks in dist output.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
+                "render_blocking": {
+                    "additionalProperties": false,
+                    "description": "Static render-blocking audit for critical resources and connection hints.",
+                    "properties": {
+                        "enabled": {
+                            "default": false,
+                            "description": "Enable render-blocking checks in dist output.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
                 "robots_meta": {
                     "additionalProperties": false,
                     "description": "Robots meta tag checks.",
@@ -423,7 +531,7 @@
                     "type": "object"
                 },
                 "severity": {
-                    "$ref": "#/definitions/SeverityOverrides",
+                    "$ref": "#/definitions/Record%3Cstring%2C%22error%22%7C%22warning%22%7C%22info%22%7C%22off%22%3E",
                     "description": "Override severity per rule ID."
                 },
                 "site": {
@@ -486,6 +594,18 @@
                     },
                     "type": "object"
                 },
+                "structured_data_graph": {
+                    "additionalProperties": false,
+                    "description": "Cross-page structured-data graph consistency checks.",
+                    "properties": {
+                        "enabled": {
+                            "default": false,
+                            "description": "Enable cross-page JSON-LD consistency checks in dist output.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
                 "url_normalization": {
                     "additionalProperties": false,
                     "description": "URL normalization rules for internal link and canonical consistency.",
@@ -517,6 +637,10 @@
         }
     },
     "properties": {
+        "baseline": {
+            "description": "Path to a baseline file (relative to project root). When set, only findings that are\n*new* since the baseline was written will be reported. If the file does not exist,\na warning is logged and the audit runs normally.",
+            "type": "string"
+        },
         "benchmark": {
             "description": "Print per-check timing benchmarks in the output.",
             "type": "boolean"
@@ -525,12 +649,45 @@
             "description": "Disable the integration (useful for dev mode).",
             "type": "boolean"
         },
+        "failOn": {
+            "description": "Build fail strategy. `'errors'`: fail on errors only (default when `throwOnError` is true).\n`'warnings'`: fail on any finding (implies `strict`). `'never'`: never fail the build.",
+            "enum": [
+                "errors",
+                "never",
+                "warnings"
+            ],
+            "type": "string"
+        },
+        "groups": {
+            "$ref": "#/definitions/GroupsConfig",
+            "description": "Shorthand rule groups. `true` enables the group, `\"warn\"` enables but downgrades all findings to warnings."
+        },
+        "hints": {
+            "additionalProperties": false,
+            "description": "Heuristic hints for source file locations in Content Collections / MDX projects.",
+            "properties": {
+                "sourceFiles": {
+                    "default": false,
+                    "description": "Show likely source file paths next to dist/ findings. Heuristic — may not always match.",
+                    "type": "boolean"
+                }
+            },
+            "type": "object"
+        },
         "maxErrors": {
             "description": "Maximum number of errors before aborting.",
             "type": "number"
         },
+        "maxWarnings": {
+            "description": "Fail the build if the warning count exceeds this number.",
+            "type": "number"
+        },
         "output": {
             "description": "Write the JSON report to this file path (relative to project root).",
+            "type": "string"
+        },
+        "outputMarkdown": {
+            "description": "Write a Markdown summary report to this file path (relative to project root).",
             "type": "string"
         },
         "pageOverview": {
@@ -540,10 +697,18 @@
         "preset": {
             "description": "Preset to apply before user overrides. `\"strict\"` enables all checks, `\"relaxed\"` is lenient.",
             "enum": [
+                "accessibility",
+                "performance",
+                "production",
                 "relaxed",
+                "seo",
                 "strict"
             ],
             "type": "string"
+        },
+        "reports": {
+            "$ref": "#/definitions/ReportsConfig",
+            "description": "Write one or more report files. Supports `json`, `markdown`, and `sarif` (SARIF 2.1.0) formats.\nMultiple formats can be active simultaneously. Takes precedence over `output`/`outputMarkdown` when both are set."
         },
         "rules": {
             "$ref": "#/definitions/RulesConfig",
@@ -559,6 +724,10 @@
         },
         "throwOnError": {
             "description": "Throw an error when the audit finds issues (fails the build). Default: false",
+            "type": "boolean"
+        },
+        "writeBaseline": {
+            "description": "Write current findings as the new baseline and exit with code 0.\nUse this once to adopt the plugin on a site with existing issues.",
             "type": "boolean"
         }
     },

@@ -5,7 +5,7 @@ use scraper::Selector;
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::normalize;
-use crate::report::{Finding, Level};
+use crate::report::{Confidence, Finding, Level};
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     if !config.crawl_budget.enabled {
@@ -50,6 +50,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 ),
                 help: "Use canonical internal URLs without tracking/query params".into(),
                 suggestion: None,
+                source_hint: None,
+                confidence: Some(Confidence::Medium),
             });
         }
 
@@ -65,6 +67,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 ),
                 help: "Link consistently to canonical URL variants only".into(),
                 suggestion: None,
+                source_hint: None,
+                confidence: Some(Confidence::Medium),
             });
         }
 
@@ -96,6 +100,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 help: "Consolidate duplicates or ensure only one canonical target page remains indexable"
                     .into(),
                 suggestion: None,
+                source_hint: None,
+                confidence: Some(Confidence::Low),
             });
         }
     }
@@ -118,6 +124,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     help: "Remove noindex URLs from sitemap to avoid mixed indexability signals"
                         .into(),
                     suggestion: None,
+                    source_hint: None,
+                    confidence: Some(Confidence::Medium),
                 });
             }
         }
@@ -137,6 +145,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         "Consider de-linking or changing indexability to keep crawl paths focused"
                             .into(),
                     suggestion: None,
+                    source_hint: None,
+                    confidence: Some(Confidence::Medium),
                 });
             }
         }
@@ -182,6 +192,8 @@ fn check_meta_refresh_targets(
                     message: format!("Meta refresh target '{}' does not exist in dist", target),
                     help: "Point redirects to existing canonical targets".into(),
                     suggestion: None,
+                    source_hint: None,
+                    confidence: Some(Confidence::Medium),
                 });
             }
         }

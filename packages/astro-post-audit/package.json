@@ -1,6 +1,6 @@
 {
   "name": "@casoon/astro-post-audit",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Astro integration for post-build auditing: SEO, links, and lightweight WCAG checks",
   "license": "MIT",
   "type": "module",
@@ -13,9 +13,6 @@
     },
     "./schema": "./schema.json"
   },
-  "bin": {
-    "astro-post-audit": "bin/run.cjs"
-  },
   "scripts": {
     "build": "tsc && npm run generate-schema",
     "generate-schema": "typescript-json-schema tsconfig.json PostAuditOptions --noExtraProps -o schema.json",
@@ -25,7 +22,8 @@
     "postinstall": "node bin/install.cjs"
   },
   "files": [
-    "bin/",
+    "bin/install.cjs",
+    "bin/run.cjs",
     "dist/",
     "schema.json"
   ],

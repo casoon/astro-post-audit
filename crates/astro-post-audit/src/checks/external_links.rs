@@ -110,6 +110,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         message: format!("{} (status: {})", message, status),
                         help: "Fix or remove this broken external link".into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: None,
                     })
                     .collect::<Vec<_>>()
             })

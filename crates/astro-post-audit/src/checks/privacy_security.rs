@@ -5,7 +5,7 @@ use url::Url;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Finding, Level};
+use crate::report::{Confidence, Finding, Level};
 
 const TRACKER_DOMAINS: &[&str] = &[
     "google-analytics.com",
@@ -66,6 +66,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 ),
                 help: "Review third-party dependencies for privacy and security impact".into(),
                 suggestion: None,
+                source_hint: None,
+                confidence: Some(Confidence::Medium),
             });
         }
 
@@ -80,6 +82,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     message: format!("External script '{}' has no SRI integrity attribute", src),
                     help: "Add integrity + crossorigin for external scripts where possible".into(),
                     suggestion: None,
+                    source_hint: None,
+                    confidence: Some(Confidence::Medium),
                 });
             }
         }
@@ -98,6 +102,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     help: "Add integrity + crossorigin for external stylesheets where possible"
                         .into(),
                     suggestion: None,
+                    source_hint: None,
+                    confidence: Some(Confidence::Medium),
                 });
             }
         }
@@ -115,6 +121,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 ),
                 help: "Move inline scripts to external files or use CSP nonces/hashes".into(),
                 suggestion: None,
+                source_hint: None,
+                confidence: Some(Confidence::Medium),
             });
         }
 
@@ -134,6 +142,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         .into(),
                 help: "Ensure tracking scripts are gated behind a consent mechanism".into(),
                 suggestion: None,
+                source_hint: None,
+                confidence: Some(Confidence::Medium),
             });
         }
     }

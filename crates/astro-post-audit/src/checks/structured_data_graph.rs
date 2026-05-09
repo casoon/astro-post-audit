@@ -6,7 +6,7 @@ use serde_json::Value;
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::normalize;
-use crate::report::{Finding, Level};
+use crate::report::{Confidence, Finding, Level};
 
 #[derive(Debug, Clone)]
 struct EntitySnapshot {
@@ -68,6 +68,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 ),
                 help: "Use a consistent @type for the same @id entity across the site".into(),
                 suggestion: None,
+                source_hint: None,
+                confidence: Some(Confidence::Medium),
             });
         }
 
@@ -84,6 +86,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 ),
                 help: "Keep core entity fields (name/url/type) consistent across pages".into(),
                 suggestion: None,
+                source_hint: None,
+                confidence: Some(Confidence::Medium),
             });
         }
 
@@ -100,6 +104,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 ),
                 help: "Use one canonical URL value for the same entity across pages".into(),
                 suggestion: None,
+                source_hint: None,
+                confidence: Some(Confidence::Medium),
             });
         }
     }
@@ -125,6 +131,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     ),
                     help: "Point structured-data URLs to existing canonical pages".into(),
                     suggestion: None,
+                    source_hint: None,
+                    confidence: Some(Confidence::Medium),
                 });
             }
         }

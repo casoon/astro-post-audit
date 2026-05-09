@@ -58,6 +58,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     message: "Hreflang tags present but no x-default".into(),
                     help: "Add <link rel=\"alternate\" hreflang=\"x-default\" href=\"...\">".into(),
                     suggestion: None,
+                    source_hint: None,
+                    confidence: None,
                 });
             }
         }
@@ -81,6 +83,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         message: "Hreflang tags don't include a self-reference".into(),
                         help: "Include the current page URL in hreflang annotations".into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: None,
                     });
                 }
             }
@@ -132,6 +136,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                                 ),
                                 help: "Add reciprocal hreflang link on the target page".into(),
                                 suggestion: None,
+                                source_hint: None,
+                                confidence: None,
                             });
                         }
                     }

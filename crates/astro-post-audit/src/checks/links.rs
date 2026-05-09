@@ -78,6 +78,8 @@ fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                             help: "Add an element with the matching id, or fix the fragment"
                                 .into(),
                             suggestion: None,
+                            source_hint: None,
+                            confidence: None,
                         });
                     }
                     continue;
@@ -96,6 +98,8 @@ fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         ),
                         help: "Remove query parameters from internal links to avoid duplicate content signals".into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: None,
                     });
                 }
 
@@ -109,6 +113,8 @@ fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         message: format!("Internal link uses HTTP instead of HTTPS: '{}'", href),
                         help: "Use HTTPS for all internal links".into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: None,
                     });
                 }
 
@@ -140,6 +146,8 @@ fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                                 ),
                                 help: "Fix the href to point to an existing page".into(),
                                 suggestion: None,
+                                source_hint: None,
+                                confidence: None,
                             });
                         }
                     }
@@ -172,6 +180,8 @@ fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                                             help: "Fix the fragment or add the target id"
                                                 .into(),
                                             suggestion: None,
+                                            source_hint: None,
+                                            confidence: None,
                                         });
                                     }
                                 }
@@ -235,6 +245,8 @@ fn check_orphan_pages(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             ),
             help: "Add internal links to this page or remove it if unneeded".into(),
             suggestion: None,
+            source_hint: None,
+            confidence: None,
         })
         .collect()
 }

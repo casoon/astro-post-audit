@@ -3,7 +3,7 @@ use scraper::Selector;
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::normalize;
-use crate::report::{Finding, Level};
+use crate::report::{Confidence, Finding, Level};
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     if !config.i18n_audit.enabled {
@@ -32,6 +32,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         ),
                         help: "Align route locale and html lang for consistent i18n signals".into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: Some(Confidence::Medium),
                     });
                 }
             } else {
@@ -48,6 +50,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         "Set html lang to the page locale (for example lang=\"en\" or lang=\"de\")"
                             .into(),
                     suggestion: None,
+                    source_hint: None,
+                    confidence: Some(Confidence::Medium),
                 });
             }
         }
@@ -82,6 +86,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         message: "Canonical URL is not represented in hreflang alternates".into(),
                         help: "Add a self hreflang entry matching the canonical URL".into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: Some(Confidence::Medium),
                     });
                 }
             }
@@ -102,6 +108,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         ),
                         help: "Add hreflang entries that include the page locale".into(),
                         suggestion: None,
+                        source_hint: None,
+                        confidence: Some(Confidence::Medium),
                     });
                 }
             }

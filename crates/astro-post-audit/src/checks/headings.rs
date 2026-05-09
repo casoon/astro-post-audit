@@ -22,6 +22,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     message: "Page has no <h1> heading".into(),
                     help: "Add exactly one <h1> as the main heading".into(),
                     suggestion: None,
+                    source_hint: None,
+                    confidence: None,
                 });
             }
 
@@ -35,6 +37,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     message: format!("Page has {} <h1> headings (expected 1)", h1_count),
                     help: "Use only one <h1> per page for clear document structure".into(),
                     suggestion: None,
+                    source_hint: None,
+                    confidence: None,
                 });
             }
 
@@ -58,6 +62,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                             help: "Don't skip heading levels; use sequential heading hierarchy"
                                 .into(),
                             suggestion: None,
+                            source_hint: None,
+                            confidence: None,
                         });
                     }
                 }
