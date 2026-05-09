@@ -74,15 +74,16 @@ postAudit({
 
 ## Example configurations
 
-Real-world configs from the [casoon/astro-v6-template](https://github.com/casoon/astro-v6-template) — a production Astro v6 monorepo with two apps (starter and blog) that run the audit as part of every build.
+Real-world configs from the [casoon/astro-v6-template](https://github.com/casoon/astro-v6-template) — a production Astro v6 monorepo (starter + blog) that runs the audit as part of every `astro build`.
 
-### Starter site (single language)
+Both apps share the same rule set; the only difference is the `filters.exclude` list.
 
-A solid baseline for any single-language Astro site. Enables strict canonical checks, fragment validation, sitemap cross-referencing, OG tags, and `target="_blank"` security.
+### Starter / single-language site
 
 ```js
 postAudit({
-  throwOnError: true,
+  failOn: 'errors',             // fail build on errors, warnings are logged only
+  hints: { sourceFiles: true }, // show likely source file paths next to dist/ findings
   rules: {
     filters: { exclude: ['404.html'] },
     canonical: { self_reference: true },
@@ -106,46 +107,34 @@ postAudit({
       entries_must_exist_in_dist: true,
     },
     security: { check_target_blank: true },
-  },
-})
-```
-
-### Multilingual blog (with hreflang)
-
-Extends the starter config with hreflang validation for a bilingual site (e.g. `en` + `de`). Requires reciprocal hreflang links and an `x-default` entry. Also excludes the blog index page which aggregates all posts and intentionally shares no canonical with individual posts.
-
-```js
-postAudit({
-  throwOnError: true,
-  rules: {
-    filters: { exclude: ['blog/index.html', '404.html'] },
-    canonical: { self_reference: true },
-    headings: { no_skip: true },
-    html_basics: { meta_description_required: true },
-    opengraph: {
-      require_og_title: true,
-      require_og_description: true,
-      require_og_image: true,
+    assets: { check_broken_assets: true },
+    structured_data: { check_json_ld: true },
+    content_quality: {
+      detect_duplicate_titles: true,
+      detect_duplicate_descriptions: true,
+      detect_duplicate_h1: true,
     },
-    a11y: {
-      require_skip_link: true,
-      img_alt_required: true,
-      button_name_required: true,
-      label_for_required: true,
-    },
-    links: { check_fragments: true },
-    sitemap: {
-      require: true,
-      canonical_must_be_in_sitemap: true,
-      entries_must_exist_in_dist: true,
-    },
-    security: { check_target_blank: true },
     hreflang: {
       check_hreflang: true,
       require_x_default: true,
       require_self_reference: true,
       require_reciprocal: true,
     },
+  },
+})
+```
+
+### Blog (MDX + Content Collections)
+
+Same as above, but the blog listing page (`blog/index.html`) is excluded — it aggregates all posts and intentionally has no per-post canonical.
+
+```js
+postAudit({
+  failOn: 'errors',
+  hints: { sourceFiles: true },
+  rules: {
+    filters: { exclude: ['blog/index.html', '404.html'] },
+    // … same rules as starter
   },
 })
 ```
