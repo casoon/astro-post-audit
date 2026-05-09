@@ -74,46 +74,64 @@ postAudit({
 
 ## Example configurations
 
-Real-world configs from the [casoon/astro-v6-template](https://github.com/casoon/astro-v6-template) — a production Astro v6 monorepo (starter + blog) that runs the audit as part of every `astro build`.
+A working reference implementation can be found in [casoon/astro-v6-template](https://github.com/casoon/astro-v6-template).
 
-Both apps share the same rule set; the only difference is the `filters.exclude` list.
+### Simple site
 
-### Starter / single-language site
+Minimal config for a small personal or marketing site. Core SEO and broken link detection — no noise.
 
 ```js
 postAudit({
-  failOn: 'errors',             // fail build on errors, warnings are logged only
-  hints: { sourceFiles: true }, // show likely source file paths next to dist/ findings
+  failOn: 'errors',
   rules: {
     filters: { exclude: ['404.html'] },
-    canonical: { self_reference: true },
-    headings: { no_skip: true },
     html_basics: { meta_description_required: true },
+    links: { check_internal: true },
+    sitemap: { require: true },
+  },
+})
+```
+
+### Blog with Content Collections
+
+Excludes the listing page (which intentionally has no unique canonical) and enables source-file hints so MDX path shows up next to dist/ findings.
+
+```js
+postAudit({
+  failOn: 'errors',
+  hints: { sourceFiles: true },
+  rules: {
+    filters: { exclude: ['404.html', 'blog/index.html'] },
+    canonical: { self_reference: true },
+    html_basics: { meta_description_required: true },
+    headings: { no_skip: true },
     opengraph: {
       require_og_title: true,
       require_og_description: true,
       require_og_image: true,
     },
-    a11y: {
-      require_skip_link: true,
-      img_alt_required: true,
-      button_name_required: true,
-      label_for_required: true,
-    },
-    links: { check_fragments: true },
-    sitemap: {
-      require: true,
-      canonical_must_be_in_sitemap: true,
-      entries_must_exist_in_dist: true,
-    },
-    security: { check_target_blank: true },
-    assets: { check_broken_assets: true },
     structured_data: { check_json_ld: true },
     content_quality: {
       detect_duplicate_titles: true,
       detect_duplicate_descriptions: true,
-      detect_duplicate_h1: true,
     },
+    sitemap: { require: true, canonical_must_be_in_sitemap: true },
+  },
+})
+```
+
+### Multilingual site (hreflang)
+
+For sites with locale-prefixed routes (e.g. `/en/`, `/de/`). Validates that every page has a self-referencing hreflang, an `x-default`, and reciprocal pairs.
+
+```js
+postAudit({
+  failOn: 'errors',
+  rules: {
+    filters: { exclude: ['404.html'] },
+    canonical: { self_reference: true },
+    html_basics: { meta_description_required: true },
+    sitemap: { require: true, canonical_must_be_in_sitemap: true },
     hreflang: {
       check_hreflang: true,
       require_x_default: true,
@@ -124,17 +142,52 @@ postAudit({
 })
 ```
 
-### Blog (MDX + Content Collections)
+### Accessibility-focused
 
-Same as above, but the blog listing page (`blog/index.html`) is excluded — it aggregates all posts and intentionally has no per-post canonical.
+Full a11y ruleset with skip-link enforcement. Useful for public-sector or WCAG-compliance projects.
 
 ```js
 postAudit({
   failOn: 'errors',
-  hints: { sourceFiles: true },
   rules: {
-    filters: { exclude: ['blog/index.html', '404.html'] },
-    // … same rules as starter
+    filters: { exclude: ['404.html'] },
+    headings: { require_h1: true, single_h1: true, no_skip: true },
+    a11y: {
+      img_alt_required: true,
+      a_accessible_name_required: true,
+      button_name_required: true,
+      label_for_required: true,
+      warn_generic_link_text: true,
+      aria_hidden_focusable_check: true,
+      require_skip_link: true,
+    },
+    links: { check_fragments: true },
+    html_basics: { lang_attr_required: true },
+  },
+})
+```
+
+### Strict production gate
+
+Everything on, build fails on any error. Suitable as the final gate in a CI pipeline after the site is fully tuned.
+
+```js
+postAudit({
+  preset: 'strict',
+  failOn: 'errors',
+  maxWarnings: 0,
+  hints: { sourceFiles: true },
+  reports: {
+    json: 'audit-report.json',
+    sarif: 'audit.sarif',
+  },
+  rules: {
+    filters: { exclude: ['404.html'] },
+    external_links: { enabled: true, fail_on_broken: true },
+    assets: { check_broken_assets: true, check_image_dimensions: true },
+    privacy_security: { enabled: true },
+    render_blocking: { enabled: true },
+    structured_data_graph: { enabled: true },
   },
 })
 ```
