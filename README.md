@@ -492,18 +492,31 @@ rules: {
 
 ## Output
 
-Rich diagnostic output with colored severity markers, location pointers, and actionable help text:
+Rich diagnostic output with colored severity markers, location pointers, and Astro-specific help text. The help text references Astro idioms (`BaseHead`, `astro:assets`, Content Collections, `Astro.site`) so fixes are actionable in context:
 
 ```
   ──▶ blog/post/index.html
   × error[canonical/missing] Missing canonical tag
     ╰─▶ head
-    help: Add <link rel="canonical" href="..."> to <head>
+    help: Set `site` in astro.config.mjs and render
+          <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
+          in your BaseHead component
   ⚠ warning[a11y/img-alt] <img> missing alt attribute
     ╰─▶ img[src='/photo.jpg']
-    help: Add an alt attribute describing the image
+    help: Add an `alt` prop to <Image>/<Picture> or the <img> tag.
+          Use alt="" only for decorative images.
 
   × 1 error, 1 warning (12 files checked)
+```
+
+When the result set is large (more than 20 findings), the report prepends a Top issues summary so you get an at-a-glance view before the per-file detail:
+
+```
+  Top issues
+       8×  html/meta-description-missing
+       3×  canonical/missing
+       2×  a11y/img-alt
+       1×  links/broken-internal
 ```
 
 ### Report files
