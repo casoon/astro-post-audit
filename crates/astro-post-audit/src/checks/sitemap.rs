@@ -31,7 +31,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 file: "sitemap.xml".into(),
                 selector: String::new(),
                 message: "sitemap.xml not found in dist directory".into(),
-                help: "Configure Astro to generate a sitemap (e.g., @astrojs/sitemap)".into(),
+                help: "Add a sitemap integration to astro.config.mjs (e.g. `@casoon/astro-sitemap` or `@astrojs/sitemap`) and ensure `site` is set".into(),
                 suggestion: None,
                 source_hint: None,
                 confidence: None,

@@ -50,7 +50,7 @@ fn check_canonical(
             file: page.rel_path.clone(),
             selector: "head".into(),
             message: "Missing canonical tag".into(),
-            help: "Add <link rel=\"canonical\" href=\"...\"> to <head>".into(),
+            help: "Set `site` in astro.config.mjs and render <link rel=\"canonical\" href={new URL(Astro.url.pathname, Astro.site)} /> in your BaseHead component".into(),
             suggestion: Some("<link rel=\"canonical\" href=\"https://...\">".into()),
             source_hint: None,
             confidence: None,

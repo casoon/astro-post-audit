@@ -144,7 +144,7 @@ fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                                     "Broken internal link '{}' -> '{}' (not found in dist)",
                                     href, normalized
                                 ),
-                                help: "Fix the href to point to an existing page".into(),
+                                help: "Verify the route in `src/pages/` or your Content Collection slug. If the target was renamed, update the href.".into(),
                                 suggestion: None,
                                 source_hint: None,
                                 confidence: None,

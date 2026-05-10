@@ -102,6 +102,13 @@ impl FromStr for Format {
     }
 }
 
+/// When the total finding count exceeds this threshold, prepend a
+/// "Top issues" summary to the text output so users get orientation first.
+const TOP_ISSUES_THRESHOLD: usize = 20;
+
+/// Number of top-frequency rule IDs to show in the Top issues summary.
+const TOP_ISSUES_LIMIT: usize = 5;
+
 pub struct Reporter {
     format: Format,
 }
@@ -137,6 +144,33 @@ impl Reporter {
         }
     }
 
+    fn print_top_issues(&self, findings: &[Finding]) {
+        let mut counts: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+        for f in findings {
+            *counts.entry(f.rule_id.as_str()).or_insert(0) += 1;
+        }
+        let mut sorted: Vec<(&str, usize)> = counts.into_iter().collect();
+        sorted.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+
+        println!();
+        println!("  {}", "Top issues".bold());
+        for (rule_id, count) in sorted.iter().take(TOP_ISSUES_LIMIT) {
+            println!("    {:>4}×  {}", count, rule_id.dimmed());
+        }
+        if sorted.len() > TOP_ISSUES_LIMIT {
+            println!(
+                "    {} {} more rule{}",
+                "…".dimmed(),
+                sorted.len() - TOP_ISSUES_LIMIT,
+                if sorted.len() - TOP_ISSUES_LIMIT == 1 {
+                    ""
+                } else {
+                    "s"
+                }
+            );
+        }
+    }
+
     fn print_text(&self, findings: &[Finding], summary: &Summary) -> Result<()> {
         if findings.is_empty() {
             println!(
@@ -146,6 +180,12 @@ impl Reporter {
             );
             println!();
             return Ok(());
+        }
+
+        // When the result set is large, print a Top issues summary first
+        // so users get an at-a-glance orientation before the per-file dump.
+        if findings.len() > TOP_ISSUES_THRESHOLD {
+            self.print_top_issues(findings);
         }
 
         // Group findings by file

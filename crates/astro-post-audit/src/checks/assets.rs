@@ -123,8 +123,7 @@ fn check_broken_assets(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                                 "Image missing width/height attributes: src='{}'",
                                 src
                             ),
-                            help: "Add explicit width and height to prevent layout shift (CLS)"
-                                .into(),
+                            help: "Use <Image>/<Picture> from `astro:assets` (sets width/height automatically) or add explicit width and height attributes to prevent layout shift (CLS)".into(),
                             suggestion: None,
                             source_hint: None,
                             confidence: None,
@@ -241,10 +240,14 @@ fn check_hashed_filenames(index: &SiteIndex, _config: &Config) -> Vec<Finding> {
 }
 
 /// Check if a filename contains a hash segment (8+ alphanumeric chars) before the extension.
-/// Matches patterns like: `main.a1b2c3d4.js`, `style-DfQ4EE2a.css`, `chunk.abc12345.mjs`
+/// Matches patterns like: `main.a1b2c3d4.js`, `style-DfQ4EE2a.css`, `chunk.abc12345.mjs`.
+/// Astro emits hashed bundles under `/_astro/` — recognize that prefix as already hashed.
 fn has_hash_in_filename(path: &str) -> bool {
     let clean = path.split('?').next().unwrap_or(path);
     let clean = clean.split('#').next().unwrap_or(clean);
+    if clean.contains("/_astro/") {
+        return true;
+    }
     let filename = clean.rsplit('/').next().unwrap_or(clean);
 
     // Split by '.' and check if any segment (except the last/extension) looks like a hash
@@ -302,8 +305,7 @@ fn check_asset_sizes(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                             file: rel,
                             selector: String::new(),
                             message: format!("Image is {}KB (max: {}KB)", size_kb, max),
-                            help: "Optimize/compress the image or use a more efficient format"
-                                .into(),
+                            help: "Use <Image> or <Picture> from `astro:assets` for automatic compression and modern formats (AVIF/WebP)".into(),
                             suggestion: None,
                             source_hint: None,
                             confidence: None,

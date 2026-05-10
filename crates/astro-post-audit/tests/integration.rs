@@ -1236,6 +1236,34 @@ fn text_output_with_errors() {
     );
 }
 
+#[test]
+fn text_output_includes_top_issues_when_many_findings() {
+    // Generate enough empty pages to exceed the 20-finding threshold
+    // and trigger the "Top issues" summary block.
+    let dir = TempDir::new().unwrap();
+    for i in 0..15 {
+        let sub = dir.path().join(format!("p{}", i));
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(sub.join("index.html"), "").unwrap();
+    }
+    let (stdout, _, _) = run_audit(dir.path(), "{}");
+    assert!(
+        stdout.contains("Top issues"),
+        "Should include Top issues summary when finding count exceeds threshold"
+    );
+}
+
+#[test]
+fn text_output_skips_top_issues_when_few_findings() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("index.html"), "").unwrap();
+    let (stdout, _, _) = run_audit(dir.path(), "{}");
+    assert!(
+        !stdout.contains("Top issues"),
+        "Should not include Top issues summary for small result sets"
+    );
+}
+
 // ==========================================================================
 // JSON snapshot test: verify structure of findings
 // ==========================================================================
@@ -1343,6 +1371,46 @@ fn assets_hashed_filename_no_warning() {
             .iter()
             .any(|f| f["rule_id"] == "assets/unhashed-filename"),
         "Hashed filenames should not trigger warning"
+    );
+}
+
+#[test]
+fn assets_astro_directory_treated_as_hashed() {
+    // Even when the filename itself looks unhashed, files under /_astro/
+    // are Astro's hashed bundle output and should not be flagged.
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Test</title>
+  <link rel="canonical" href="https://example.com/">
+  <link rel="stylesheet" href="/_astro/main.css">
+</head>
+<body>
+  <h1>Test</h1>
+  <script src="/_astro/main.js"></script>
+</body>
+</html>"#,
+    )
+    .unwrap();
+    fs::create_dir_all(dir.path().join("_astro")).unwrap();
+    fs::write(dir.path().join("_astro/main.css"), "body {}").unwrap();
+    fs::write(dir.path().join("_astro/main.js"), "console.log('hi')").unwrap();
+
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"assets":{"require_hashed_filenames":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "assets/unhashed-filename"),
+        "Assets under /_astro/ should be treated as hashed"
     );
 }
 

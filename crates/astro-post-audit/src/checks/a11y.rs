@@ -97,7 +97,7 @@ fn check_img_alt(
                 file: page.rel_path.clone(),
                 selector: format!("img[src='{}']", src),
                 message: format!("Image missing alt attribute: src='{}'", src),
-                help: "Add an alt attribute describing the image, or use alt=\"\" for decorative images".into(),
+                help: "Add an `alt` prop to <Image>/<Picture> or the <img> tag. Use alt=\"\" only for decorative images.".into(),
                 suggestion: Some("alt=\"...\"".into()),
                 source_hint: None,
                 confidence: None,
