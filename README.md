@@ -165,6 +165,32 @@ postAudit({
 })
 ```
 
+### Environment-based gate (dev / staging / prod)
+
+Use plain JavaScript in `astro.config.mjs` — no profile system needed. The `goLive` option automatically uses Astro's `site` as the expected production origin so you don't have to repeat the domain.
+
+```js
+const isProd = process.env.DEPLOY_CONTEXT === 'production'
+
+postAudit({
+  preset: isProd ? 'production' : 'relaxed',
+  failOn: isProd ? 'errors' : 'never',
+  maxWarnings: isProd ? 0 : undefined,
+  goLive: {
+    enabled: isProd,
+    forbiddenDomains: ['staging.example.com', 'localhost'],
+  },
+})
+```
+
+When `goLive.enabled` is `true`, the integration verifies that the expected production origin matches:
+1. `goLive.expectedSite` — only needed when the go-live target differs from Astro's `site` config
+2. `Astro config.site` — used automatically otherwise
+
+If neither is set and `goLive.enabled` is `true`, the audit fails with a config error.
+
+Environment selection always belongs in `astro.config.mjs` via normal JavaScript — the plugin does not have a built-in profile system. If you find yourself duplicating a lot of config across environments, a profile system may be worth revisiting in a future release.
+
 ## Production rollout
 
 The new dist-only audits (`i18n_audit`, `crawl_budget`, `render_blocking`, `privacy_security`, `structured_data_graph`) are intentionally heuristic. They are useful in production, but best rolled out in two steps.
@@ -264,6 +290,7 @@ postAudit({
 | `writeBaseline` | `boolean` | `false` | Write current findings as the new baseline and exit 0. Run once to adopt the plugin on a site with existing issues. |
 | `hints.sourceFiles` | `boolean` | `false` | Show likely source file paths (e.g. `src/content/blog/post.mdx`) next to `dist/` findings. Heuristic — may not always match. |
 | `groups` | `GroupsConfig` | — | Enable rule groups: `seo`, `a11y`, `links`, `performance`, `privacy`. `true` enables the group, `"warn"` enables but downgrades all findings to warnings. |
+| `goLive` | `GoLiveConfig` | — | Production readiness gate. See [Go-live gate](#go-live-gate). |
 | `pageOverview` | `boolean` | `false` | Print a page properties table (title, description, canonical, OG, H1, lang, JSON-LD) instead of running checks. |
 | `benchmark` | `boolean` | `false` | Print per-check timing breakdown. |
 | `disable` | `boolean` | `false` | Disable the integration entirely. |
@@ -294,6 +321,30 @@ postAudit({
   },
 })
 ```
+
+#### Go-live gate
+
+The `goLive` option adds a set of production-readiness checks that run only when `enabled: true`. These checks catch staging/dev leftovers before a build goes to production.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `goLive.enabled` | `boolean` | `false` | Enable go-live checks. |
+| `goLive.expectedSite` | `string` | auto | Expected production origin. Defaults to Astro's `site` config. Only set this when the go-live target differs from Astro `site`. |
+| `goLive.forbiddenDomains` | `string[]` | `[]` | Domains that must not appear in canonical URLs, sitemaps, OG tags, or absolute links. |
+
+**What it checks (rule IDs prefixed with `golive/`):**
+
+| Rule ID | Description |
+|---------|-------------|
+| `golive/noindex` | Page has a `noindex` robots directive |
+| `golive/canonical-origin` | Canonical URL uses the wrong origin |
+| `golive/og-origin` | `og:url` or `og:image` uses the wrong origin |
+| `golive/sitemap-origin` | Sitemap entry uses the wrong origin |
+| `golive/forbidden-domain` | Absolute link, script, canonical, or sitemap entry contains a forbidden domain |
+| `golive/robots-blocked` | `robots.txt` globally blocks crawlers with `Disallow: /` |
+| `golive/config-missing-site` | `goLive.enabled` is `true` but no expected site could be resolved |
+
+All go-live findings are errors (exit code 1). They cannot be downgraded via `severity` overrides — they are explicit production gates.
 
 ### Full rules reference
 

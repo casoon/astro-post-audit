@@ -1,0 +1,151 @@
+{
+  "preset": "standard",
+  "strict": true,
+  "max_errors": 50,
+  "max_warnings": 10,
+  "page_overview": false,
+  "format": "json",
+  "benchmark": true,
+  "project_root": "/tmp/project",
+  "baseline": "/tmp/baseline.json",
+  "write_baseline": false,
+  "site": {
+    "base_url": "https://example.com"
+  },
+  "filters": {
+    "include": ["pages/**"],
+    "exclude": ["404.html", "drafts/**"]
+  },
+  "url_normalization": {
+    "trailing_slash": "always",
+    "index_html": "forbid"
+  },
+  "canonical": {
+    "require": true,
+    "absolute": true,
+    "same_origin": true,
+    "self_reference": true,
+    "detect_clusters": true
+  },
+  "robots_meta": {
+    "allow_noindex": true,
+    "fail_if_noindex": false
+  },
+  "links": {
+    "check_internal": true,
+    "fail_on_broken": true,
+    "forbid_query_params_internal": true,
+    "check_fragments": true,
+    "detect_orphan_pages": true,
+    "check_mixed_content": true
+  },
+  "sitemap": {
+    "require": true,
+    "canonical_must_be_in_sitemap": true,
+    "forbid_noncanonical_in_sitemap": true,
+    "entries_must_exist_in_dist": true
+  },
+  "robots_txt": {
+    "require": true,
+    "require_sitemap_link": true
+  },
+  "html_basics": {
+    "lang_attr_required": true,
+    "title_required": true,
+    "meta_description_required": true,
+    "viewport_required": true,
+    "title_max_length": 60,
+    "meta_description_max_length": 160
+  },
+  "headings": {
+    "require_h1": true,
+    "single_h1": true,
+    "no_skip": true
+  },
+  "a11y": {
+    "img_alt_required": true,
+    "allow_decorative_images": true,
+    "a_accessible_name_required": true,
+    "button_name_required": true,
+    "label_for_required": true,
+    "warn_generic_link_text": true,
+    "aria_hidden_focusable_check": true,
+    "require_skip_link": true
+  },
+  "assets": {
+    "check_broken_assets": true,
+    "check_image_dimensions": true,
+    "max_image_size_kb": 500,
+    "max_js_size_kb": 200,
+    "max_css_size_kb": 100,
+    "require_hashed_filenames": true
+  },
+  "opengraph": {
+    "require_og_title": true,
+    "require_og_description": true,
+    "require_og_image": true,
+    "require_twitter_card": true
+  },
+  "structured_data": {
+    "check_json_ld": true,
+    "require_json_ld": true,
+    "detect_duplicate_types": true
+  },
+  "hreflang": {
+    "check_hreflang": true,
+    "require_x_default": true,
+    "require_self_reference": true,
+    "require_reciprocal": true
+  },
+  "security": {
+    "check_target_blank": true,
+    "check_mixed_content": true,
+    "warn_inline_scripts": true
+  },
+  "content_quality": {
+    "detect_duplicate_titles": true,
+    "detect_duplicate_descriptions": true,
+    "detect_duplicate_h1": true,
+    "detect_duplicate_pages": true
+  },
+  "external_links": {
+    "enabled": false,
+    "timeout_ms": 5000,
+    "max_concurrent": 5,
+    "fail_on_broken": true,
+    "allow_domains": ["trusted.example.com"],
+    "block_domains": ["ads.example.com"]
+  },
+  "i18n_audit": {
+    "enabled": true
+  },
+  "crawl_budget": {
+    "enabled": true
+  },
+  "render_blocking": {
+    "enabled": true
+  },
+  "privacy_security": {
+    "enabled": true
+  },
+  "structured_data_graph": {
+    "enabled": true
+  },
+  "severity": {
+    "html/title-too-long": "warning",
+    "a11y/img-alt": "error",
+    "links/orphan-page": "off"
+  },
+  "hints": {
+    "source_files": true
+  },
+  "extra_reports": [
+    { "format": "markdown", "path": "/tmp/report.md" },
+    { "format": "sarif", "path": "/tmp/report.sarif" }
+  ],
+  "go_live": {
+    "enabled": true,
+    "expected_site": "https://www.example.com",
+    "forbidden_domains": ["staging.example.com", "localhost"]
+  }
+}

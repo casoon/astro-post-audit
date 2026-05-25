@@ -160,6 +160,7 @@ export default function postAudit(options = {}, deps = defaultDeps) {
     let siteUrl;
     let rootDir;
     let astroTrailingSlash;
+    let astroOutput;
     return {
         name: "astro-post-audit",
         hooks: {
@@ -170,6 +171,7 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                 if (config.trailingSlash) {
                     astroTrailingSlash = config.trailingSlash;
                 }
+                astroOutput = config.output;
             },
             "astro:build:done": ({ dir, logger }) => {
                 if (options.disable ||
@@ -215,7 +217,18 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                     logger.error(msg);
                     return;
                 }
-                const distPath = fileURLToPath(dir);
+                let distPath = fileURLToPath(dir);
+                // For SSR/hybrid builds, static HTML lives under dist/client/ (adapter convention)
+                if (astroOutput === "server" || astroOutput === "hybrid") {
+                    const clientPath = join(distPath, "client");
+                    if (deps.existsSync(clientPath)) {
+                        distPath = clientPath;
+                        logger.info("SSR/hybrid build detected: auditing static output in dist/client/");
+                    }
+                    else {
+                        logger.info("SSR/hybrid build detected: no dist/client/ found, auditing dist/ directly.");
+                    }
+                }
                 const args = [distPath, "--config-stdin"];
                 // Info: sitemap checks active but no sitemap.xml in dist
                 const sitemapChecksActive = resolvedRules.sitemap?.canonical_must_be_in_sitemap !== false ||
@@ -265,6 +278,17 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                     stdinConfig.max_errors = options.maxErrors;
                 if (options.pageOverview !== undefined)
                     stdinConfig.page_overview = options.pageOverview;
+                if (options.goLive) {
+                    stdinConfig.go_live = {
+                        enabled: options.goLive.enabled ?? false,
+                        ...(options.goLive.expectedSite
+                            ? { expected_site: options.goLive.expectedSite }
+                            : effectiveSite
+                                ? { expected_site: effectiveSite }
+                                : {}),
+                        forbidden_domains: options.goLive.forbiddenDomains ?? [],
+                    };
+                }
                 const root = rootDir ?? process.cwd();
                 const outputPath = options.reports?.json
                     ? resolve(root, options.reports.json)
@@ -281,55 +305,15 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                 const outputSarifPath = options.reports?.sarif
                     ? resolve(root, options.reports.sarif)
                     : undefined;
+                // Pass extra report formats to the binary so a single run produces all outputs
+                const extraReports = [];
+                if (outputMarkdownPath)
+                    extraReports.push({ format: "markdown", path: outputMarkdownPath });
+                if (outputSarifPath)
+                    extraReports.push({ format: "sarif", path: outputSarifPath });
+                if (extraReports.length > 0)
+                    stdinConfig.extra_reports = extraReports;
                 const stdinInput = JSON.stringify(stdinConfig);
-                // Run Markdown report if requested (separate invocation, captures stdout)
-                if (outputMarkdownPath) {
-                    const mdConfig = { ...stdinConfig, format: "markdown" };
-                    try {
-                        const mdResult = deps.execFileSync(binaryPath, args, {
-                            stdio: ["pipe", "pipe", "inherit"],
-                            input: JSON.stringify(mdConfig),
-                            encoding: "utf-8",
-                        });
-                        if (mdResult) {
-                            deps.writeFileSync(outputMarkdownPath, mdResult);
-                            logger.info(`Markdown report written to ${outputMarkdownPath}`);
-                        }
-                    }
-                    catch (mdErr) {
-                        if (mdErr &&
-                            typeof mdErr === "object" &&
-                            "stdout" in mdErr &&
-                            mdErr.stdout) {
-                            deps.writeFileSync(outputMarkdownPath, mdErr.stdout);
-                            logger.info(`Markdown report written to ${outputMarkdownPath}`);
-                        }
-                    }
-                }
-                // Run SARIF report if requested (separate invocation, captures stdout)
-                if (outputSarifPath) {
-                    const sarifConfig = { ...stdinConfig, format: "sarif" };
-                    try {
-                        const sarifResult = deps.execFileSync(binaryPath, args, {
-                            stdio: ["pipe", "pipe", "inherit"],
-                            input: JSON.stringify(sarifConfig),
-                            encoding: "utf-8",
-                        });
-                        if (sarifResult) {
-                            deps.writeFileSync(outputSarifPath, sarifResult);
-                            logger.info(`SARIF report written to ${outputSarifPath}`);
-                        }
-                    }
-                    catch (sarifErr) {
-                        if (sarifErr &&
-                            typeof sarifErr === "object" &&
-                            "stdout" in sarifErr &&
-                            sarifErr.stdout) {
-                            deps.writeFileSync(outputSarifPath, sarifErr.stdout);
-                            logger.info(`SARIF report written to ${outputSarifPath}`);
-                        }
-                    }
-                }
                 logger.info("Running post-build audit...");
                 const captureOutput = !!outputPath;
                 try {
@@ -342,6 +326,9 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                         deps.writeFileSync(outputPath, result);
                         logger.info(`Report written to ${outputPath}`);
                         logJsonSummary(result, logger);
+                    }
+                    for (const r of extraReports) {
+                        logger.info(`${r.format.charAt(0).toUpperCase() + r.format.slice(1)} report written to ${r.path}`);
                     }
                     logger.info("All checks passed!");
                 }
@@ -361,6 +348,12 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                             deps.writeFileSync(outputPath, stdoutStr);
                             logger.info(`Report written to ${outputPath}`);
                             logJsonSummary(stdoutStr, logger);
+                        }
+                    }
+                    // extra_reports are written by the binary directly; log them on any non-crash exit
+                    if (exitCode === 1) {
+                        for (const r of extraReports) {
+                            logger.info(`${r.format.charAt(0).toUpperCase() + r.format.slice(1)} report written to ${r.path}`);
                         }
                     }
                     if (exitCode === 1) {

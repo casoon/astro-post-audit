@@ -254,6 +254,17 @@ export interface ReportsConfig {
     /** Write a SARIF 2.1.0 report to this file path (relative to project root). For use with GitHub Code Scanning. */
     sarif?: string;
 }
+export interface GoLiveConfig {
+    /** Enable go-live production gate checks. @default false */
+    enabled?: boolean;
+    /**
+     * Expected production origin. Auto-detected from Astro's `site` config if not set.
+     * Only set this when the go-live target intentionally differs from Astro `site`.
+     */
+    expectedSite?: string;
+    /** Domains that must not appear in canonical URLs, sitemaps, OG tags, or absolute links. */
+    forbiddenDomains?: string[];
+}
 export interface PostAuditOptions {
     /** Inline rules config — all check settings go here. */
     rules?: RulesConfig;
@@ -307,6 +318,13 @@ export interface PostAuditOptions {
     maxWarnings?: number;
     /** Shorthand rule groups. `true` enables the group, `"warn"` enables but downgrades all findings to warnings. */
     groups?: GroupsConfig;
+    /**
+     * Production readiness gate. Catches staging/dev leftovers before a build goes live.
+     * Use `process.env.DEPLOY_CONTEXT === "production"` to enable only in production.
+     * @example
+     * goLive: { enabled: process.env.DEPLOY_CONTEXT === "production", forbiddenDomains: ["staging.example.com"] }
+     */
+    goLive?: GoLiveConfig;
 }
 interface RuntimeDeps {
     execFileSync: typeof execFileSync;

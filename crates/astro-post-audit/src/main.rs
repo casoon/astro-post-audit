@@ -103,103 +103,63 @@ fn run() -> Result<i32> {
     let mut error_count: usize = 0;
     let mut check_timings: Vec<report::CheckTiming> = Vec::new();
 
-    // Core checks (always on by default)
-    macro_rules! run_check {
-        ($name:expr, $check:expr) => {
-            if !max_errors.is_some_and(|m| error_count >= m) {
-                let t = Instant::now();
-                let mut new_findings = $check;
-                if !config.severity.overrides.is_empty() {
-                    use config::SeverityLevel;
-                    new_findings.retain_mut(|f| {
-                        if let Some(override_level) = config.severity.overrides.get(&f.rule_id) {
-                            match override_level {
-                                SeverityLevel::Off => return false,
-                                SeverityLevel::Error => f.level = report::Level::Error,
-                                SeverityLevel::Warning => f.level = report::Level::Warning,
-                                SeverityLevel::Info => f.level = report::Level::Info,
-                            }
-                        }
-                        true
-                    });
-                }
-                if bench {
-                    check_timings.push(report::CheckTiming {
-                        name: $name.to_string(),
-                        duration_ms: t.elapsed().as_millis(),
-                    });
-                }
-                error_count += new_findings
-                    .iter()
-                    .filter(|f| f.level == report::Level::Error)
-                    .count();
-                findings.extend(new_findings);
-            }
-        };
-    }
+    type CheckFn = fn(&SiteIndex, &Config) -> Vec<Finding>;
+    let registry: &[(&str, CheckFn)] = &[
+        ("seo", checks::seo::check_all),
+        ("links", checks::links::check_all),
+        ("a11y", checks::a11y::check_all),
+        ("html_basics", checks::html_basics::check_all),
+        ("headings", checks::headings::check_all),
+        ("sitemap", checks::sitemap::check_all),
+        ("robots_txt", checks::robots_txt::check_all),
+        ("assets", checks::assets::check_all),
+        ("opengraph", checks::opengraph::check_all),
+        ("structured_data", checks::structured_data::check_all),
+        ("hreflang", checks::hreflang::check_all),
+        ("security", checks::security::check_all),
+        ("content_quality", checks::content_quality::check_all),
+        ("i18n_audit", checks::i18n_audit::check_all),
+        ("crawl_budget", checks::crawl_budget::check_all),
+        ("render_blocking", checks::render_blocking::check_all),
+        ("privacy_security", checks::privacy_security::check_all),
+        ("structured_data_graph", checks::structured_data_graph::check_all),
+        ("golive", checks::golive::check_all),
+        ("external_links", checks::external_links::check_all),
+    ];
 
-    run_check!("seo", checks::seo::check_all(&site_index, &config));
-    run_check!("links", checks::links::check_all(&site_index, &config));
-    run_check!("a11y", checks::a11y::check_all(&site_index, &config));
-    run_check!(
-        "html_basics",
-        checks::html_basics::check_all(&site_index, &config)
-    );
-    run_check!(
-        "headings",
-        checks::headings::check_all(&site_index, &config)
-    );
-    run_check!("sitemap", checks::sitemap::check_all(&site_index, &config));
-    run_check!(
-        "robots_txt",
-        checks::robots_txt::check_all(&site_index, &config)
-    );
-    run_check!("assets", checks::assets::check_all(&site_index, &config));
-    run_check!(
-        "opengraph",
-        checks::opengraph::check_all(&site_index, &config)
-    );
-    run_check!(
-        "structured_data",
-        checks::structured_data::check_all(&site_index, &config)
-    );
-    run_check!(
-        "hreflang",
-        checks::hreflang::check_all(&site_index, &config)
-    );
-    run_check!(
-        "security",
-        checks::security::check_all(&site_index, &config)
-    );
-    run_check!(
-        "content_quality",
-        checks::content_quality::check_all(&site_index, &config)
-    );
-    run_check!(
-        "i18n_audit",
-        checks::i18n_audit::check_all(&site_index, &config)
-    );
-    run_check!(
-        "crawl_budget",
-        checks::crawl_budget::check_all(&site_index, &config)
-    );
-    run_check!(
-        "render_blocking",
-        checks::render_blocking::check_all(&site_index, &config)
-    );
-    run_check!(
-        "privacy_security",
-        checks::privacy_security::check_all(&site_index, &config)
-    );
-    run_check!(
-        "structured_data_graph",
-        checks::structured_data_graph::check_all(&site_index, &config)
-    );
-    run_check!(
-        "external_links",
-        checks::external_links::check_all(&site_index, &config)
-    );
-    let _ = error_count; // used by run_check! macro for early-stop
+    for &(name, check_fn) in registry {
+        if max_errors.is_some_and(|m| error_count >= m) {
+            break;
+        }
+        let t = Instant::now();
+        let mut new_findings = check_fn(&site_index, &config);
+        if !config.severity.overrides.is_empty() {
+            use config::SeverityLevel;
+            new_findings.retain_mut(|f| {
+                if let Some(override_level) = config.severity.overrides.get(&f.rule_id) {
+                    match override_level {
+                        SeverityLevel::Off => return false,
+                        SeverityLevel::Error => f.level = report::Level::Error,
+                        SeverityLevel::Warning => f.level = report::Level::Warning,
+                        SeverityLevel::Info => f.level = report::Level::Info,
+                    }
+                }
+                true
+            });
+        }
+        if bench {
+            check_timings.push(report::CheckTiming {
+                name: name.to_string(),
+                duration_ms: t.elapsed().as_millis(),
+            });
+        }
+        error_count += new_findings
+            .iter()
+            .filter(|f| f.level == report::Level::Error)
+            .count();
+        findings.extend(new_findings);
+    }
+    let _ = error_count;
 
     // Populate source-file hints when enabled
     if config.hints.source_files {
@@ -277,6 +237,15 @@ fn run() -> Result<i32> {
 
     let reporter = Reporter::new(format);
     reporter.print(&findings, &summary, benchmark_data.as_ref())?;
+
+    // Write extra report files (all formats from a single audit run)
+    for extra in &config.extra_reports {
+        let fmt = extra.format.parse::<report::Format>()
+            .map_err(|e| anyhow::anyhow!("extra_reports: {e}"))?;
+        let extra_reporter = Reporter::new(fmt);
+        let content = extra_reporter.render_to_string(&findings, &summary, benchmark_data.as_ref())?;
+        std::fs::write(&extra.path, content)?;
+    }
 
     // Determine exit code
     if baseline_written {

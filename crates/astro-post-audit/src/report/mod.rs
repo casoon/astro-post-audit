@@ -144,6 +144,32 @@ impl Reporter {
         }
     }
 
+    pub fn render_to_string(
+        &self,
+        findings: &[Finding],
+        summary: &Summary,
+        benchmark: Option<&BenchmarkData>,
+    ) -> Result<String> {
+        match self.format {
+            Format::Json => {
+                #[derive(Serialize)]
+                struct Report<'a> {
+                    findings: &'a [Finding],
+                    summary: &'a Summary,
+                    #[serde(skip_serializing_if = "Option::is_none")]
+                    benchmark: Option<&'a BenchmarkData>,
+                }
+                let report = Report { findings, summary, benchmark };
+                Ok(serde_json::to_string_pretty(&report)?)
+            }
+            Format::Markdown => Ok(self.render_markdown(findings, summary)),
+            Format::Sarif => self.render_sarif(findings),
+            Format::Text => Err(anyhow::anyhow!(
+                "text format cannot be rendered to a string; use print() for stdout output"
+            )),
+        }
+    }
+
     fn print_top_issues(&self, findings: &[Finding]) {
         let mut counts: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
         for f in findings {

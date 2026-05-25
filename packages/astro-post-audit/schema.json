@@ -2,6 +2,28 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "additionalProperties": false,
     "definitions": {
+        "GoLiveConfig": {
+            "additionalProperties": false,
+            "properties": {
+                "enabled": {
+                    "default": false,
+                    "description": "Enable go-live production gate checks.",
+                    "type": "boolean"
+                },
+                "expectedSite": {
+                    "description": "Expected production origin. Auto-detected from Astro's `site` config if not set.\nOnly set this when the go-live target intentionally differs from Astro `site`.",
+                    "type": "string"
+                },
+                "forbiddenDomains": {
+                    "description": "Domains that must not appear in canonical URLs, sitemaps, OG tags, or absolute links.",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                }
+            },
+            "type": "object"
+        },
         "GroupsConfig": {
             "additionalProperties": false,
             "properties": {
@@ -657,6 +679,10 @@
                 "warnings"
             ],
             "type": "string"
+        },
+        "goLive": {
+            "$ref": "#/definitions/GoLiveConfig",
+            "description": "Production readiness gate. Catches staging/dev leftovers before a build goes live.\nUse `process.env.DEPLOY_CONTEXT === \"production\"` to enable only in production."
         },
         "groups": {
             "$ref": "#/definitions/GroupsConfig",

@@ -2360,3 +2360,258 @@ fn json_suggestion_absent_for_broken_link() {
         "links/broken should not have a suggestion"
     );
 }
+
+// ==========================================================================
+// Go-live gate checks (#11)
+// ==========================================================================
+
+#[test]
+fn golive_disabled_no_findings() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (json, code) = run_audit_json(
+        dir.path(),
+        r#"{"go_live":{"enabled":false},"site":{"base_url":"https://example.com"}}"#,
+    );
+    let rule_ids: Vec<&str> = json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["rule_id"].as_str().unwrap())
+        .filter(|id| id.starts_with("golive/"))
+        .collect();
+    assert!(rule_ids.is_empty(), "go-live disabled should emit no golive findings");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn golive_enabled_no_site_emits_config_error() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (json, code) = run_audit_json(
+        dir.path(),
+        r#"{"go_live":{"enabled":true}}"#,
+    );
+    let rule_ids: Vec<&str> = json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["rule_id"].as_str().unwrap())
+        .collect();
+    assert!(
+        rule_ids.contains(&"golive/config-missing-site"),
+        "Should emit config-missing-site when no expected site, got: {:?}",
+        rule_ids
+    );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn golive_noindex_fails_when_enabled() {
+    let dir = TempDir::new().unwrap();
+    let html = r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Test</title>
+  <link rel="canonical" href="https://prod.example.com/">
+</head>
+<body><h1>Test</h1></body>
+</html>"#;
+    fs::write(dir.path().join("index.html"), html).unwrap();
+    let (json, code) = run_audit_json(
+        dir.path(),
+        r#"{"go_live":{"enabled":true},"site":{"base_url":"https://prod.example.com"}}"#,
+    );
+    let rule_ids: Vec<&str> = json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["rule_id"].as_str().unwrap())
+        .collect();
+    assert!(rule_ids.contains(&"golive/noindex"), "Should flag noindex pages");
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn golive_canonical_wrong_origin_fails() {
+    let dir = TempDir::new().unwrap();
+    let html = r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Test</title>
+  <link rel="canonical" href="https://staging.example.com/">
+</head>
+<body><h1>Test</h1></body>
+</html>"#;
+    fs::write(dir.path().join("index.html"), html).unwrap();
+    let (json, code) = run_audit_json(
+        dir.path(),
+        r#"{"go_live":{"enabled":true},"site":{"base_url":"https://prod.example.com"}}"#,
+    );
+    let rule_ids: Vec<&str> = json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["rule_id"].as_str().unwrap())
+        .collect();
+    assert!(
+        rule_ids.contains(&"golive/canonical-origin"),
+        "Should flag canonical pointing to staging origin, got: {:?}",
+        rule_ids
+    );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn golive_forbidden_domain_in_link_fails() {
+    let dir = TempDir::new().unwrap();
+    let html = r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Test</title>
+  <link rel="canonical" href="https://prod.example.com/">
+</head>
+<body>
+  <h1>Test</h1>
+  <a href="https://staging.example.com/page">staging link</a>
+</body>
+</html>"#;
+    fs::write(dir.path().join("index.html"), html).unwrap();
+    let (json, code) = run_audit_json(
+        dir.path(),
+        r#"{"go_live":{"enabled":true,"forbidden_domains":["staging.example.com"]},"site":{"base_url":"https://prod.example.com"}}"#,
+    );
+    let rule_ids: Vec<&str> = json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["rule_id"].as_str().unwrap())
+        .collect();
+    assert!(
+        rule_ids.contains(&"golive/forbidden-domain"),
+        "Should flag forbidden domain in link, got: {:?}",
+        rule_ids
+    );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn golive_robots_txt_global_disallow_fails() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    fs::write(
+        dir.path().join("robots.txt"),
+        "User-agent: *\nDisallow: /\n",
+    )
+    .unwrap();
+    let (json, code) = run_audit_json(
+        dir.path(),
+        r#"{"go_live":{"enabled":true},"site":{"base_url":"https://prod.example.com"}}"#,
+    );
+    let rule_ids: Vec<&str> = json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["rule_id"].as_str().unwrap())
+        .collect();
+    assert!(
+        rule_ids.contains(&"golive/robots-blocked"),
+        "Should flag robots.txt global disallow, got: {:?}",
+        rule_ids
+    );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn golive_robots_txt_partial_disallow_passes() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    fs::write(
+        dir.path().join("robots.txt"),
+        "User-agent: *\nDisallow: /admin/\n",
+    )
+    .unwrap();
+    let (json, _code) = run_audit_json(
+        dir.path(),
+        r#"{"go_live":{"enabled":true},"site":{"base_url":"https://prod.example.com"}}"#,
+    );
+    let golive_rules: Vec<&str> = json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["rule_id"].as_str().unwrap())
+        .filter(|id| *id == "golive/robots-blocked")
+        .collect();
+    assert!(
+        golive_rules.is_empty(),
+        "Partial disallow should not trigger robots-blocked"
+    );
+}
+
+// ==========================================================================
+// Config parity: TS ↔ Rust option surface (#15)
+// ==========================================================================
+
+#[test]
+fn config_parity_fixture_deserializes_cleanly() {
+    // Verifies that the full config JSON (matching the TypeScript API surface)
+    // round-trips through Rust deserialization without unknown-field errors.
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/config-parity.json");
+    let json = fs::read_to_string(&fixture)
+        .unwrap_or_else(|_| panic!("missing parity fixture: {}", fixture.display()));
+
+    // Deserialize without error
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    // Run with format=json to capture output; go_live.enabled=true will check
+    // origin and may find canonical/sitemap issues — we only care that it
+    // doesn't crash or produce a parse error (exit code 2).
+    let mut config: serde_json::Value = serde_json::from_str(&json).unwrap();
+    // Patch go_live.expected_site to match the canonical in write_valid_page
+    config["go_live"]["expected_site"] = serde_json::json!("https://example.com");
+    config["go_live"]["enabled"] = serde_json::json!(false);
+    config["format"] = serde_json::json!("json");
+    // Remove extra_reports paths that don't exist in the test environment
+    config["extra_reports"] = serde_json::json!([]);
+
+    let (_stdout, _stderr, code) = run_audit(dir.path(), &config.to_string());
+    assert_ne!(code, 2, "Config must parse without error (exit code 2 = parse/runtime error)");
+}
+
+#[test]
+fn config_parity_all_preset_names_valid() {
+    // Verifies that every preset name documented in the TypeScript API is accepted by Rust.
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    for preset in &["strict", "relaxed", "seo", "accessibility", "performance", "production", "standard"] {
+        let config = format!(r#"{{"preset":"{}","format":"json"}}"#, preset);
+        let (_stdout, _stderr, code) = run_audit(dir.path(), &config);
+        assert_ne!(code, 2, "Preset '{}' should be recognized by Rust config parser", preset);
+    }
+}
+
+#[test]
+fn config_parity_severity_level_names_valid() {
+    // Verifies that all severity level names from the TypeScript API parse in Rust.
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let config = r#"{
+        "format": "json",
+        "severity": {
+            "html/title-too-long": "error",
+            "a11y/img-alt": "warning",
+            "links/orphan-page": "info",
+            "canonical/missing": "off"
+        }
+    }"#;
+    let (_stdout, _stderr, code) = run_audit(dir.path(), config);
+    assert_ne!(code, 2, "All severity level names must be accepted");
+}

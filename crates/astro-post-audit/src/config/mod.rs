@@ -62,6 +62,9 @@ pub struct Config {
     pub baseline: Option<String>,
     /// Write the current findings to the baseline file and exit successfully.
     pub write_baseline: bool,
+    /// Additional report formats to write to disk in a single audit run.
+    pub extra_reports: Vec<ExtraReport>,
+    pub go_live: GoLiveConfig,
 }
 
 /// Custom severity overrides per rule ID.
@@ -294,6 +297,23 @@ pub struct StructuredDataGraphConfig {
 pub struct HintsConfig {
     /// Show heuristic source-file hints in output (e.g. "Likely source: src/content/blog/post.mdx").
     pub source_files: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct ExtraReport {
+    /// Output format: "json", "markdown", or "sarif"
+    pub format: String,
+    /// Absolute path to write the report to
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct GoLiveConfig {
+    pub enabled: bool,
+    pub expected_site: Option<String>,
+    pub forbidden_domains: Vec<String>,
 }
 
 // --- Defaults (only for structs with non-zero defaults) ---

@@ -3,6 +3,7 @@ pub mod assets;
 pub mod content_quality;
 pub mod crawl_budget;
 pub mod external_links;
+pub mod golive;
 pub mod headings;
 pub mod hreflang;
 pub mod html_basics;
