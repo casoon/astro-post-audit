@@ -224,5 +224,7 @@ fn has_author_or_publisher(json: &serde_json::Value) -> bool {
 }
 
 fn entity_has_author(entity: &serde_json::Value) -> bool {
-    entity.get("author").is_some() || entity.get("publisher").is_some() || entity.get("creator").is_some()
+    entity.get("author").is_some()
+        || entity.get("publisher").is_some()
+        || entity.get("creator").is_some()
 }

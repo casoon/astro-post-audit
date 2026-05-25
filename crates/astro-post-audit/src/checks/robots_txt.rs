@@ -70,10 +70,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     if config.robots_txt.check_disallow_all {
         for block in &blocks {
             let is_global = block.agents.iter().any(|a| a == "*");
-            let has_disallow_all = block
-                .disallows
-                .iter()
-                .any(|d| d == "/" || d.is_empty());
+            let has_disallow_all = block.disallows.iter().any(|d| d == "/" || d.is_empty());
             // Only flag if there's no Allow: / or Allow entries that override
             let has_allow_all = block.allows.iter().any(|a| a == "/");
 
@@ -84,7 +81,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     file: "robots.txt".into(),
                     selector: String::new(),
                     message: "robots.txt blocks all crawlers with 'Disallow: /'".into(),
-                    help: "Remove 'Disallow: /' for User-agent: * to allow search engine indexing".into(),
+                    help: "Remove 'Disallow: /' for User-agent: * to allow search engine indexing"
+                        .into(),
                     suggestion: None,
                     source_hint: None,
                     confidence: None,
@@ -97,10 +95,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         for bot in &["Googlebot", "Bingbot"] {
             for block in &blocks {
                 let is_bot = block.agents.iter().any(|a| a.eq_ignore_ascii_case(bot));
-                let has_disallow_all = block
-                    .disallows
-                    .iter()
-                    .any(|d| d == "/" || d.is_empty());
+                let has_disallow_all = block.disallows.iter().any(|d| d == "/" || d.is_empty());
                 let has_allow_all = block.allows.iter().any(|a| a == "/");
 
                 if is_bot && has_disallow_all && !has_allow_all {
@@ -109,11 +104,11 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         rule_id: "robots-txt/disallow-search-bot".into(),
                         file: "robots.txt".into(),
                         selector: String::new(),
-                        message: format!(
-                            "robots.txt blocks {} with 'Disallow: /'",
+                        message: format!("robots.txt blocks {} with 'Disallow: /'", bot),
+                        help: format!(
+                            "Remove 'Disallow: /' for {} to allow search engine indexing",
                             bot
                         ),
-                        help: format!("Remove 'Disallow: /' for {} to allow search engine indexing", bot),
                         suggestion: None,
                         source_hint: None,
                         confidence: None,
@@ -159,10 +154,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 let is_citation_bot = AI_CITATION_BOTS
                     .iter()
                     .any(|b| agent.eq_ignore_ascii_case(b));
-                let has_disallow = block
-                    .disallows
-                    .iter()
-                    .any(|d| d == "/" || d.is_empty());
+                let has_disallow = block.disallows.iter().any(|d| d == "/" || d.is_empty());
                 let has_allow = block.allows.iter().any(|a| a == "/");
 
                 if is_citation_bot && has_disallow && !has_allow {
@@ -281,4 +273,3 @@ fn parse_robots_blocks(content: &str) -> Vec<RobotsBlock> {
 
     blocks
 }
-

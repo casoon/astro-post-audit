@@ -330,7 +330,10 @@ fn check_property_completeness(
                     rule_id: "structured-data/article-missing-image".into(),
                     file: file.to_string(),
                     selector: selector.to_string(),
-                    message: format!("JSON-LD {} is missing recommended property 'image'", type_name),
+                    message: format!(
+                        "JSON-LD {} is missing recommended property 'image'",
+                        type_name
+                    ),
                     help: "Add an \"image\" property with an absolute URL for rich results".into(),
                     suggestion: None,
                     source_hint: None,
@@ -360,7 +363,10 @@ fn check_property_completeness(
                     rule_id: "structured-data/organization-missing-url".into(),
                     file: file.to_string(),
                     selector: selector.to_string(),
-                    message: format!("JSON-LD {} is missing recommended property 'url'", type_name),
+                    message: format!(
+                        "JSON-LD {} is missing recommended property 'url'",
+                        type_name
+                    ),
                     help: "Add a \"url\" property with the organization's website URL".into(),
                     suggestion: None,
                     source_hint: None,

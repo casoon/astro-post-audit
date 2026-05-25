@@ -23,7 +23,9 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 file: "astro.config.mjs".into(),
                 selector: "goLive".into(),
                 message: "go-live enabled but no expected site configured".into(),
-                help: "Set `site` in astro.config.mjs or `goLive.expectedSite` in postAudit() options".into(),
+                help:
+                    "Set `site` in astro.config.mjs or `goLive.expectedSite` in postAudit() options"
+                        .into(),
                 suggestion: None,
                 source_hint: None,
                 confidence: None,
@@ -238,7 +240,10 @@ fn check_forbidden_domains(
                 rule_id: "golive/forbidden-domain".into(),
                 file: page.rel_path.clone(),
                 selector: "link[rel='canonical']".into(),
-                message: format!("Canonical URL contains forbidden domain '{}': {}", domain, href),
+                message: format!(
+                    "Canonical URL contains forbidden domain '{}': {}",
+                    domain, href
+                ),
                 help: "Update canonical URLs to use the production domain".into(),
                 suggestion: None,
                 source_hint: None,
@@ -257,7 +262,12 @@ fn check_sitemap_origins(
     for url in &index.sitemap_urls {
         if let Ok(parsed) = Url::parse(url) {
             let actual_origin = match parsed.port() {
-                Some(p) => format!("{}://{}:{}", parsed.scheme(), parsed.host_str().unwrap_or(""), p),
+                Some(p) => format!(
+                    "{}://{}:{}",
+                    parsed.scheme(),
+                    parsed.host_str().unwrap_or(""),
+                    p
+                ),
                 None => format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or("")),
             };
             if actual_origin != expected_origin {
@@ -284,7 +294,10 @@ fn check_sitemap_origins(
                     rule_id: "golive/forbidden-domain".into(),
                     file: "sitemap.xml".into(),
                     selector: "<loc>".into(),
-                    message: format!("Sitemap entry contains forbidden domain '{}': {}", domain, url),
+                    message: format!(
+                        "Sitemap entry contains forbidden domain '{}': {}",
+                        domain, url
+                    ),
                     help: "Regenerate the sitemap with the production `site` URL".into(),
                     suggestion: None,
                     source_hint: None,

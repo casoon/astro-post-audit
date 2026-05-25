@@ -122,7 +122,10 @@ fn run() -> Result<i32> {
         ("crawl_budget", checks::crawl_budget::check_all),
         ("render_blocking", checks::render_blocking::check_all),
         ("privacy_security", checks::privacy_security::check_all),
-        ("structured_data_graph", checks::structured_data_graph::check_all),
+        (
+            "structured_data_graph",
+            checks::structured_data_graph::check_all,
+        ),
         ("golive", checks::golive::check_all),
         ("external_links", checks::external_links::check_all),
         ("images", checks::images::check_all),
@@ -243,10 +246,13 @@ fn run() -> Result<i32> {
 
     // Write extra report files (all formats from a single audit run)
     for extra in &config.extra_reports {
-        let fmt = extra.format.parse::<report::Format>()
+        let fmt = extra
+            .format
+            .parse::<report::Format>()
             .map_err(|e| anyhow::anyhow!("extra_reports: {e}"))?;
         let extra_reporter = Reporter::new(fmt);
-        let content = extra_reporter.render_to_string(&findings, &summary, benchmark_data.as_ref())?;
+        let content =
+            extra_reporter.render_to_string(&findings, &summary, benchmark_data.as_ref())?;
         std::fs::write(&extra.path, content)?;
     }
 

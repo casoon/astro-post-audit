@@ -5,6 +5,8 @@ edition = "2021"
 description = "Fast post-build auditor for Astro sites: SEO, links, and lightweight WCAG checks"
 license = "MIT"
 repository = "https://github.com/casoon/astro-post-audit"
+homepage = "https://auditmysite.casoon.dev"
+authors = ["Jörn Seidel <info@casoon.de>"]
 keywords = ["astro", "seo", "audit", "accessibility", "static-site"]
 categories = ["command-line-utilities", "web-programming"]
 

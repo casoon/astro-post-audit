@@ -5,12 +5,7 @@ use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::report::{Finding, Level};
 
-const VALID_TWITTER_CARD_VALUES: &[&str] = &[
-    "summary",
-    "summary_large_image",
-    "app",
-    "player",
-];
+const VALID_TWITTER_CARD_VALUES: &[&str] = &["summary", "summary_large_image", "app", "player"];
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     let og = &config.opengraph;

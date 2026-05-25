@@ -2380,7 +2380,10 @@ fn golive_disabled_no_findings() {
         .map(|f| f["rule_id"].as_str().unwrap())
         .filter(|id| id.starts_with("golive/"))
         .collect();
-    assert!(rule_ids.is_empty(), "go-live disabled should emit no golive findings");
+    assert!(
+        rule_ids.is_empty(),
+        "go-live disabled should emit no golive findings"
+    );
     assert_eq!(code, 0);
 }
 
@@ -2388,10 +2391,7 @@ fn golive_disabled_no_findings() {
 fn golive_enabled_no_site_emits_config_error() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
-    let (json, code) = run_audit_json(
-        dir.path(),
-        r#"{"go_live":{"enabled":true}}"#,
-    );
+    let (json, code) = run_audit_json(dir.path(), r#"{"go_live":{"enabled":true}}"#);
     let rule_ids: Vec<&str> = json["findings"]
         .as_array()
         .unwrap()
@@ -2431,7 +2431,10 @@ fn golive_noindex_fails_when_enabled() {
         .iter()
         .map(|f| f["rule_id"].as_str().unwrap())
         .collect();
-    assert!(rule_ids.contains(&"golive/noindex"), "Should flag noindex pages");
+    assert!(
+        rule_ids.contains(&"golive/noindex"),
+        "Should flag noindex pages"
+    );
     assert_eq!(code, 1);
 }
 
@@ -2563,8 +2566,8 @@ fn golive_robots_txt_partial_disallow_passes() {
 fn config_parity_fixture_deserializes_cleanly() {
     // Verifies that the full config JSON (matching the TypeScript API surface)
     // round-trips through Rust deserialization without unknown-field errors.
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/config-parity.json");
+    let fixture =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/config-parity.json");
     let json = fs::read_to_string(&fixture)
         .unwrap_or_else(|_| panic!("missing parity fixture: {}", fixture.display()));
 
@@ -2583,7 +2586,10 @@ fn config_parity_fixture_deserializes_cleanly() {
     config["extra_reports"] = serde_json::json!([]);
 
     let (_stdout, _stderr, code) = run_audit(dir.path(), &config.to_string());
-    assert_ne!(code, 2, "Config must parse without error (exit code 2 = parse/runtime error)");
+    assert_ne!(
+        code, 2,
+        "Config must parse without error (exit code 2 = parse/runtime error)"
+    );
 }
 
 #[test]
@@ -2591,10 +2597,22 @@ fn config_parity_all_preset_names_valid() {
     // Verifies that every preset name documented in the TypeScript API is accepted by Rust.
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
-    for preset in &["strict", "relaxed", "seo", "accessibility", "performance", "production", "standard"] {
+    for preset in &[
+        "strict",
+        "relaxed",
+        "seo",
+        "accessibility",
+        "performance",
+        "production",
+        "standard",
+    ] {
         let config = format!(r#"{{"preset":"{}","format":"json"}}"#, preset);
         let (_stdout, _stderr, code) = run_audit(dir.path(), &config);
-        assert_ne!(code, 2, "Preset '{}' should be recognized by Rust config parser", preset);
+        assert_ne!(
+            code, 2,
+            "Preset '{}' should be recognized by Rust config parser",
+            preset
+        );
     }
 }
 
@@ -2630,7 +2648,9 @@ fn a11y_landmark_main_missing() {
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "a11y/landmark-main-missing"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "a11y/landmark-main-missing"),
         "Missing <main> should be reported"
     );
     assert_eq!(code, 1);
@@ -2646,7 +2666,9 @@ fn a11y_landmark_main_duplicate() {
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "a11y/landmark-main-duplicate"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "a11y/landmark-main-duplicate"),
         "Two <main> elements should be reported"
     );
     assert_eq!(code, 1);
@@ -2662,7 +2684,9 @@ fn a11y_landmark_nav_missing() {
     let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "a11y/landmark-nav-missing"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "a11y/landmark-nav-missing"),
         "Missing <nav> should be a warning"
     );
 }
@@ -2678,9 +2702,17 @@ fn a11y_landmark_all_present_no_landmark_errors() {
     let findings = json["findings"].as_array().unwrap();
     let landmark_errors: Vec<_> = findings
         .iter()
-        .filter(|f| f["rule_id"].as_str().unwrap_or("").starts_with("a11y/landmark-"))
+        .filter(|f| {
+            f["rule_id"]
+                .as_str()
+                .unwrap_or("")
+                .starts_with("a11y/landmark-")
+        })
         .collect();
-    assert!(landmark_errors.is_empty(), "Complete landmark structure should produce no landmark findings");
+    assert!(
+        landmark_errors.is_empty(),
+        "Complete landmark structure should produce no landmark findings"
+    );
 }
 
 // ==========================================================================
@@ -2713,7 +2745,9 @@ fn a11y_duplicate_id_aria_ref() {
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "a11y/duplicate-id-aria"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "a11y/duplicate-id-aria"),
         "Duplicate id referenced by ARIA should be reported as duplicate-id-aria"
     );
     assert_eq!(code, 1);
@@ -2729,7 +2763,10 @@ fn a11y_unique_ids_pass() {
     let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        !findings.iter().any(|f| f["rule_id"].as_str().unwrap_or("").starts_with("a11y/duplicate-id")),
+        !findings.iter().any(|f| f["rule_id"]
+            .as_str()
+            .unwrap_or("")
+            .starts_with("a11y/duplicate-id")),
         "Unique ids should produce no duplicate-id findings"
     );
 }
@@ -2748,7 +2785,9 @@ fn a11y_aria_role_invalid() {
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "a11y/aria-role-invalid"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "a11y/aria-role-invalid"),
         "Typo in role name should be reported"
     );
     assert_eq!(code, 1);
@@ -2764,7 +2803,9 @@ fn a11y_aria_role_abstract() {
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "a11y/aria-role-abstract"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "a11y/aria-role-abstract"),
         "Abstract role should be reported"
     );
     assert_eq!(code, 1);
@@ -2780,7 +2821,9 @@ fn a11y_aria_checkbox_missing_checked() {
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "a11y/aria-required-attr"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "a11y/aria-required-attr"),
         "role=checkbox without aria-checked should be reported"
     );
     assert_eq!(code, 1);
@@ -2796,7 +2839,10 @@ fn a11y_aria_valid_roles_pass() {
     let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        !findings.iter().any(|f| f["rule_id"].as_str().unwrap_or("").starts_with("a11y/aria-role")),
+        !findings.iter().any(|f| f["rule_id"]
+            .as_str()
+            .unwrap_or("")
+            .starts_with("a11y/aria-role")),
         "Valid ARIA roles should produce no role findings"
     );
 }
@@ -2812,10 +2858,15 @@ fn og_type_missing() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"opengraph":{"require_og_type":true}}"#);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"opengraph":{"require_og_type":true}}"#,
+    );
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "opengraph/type-missing"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "opengraph/type-missing"),
         "Missing og:type should be reported when required"
     );
 }
@@ -2827,10 +2878,15 @@ fn og_url_missing() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"opengraph":{"require_og_url":true}}"#);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"opengraph":{"require_og_url":true}}"#,
+    );
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "opengraph/url-missing"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "opengraph/url-missing"),
         "Missing og:url should be reported when required"
     );
 }
@@ -2845,7 +2901,9 @@ fn og_image_relative_url() {
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "opengraph/image-not-absolute"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "opengraph/image-not-absolute"),
         "Relative og:image should be reported as error"
     );
     assert_eq!(code, 1);
@@ -2861,7 +2919,9 @@ fn twitter_card_invalid_value() {
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "opengraph/twitter-card-invalid"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "opengraph/twitter-card-invalid"),
         "Invalid twitter:card value should be reported"
     );
     assert_eq!(code, 1);
@@ -2874,14 +2934,21 @@ fn og_type_present_pass() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"><meta property="og:type" content="website"><meta property="og:url" content="https://example.com/"><meta name="twitter:card" content="summary_large_image"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"opengraph":{"require_og_type":true,"require_og_url":true}}"#);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"opengraph":{"require_og_type":true,"require_og_url":true}}"#,
+    );
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        !findings.iter().any(|f| f["rule_id"] == "opengraph/type-missing"),
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "opengraph/type-missing"),
         "Present og:type should not be reported"
     );
     assert!(
-        !findings.iter().any(|f| f["rule_id"] == "opengraph/twitter-card-invalid"),
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "opengraph/twitter-card-invalid"),
         "Valid twitter:card should not be reported"
     );
 }
@@ -2897,10 +2964,15 @@ fn structured_data_article_no_author() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"><script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Test"}</script></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#,
+    );
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "structured-data/article-missing-author"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "structured-data/article-missing-author"),
         "Article without author should be reported"
     );
 }
@@ -2912,10 +2984,15 @@ fn structured_data_faqpage_no_answer() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"><script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What?"}]}</script></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
-    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#);
+    let (json, code) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#,
+    );
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "structured-data/faq-missing-answer"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "structured-data/faq-missing-answer"),
         "FAQPage without acceptedAnswer should be reported"
     );
     assert_eq!(code, 1);
@@ -2928,10 +3005,15 @@ fn structured_data_breadcrumb_no_position() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","name":"Home"}]}</script></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
-    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#);
+    let (json, code) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#,
+    );
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "structured-data/breadcrumb-missing-position"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "structured-data/breadcrumb-missing-position"),
         "BreadcrumbList item without position should be reported"
     );
     assert_eq!(code, 1);
@@ -2951,7 +3033,9 @@ fn image_missing_width_height() {
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "images/missing-dimensions"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "images/missing-dimensions"),
         "Image without width/height should be reported as error"
     );
     assert_eq!(code, 1);
@@ -2967,7 +3051,9 @@ fn image_missing_lazy_loading() {
     let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "images/missing-lazy"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "images/missing-lazy"),
         "Second image without loading=lazy should be warned"
     );
 }
@@ -2979,10 +3065,15 @@ fn image_format_hint_jpeg() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><img src="/photo.jpg" alt="Photo" width="400" height="300" loading="lazy"></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"images":{"format_hints":true}}"#);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"images":{"format_hints":true}}"#,
+    );
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "images/legacy-format"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "images/legacy-format"),
         "JPEG image should suggest WebP when format_hints is enabled"
     );
 }
@@ -2994,10 +3085,15 @@ fn image_complete_pass() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><img src="/hero.webp" alt="Hero" width="800" height="600" loading="eager" srcset="/hero-400.webp 400w, /hero.webp 800w"></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"images":{"format_hints":true}}"#);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"images":{"format_hints":true}}"#,
+    );
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        !findings.iter().any(|f| f["rule_id"].as_str().unwrap_or("").starts_with("images/")),
+        !findings
+            .iter()
+            .any(|f| f["rule_id"].as_str().unwrap_or("").starts_with("images/")),
         "Complete image markup should produce no image findings"
     );
 }
@@ -3013,11 +3109,14 @@ fn robots_global_disallow_all() {
     fs::write(
         dir.path().join("robots.txt"),
         "User-agent: *\nDisallow: /\n",
-    ).unwrap();
+    )
+    .unwrap();
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "robots-txt/disallow-all"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "robots-txt/disallow-all"),
         "Global Disallow: / should be reported as error"
     );
     assert_eq!(code, 1);
@@ -3030,11 +3129,17 @@ fn robots_ai_citation_bot_blocked() {
     fs::write(
         dir.path().join("robots.txt"),
         "User-agent: *\nAllow: /\n\nUser-agent: GPTBot\nDisallow: /\n",
-    ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"robots_txt":{"ai_bot_policy":true}}"#);
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"robots_txt":{"ai_bot_policy":true}}"#,
+    );
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "robots-txt/ai-citation-bot-blocked"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "robots-txt/ai-citation-bot-blocked"),
         "Blocked AI citation bot should be warned when ai_bot_policy is true"
     );
 }
@@ -3046,11 +3151,18 @@ fn robots_clean_pass() {
     fs::write(
         dir.path().join("robots.txt"),
         "User-agent: *\nAllow: /\nSitemap: https://example.com/sitemap.xml\n",
-    ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"robots_txt":{"require":true,"require_sitemap_link":true}}"#);
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"robots_txt":{"require":true,"require_sitemap_link":true}}"#,
+    );
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        !findings.iter().any(|f| f["rule_id"].as_str().unwrap_or("").starts_with("robots-txt/")),
+        !findings.iter().any(|f| f["rule_id"]
+            .as_str()
+            .unwrap_or("")
+            .starts_with("robots-txt/")),
         "Clean robots.txt should produce no findings"
     );
 }
@@ -3066,7 +3178,10 @@ fn ai_visibility_disabled_by_default() {
     let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        !findings.iter().any(|f| f["rule_id"].as_str().unwrap_or("").starts_with("ai-visibility/")),
+        !findings.iter().any(|f| f["rule_id"]
+            .as_str()
+            .unwrap_or("")
+            .starts_with("ai-visibility/")),
         "AI visibility checks should not run without aiVisibility:true"
     );
 }
@@ -3078,16 +3193,25 @@ fn ai_visibility_rich_page_pass() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test Article</title><link rel="canonical" href="https://example.com/"><meta property="og:title" content="Test Article"><meta property="og:description" content="A rich article with good AI visibility signals."><script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Test","author":{"@type":"Person","name":"Author"}}</script></head><body><header><nav><a href="/">Home</a></nav></header><main><article><h1>Test Article</h1><h2>Section 1</h2><p>This is a well structured article with enough content to satisfy AI visibility requirements. It has multiple paragraphs and clear semantic structure with headings. The content is substantive and provides real value to readers.</p><h2>Section 2</h2><p>More content here to ensure the word count is above the minimum threshold for AI citation systems to consider this page worth indexing and referencing.</p></article></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"ai_visibility":{"enabled":true}}"#);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"ai_visibility":{"enabled":true}}"#,
+    );
     let findings = json["findings"].as_array().unwrap();
     let ai_errors: Vec<_> = findings
         .iter()
         .filter(|f| {
-            f["rule_id"].as_str().unwrap_or("").starts_with("ai-visibility/")
+            f["rule_id"]
+                .as_str()
+                .unwrap_or("")
+                .starts_with("ai-visibility/")
                 && f["level"] == "error"
         })
         .collect();
-    assert!(ai_errors.is_empty(), "Rich page should produce no AI visibility errors");
+    assert!(
+        ai_errors.is_empty(),
+        "Rich page should produce no AI visibility errors"
+    );
 }
 
 // ==========================================================================
@@ -3101,7 +3225,9 @@ fn ux_disabled_by_default() {
     let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        !findings.iter().any(|f| f["rule_id"].as_str().unwrap_or("").starts_with("ux/")),
+        !findings
+            .iter()
+            .any(|f| f["rule_id"].as_str().unwrap_or("").starts_with("ux/")),
         "UX checks should not run without uxHeuristics:true"
     );
 }
@@ -3113,7 +3239,10 @@ fn ux_no_cta_found() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><p>No calls to action here.</p></main><footer><a href="/impressum/">Impressum</a></footer></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"ux_heuristics":{"enabled":true}}"#);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"ux_heuristics":{"enabled":true}}"#,
+    );
     let findings = json["findings"].as_array().unwrap();
     assert!(
         findings.iter().any(|f| f["rule_id"] == "ux/no-cta"),
@@ -3128,10 +3257,15 @@ fn ux_no_trust_signals() {
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><a href="/products/">Buy now</a></main><footer></footer></body></html>"#,
     ).unwrap();
-    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"ux_heuristics":{"enabled":true}}"#);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"ux_heuristics":{"enabled":true}}"#,
+    );
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "ux/no-trust-signals"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "ux/no-trust-signals"),
         "Page without trust signal links should be reported"
     );
 }

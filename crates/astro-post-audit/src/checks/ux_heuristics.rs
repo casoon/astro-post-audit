@@ -6,23 +6,58 @@ use crate::discovery::SiteIndex;
 use crate::report::{Finding, Level};
 
 const CTA_KEYWORDS_DE: &[&str] = &[
-    "kaufen", "buchen", "starten", "kontakt", "anfrage", "bestellen",
-    "anmelden", "registrieren", "herunterladen", "jetzt", "kostenlos",
+    "kaufen",
+    "buchen",
+    "starten",
+    "kontakt",
+    "anfrage",
+    "bestellen",
+    "anmelden",
+    "registrieren",
+    "herunterladen",
+    "jetzt",
+    "kostenlos",
 ];
 
 const CTA_KEYWORDS_EN: &[&str] = &[
-    "buy", "book", "start", "contact", "order", "sign up", "register",
-    "download", "get started", "try", "free", "subscribe", "request",
+    "buy",
+    "book",
+    "start",
+    "contact",
+    "order",
+    "sign up",
+    "register",
+    "download",
+    "get started",
+    "try",
+    "free",
+    "subscribe",
+    "request",
 ];
 
 const GENERIC_LINK_TEXTS: &[&str] = &[
-    "mehr", "hier", "weiter", "lesen", "click here", "read more",
-    "learn more", "more", "here", "details",
+    "mehr",
+    "hier",
+    "weiter",
+    "lesen",
+    "click here",
+    "read more",
+    "learn more",
+    "more",
+    "here",
+    "details",
 ];
 
 const TRUST_KEYWORDS: &[&str] = &[
-    "impressum", "datenschutz", "kontakt", "about", "über uns",
-    "privacy", "legal", "imprint", "contact",
+    "impressum",
+    "datenschutz",
+    "kontakt",
+    "about",
+    "über uns",
+    "privacy",
+    "legal",
+    "imprint",
+    "contact",
 ];
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {

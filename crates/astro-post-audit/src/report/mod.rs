@@ -159,7 +159,11 @@ impl Reporter {
                     #[serde(skip_serializing_if = "Option::is_none")]
                     benchmark: Option<&'a BenchmarkData>,
                 }
-                let report = Report { findings, summary, benchmark };
+                let report = Report {
+                    findings,
+                    summary,
+                    benchmark,
+                };
                 Ok(serde_json::to_string_pretty(&report)?)
             }
             Format::Markdown => Ok(self.render_markdown(findings, summary)),

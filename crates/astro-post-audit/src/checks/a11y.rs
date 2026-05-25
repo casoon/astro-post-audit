@@ -351,11 +351,7 @@ fn check_aria_hidden_focusable(
     }
 }
 
-fn check_landmarks(
-    page: &crate::discovery::PageInfo,
-    html: &Html,
-    findings: &mut Vec<Finding>,
-) {
+fn check_landmarks(page: &crate::discovery::PageInfo, html: &Html, findings: &mut Vec<Finding>) {
     let main_sel = Selector::parse("main, [role='main']").unwrap();
     let nav_sel = Selector::parse("nav, [role='navigation']").unwrap();
     let header_sel = Selector::parse("body > header, [role='banner']").unwrap();
@@ -369,7 +365,8 @@ fn check_landmarks(
             file: page.rel_path.clone(),
             selector: "body".into(),
             message: "Page has no <main> element or role=\"main\"".into(),
-            help: "Add a <main> element to wrap the primary page content (WCAG 1.3.1, 2.4.1)".into(),
+            help: "Add a <main> element to wrap the primary page content (WCAG 1.3.1, 2.4.1)"
+                .into(),
             suggestion: Some("<main id=\"main-content\">...</main>".into()),
             source_hint: None,
             confidence: None,
@@ -380,7 +377,10 @@ fn check_landmarks(
             rule_id: "a11y/landmark-main-duplicate".into(),
             file: page.rel_path.clone(),
             selector: "main".into(),
-            message: format!("Page has {} <main> elements — only one is allowed", main_count),
+            message: format!(
+                "Page has {} <main> elements — only one is allowed",
+                main_count
+            ),
             help: "There must be exactly one <main> landmark per page".into(),
             suggestion: None,
             source_hint: None,
@@ -489,32 +489,95 @@ fn check_duplicate_ids(
 
 /// Valid WAI-ARIA roles (subset — abstract roles are listed separately).
 const VALID_ARIA_ROLES: &[&str] = &[
-    "alert", "alertdialog", "application", "article", "banner", "button",
-    "cell", "checkbox", "columnheader", "combobox", "complementary",
-    "contentinfo", "definition", "dialog", "directory", "document",
-    "feed", "figure", "form", "generic", "grid", "gridcell", "group",
-    "heading", "img", "link", "list", "listbox", "listitem", "log",
-    "main", "marquee", "math", "menu", "menubar", "menuitem", "menuitemcheckbox",
-    "menuitemradio", "navigation", "none", "note", "option", "presentation",
-    "progressbar", "radio", "radiogroup", "region", "row", "rowgroup",
-    "rowheader", "scrollbar", "search", "searchbox", "separator",
-    "slider", "spinbutton", "status", "switch", "tab", "table", "tablist",
-    "tabpanel", "term", "textbox", "timer", "toolbar", "tooltip", "tree",
-    "treegrid", "treeitem",
+    "alert",
+    "alertdialog",
+    "application",
+    "article",
+    "banner",
+    "button",
+    "cell",
+    "checkbox",
+    "columnheader",
+    "combobox",
+    "complementary",
+    "contentinfo",
+    "definition",
+    "dialog",
+    "directory",
+    "document",
+    "feed",
+    "figure",
+    "form",
+    "generic",
+    "grid",
+    "gridcell",
+    "group",
+    "heading",
+    "img",
+    "link",
+    "list",
+    "listbox",
+    "listitem",
+    "log",
+    "main",
+    "marquee",
+    "math",
+    "menu",
+    "menubar",
+    "menuitem",
+    "menuitemcheckbox",
+    "menuitemradio",
+    "navigation",
+    "none",
+    "note",
+    "option",
+    "presentation",
+    "progressbar",
+    "radio",
+    "radiogroup",
+    "region",
+    "row",
+    "rowgroup",
+    "rowheader",
+    "scrollbar",
+    "search",
+    "searchbox",
+    "separator",
+    "slider",
+    "spinbutton",
+    "status",
+    "switch",
+    "tab",
+    "table",
+    "tablist",
+    "tabpanel",
+    "term",
+    "textbox",
+    "timer",
+    "toolbar",
+    "tooltip",
+    "tree",
+    "treegrid",
+    "treeitem",
 ];
 
 /// Abstract ARIA roles that must not be used directly in HTML.
 const ABSTRACT_ARIA_ROLES: &[&str] = &[
-    "command", "composite", "input", "landmark", "range",
-    "roletype", "section", "sectionhead", "select",
-    "structure", "widget", "window",
+    "command",
+    "composite",
+    "input",
+    "landmark",
+    "range",
+    "roletype",
+    "section",
+    "sectionhead",
+    "select",
+    "structure",
+    "widget",
+    "window",
 ];
 
-fn check_aria_roles(
-    page: &crate::discovery::PageInfo,
-    html: &Html,
-    findings: &mut Vec<Finding>,
-) {
+fn check_aria_roles(page: &crate::discovery::PageInfo, html: &Html, findings: &mut Vec<Finding>) {
     let role_sel = Selector::parse("[role]").unwrap();
 
     for el in html.select(&role_sel) {
@@ -633,14 +696,18 @@ fn strsim_distance(a: &str, b: &str) -> usize {
     let m = a.len();
     let n = b.len();
     let mut dp = vec![vec![0usize; n + 1]; m + 1];
-    for (i, row) in dp.iter_mut().enumerate() { row[0] = i; }
-    for j in 0..=n { dp[0][j] = j; }
+    for (i, row) in dp.iter_mut().enumerate() {
+        row[0] = i;
+    }
+    for j in 0..=n {
+        dp[0][j] = j;
+    }
     for i in 1..=m {
         for j in 1..=n {
-            dp[i][j] = if a[i-1] == b[j-1] {
-                dp[i-1][j-1]
+            dp[i][j] = if a[i - 1] == b[j - 1] {
+                dp[i - 1][j - 1]
             } else {
-                1 + dp[i-1][j].min(dp[i][j-1]).min(dp[i-1][j-1])
+                1 + dp[i - 1][j].min(dp[i][j - 1]).min(dp[i - 1][j - 1])
             };
         }
     }
