@@ -429,21 +429,19 @@ fn check_property_completeness(
                 }
             }
         }
-        "WebSite" => {
+        "WebSite" if entity.get("potentialAction").is_none() => {
             // Info: potentialAction (SearchAction)
-            if entity.get("potentialAction").is_none() {
-                findings.push(Finding {
-                    level: Level::Info,
-                    rule_id: "structured-data/website-missing-search-action".into(),
-                    file: file.to_string(),
-                    selector: selector.to_string(),
-                    message: "JSON-LD WebSite has no 'potentialAction' (SearchAction)".into(),
-                    help: "Add a SearchAction to enable Google Sitelinks search box".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
-            }
+            findings.push(Finding {
+                level: Level::Info,
+                rule_id: "structured-data/website-missing-search-action".into(),
+                file: file.to_string(),
+                selector: selector.to_string(),
+                message: "JSON-LD WebSite has no 'potentialAction' (SearchAction)".into(),
+                help: "Add a SearchAction to enable Google Sitelinks search box".into(),
+                suggestion: None,
+                source_hint: None,
+                confidence: None,
+            });
         }
         "BreadcrumbList" => {
             // Each ListItem must have position and item.name
