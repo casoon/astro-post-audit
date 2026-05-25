@@ -1,4 +1,5 @@
 pub mod a11y;
+pub mod ai_visibility;
 pub mod assets;
 pub mod content_quality;
 pub mod crawl_budget;
@@ -8,6 +9,7 @@ pub mod headings;
 pub mod hreflang;
 pub mod html_basics;
 pub mod i18n_audit;
+pub mod images;
 pub mod links;
 pub mod opengraph;
 pub mod privacy_security;
@@ -18,3 +20,4 @@ pub mod seo;
 pub mod sitemap;
 pub mod structured_data;
 pub mod structured_data_graph;
+pub mod ux_heuristics;

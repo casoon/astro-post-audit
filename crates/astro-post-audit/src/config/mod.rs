@@ -54,6 +54,9 @@ pub struct Config {
     pub render_blocking: RenderBlockingConfig,
     pub privacy_security: PrivacySecurityConfig,
     pub structured_data_graph: StructuredDataGraphConfig,
+    pub images: ImagesConfig,
+    pub ai_visibility: AiVisibilityConfig,
+    pub ux_heuristics: UxHeuristicsConfig,
     pub severity: SeverityConfig,
     pub hints: HintsConfig,
     /// Project root directory, used for source-file hint resolution.
@@ -188,6 +191,12 @@ pub struct A11yConfig {
     pub warn_generic_link_text: bool,
     pub aria_hidden_focusable_check: bool,
     pub require_skip_link: bool,
+    /// Check for semantic landmark elements (main, nav, header, footer). @default true
+    pub check_landmarks: bool,
+    /// Detect duplicate id attributes on a page. @default true
+    pub check_duplicate_ids: bool,
+    /// Validate ARIA role values and required role attributes. @default true
+    pub check_aria_roles: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -201,13 +210,25 @@ pub struct AssetsConfig {
     pub require_hashed_filenames: bool,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct OpenGraphConfig {
     pub require_og_title: bool,
     pub require_og_description: bool,
     pub require_og_image: bool,
     pub require_twitter_card: bool,
+    /// Require og:type meta tag (e.g. "website", "article"). @default false
+    pub require_og_type: bool,
+    /// Require og:url canonical property. @default false
+    pub require_og_url: bool,
+    /// Error if og:image value is a relative URL. @default true
+    pub og_image_absolute_url: bool,
+    /// Require twitter:image meta tag. @default false
+    pub require_twitter_image: bool,
+    /// Validate twitter:card value against allowed set. @default true
+    pub twitter_card_valid_values: bool,
+    /// Warn when og:title and <title> differ by more than 50% in length. @default false
+    pub og_title_consistency: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -255,11 +276,17 @@ pub struct ExternalLinksConfig {
     pub block_domains: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct RobotsTxtConfig {
     pub require: bool,
     pub require_sitemap_link: bool,
+    /// Error if User-agent: * with Disallow: / blocks all crawlers. @default true
+    pub check_disallow_all: bool,
+    /// Warn if Crawl-delay exceeds this value in seconds. 0 = disabled. @default 10
+    pub max_crawl_delay: u32,
+    /// Warn if AI citation bots (GPTBot, ClaudeBot, PerplexityBot) are blocked. @default false
+    pub ai_bot_policy: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -306,6 +333,37 @@ pub struct ExtraReport {
     pub format: String,
     /// Absolute path to write the report to
     pub path: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct ImagesConfig {
+    /// Error if <img> is missing both width and height (causes CLS). @default true
+    pub check_missing_dimensions: bool,
+    /// Warn if <img> beyond the first on a page lacks loading="lazy". @default true
+    pub warn_missing_lazy: bool,
+    /// Info if <img> has no srcset (no responsive image markup). @default true
+    pub info_missing_srcset: bool,
+    /// Info if <img> src uses legacy format (.jpg/.jpeg/.png/.gif). @default false
+    pub format_hints: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct AiVisibilityConfig {
+    /// Enable AI visibility scoring module. @default false
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct UxHeuristicsConfig {
+    /// Enable UX heuristics module. @default false
+    pub enabled: bool,
+    /// Warn if a page has more than this many links (cognitive load). @default 80
+    pub max_links_per_page: usize,
+    /// Warn if a page has fewer than this many CTA-like elements. @default 1
+    pub min_cta_per_page: usize,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -406,6 +464,47 @@ impl Default for A11yConfig {
             warn_generic_link_text: true,
             aria_hidden_focusable_check: true,
             require_skip_link: false,
+            check_landmarks: true,
+            check_duplicate_ids: true,
+            check_aria_roles: true,
+        }
+    }
+}
+
+impl Default for OpenGraphConfig {
+    fn default() -> Self {
+        Self {
+            require_og_title: false,
+            require_og_description: false,
+            require_og_image: false,
+            require_twitter_card: false,
+            require_og_type: false,
+            require_og_url: false,
+            og_image_absolute_url: true,
+            require_twitter_image: false,
+            twitter_card_valid_values: true,
+            og_title_consistency: false,
+        }
+    }
+}
+
+impl Default for ImagesConfig {
+    fn default() -> Self {
+        Self {
+            check_missing_dimensions: true,
+            warn_missing_lazy: true,
+            info_missing_srcset: true,
+            format_hints: false,
+        }
+    }
+}
+
+impl Default for UxHeuristicsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_links_per_page: 80,
+            min_cta_per_page: 1,
         }
     }
 }
@@ -416,6 +515,18 @@ impl Default for SecurityConfig {
             check_target_blank: true,
             check_mixed_content: true,
             warn_inline_scripts: false,
+        }
+    }
+}
+
+impl Default for RobotsTxtConfig {
+    fn default() -> Self {
+        Self {
+            require: false,
+            require_sitemap_link: false,
+            check_disallow_all: true,
+            max_crawl_delay: 10,
+            ai_bot_policy: false,
         }
     }
 }
@@ -542,7 +653,10 @@ impl Config {
                 "label_for_required": true,
                 "warn_generic_link_text": true,
                 "aria_hidden_focusable_check": true,
-                "require_skip_link": true
+                "require_skip_link": true,
+                "check_landmarks": true,
+                "check_duplicate_ids": true,
+                "check_aria_roles": true
             },
             "assets": {
                 "check_broken_assets": true,
@@ -552,7 +666,11 @@ impl Config {
                 "require_og_title": true,
                 "require_og_description": true,
                 "require_og_image": true,
-                "require_twitter_card": true
+                "require_twitter_card": true,
+                "require_og_type": true,
+                "require_og_url": true,
+                "og_image_absolute_url": true,
+                "twitter_card_valid_values": true
             },
             "structured_data": {
                 "check_json_ld": true,
@@ -753,13 +871,18 @@ impl Config {
             "opengraph": {
                 "require_og_title": true,
                 "require_og_description": true,
-                "require_og_image": true
+                "require_og_image": true,
+                "og_image_absolute_url": true,
+                "twitter_card_valid_values": true
             },
             "a11y": {
                 "require_skip_link": true,
                 "img_alt_required": true,
                 "button_name_required": true,
-                "label_for_required": true
+                "label_for_required": true,
+                "check_landmarks": true,
+                "check_duplicate_ids": true,
+                "check_aria_roles": true
             },
             "links": {
                 "check_fragments": true

@@ -278,6 +278,25 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                     stdinConfig.max_errors = options.maxErrors;
                 if (options.pageOverview !== undefined)
                     stdinConfig.page_overview = options.pageOverview;
+                if (options.aiVisibility !== undefined) {
+                    stdinConfig.ai_visibility = { enabled: options.aiVisibility === true };
+                }
+                if (options.uxHeuristics !== undefined) {
+                    if (options.uxHeuristics === true) {
+                        stdinConfig.ux_heuristics = { enabled: true };
+                    }
+                    else if (options.uxHeuristics && typeof options.uxHeuristics === "object") {
+                        stdinConfig.ux_heuristics = {
+                            enabled: true,
+                            ...(options.uxHeuristics.maxLinksPerPage !== undefined
+                                ? { max_links_per_page: options.uxHeuristics.maxLinksPerPage }
+                                : {}),
+                            ...(options.uxHeuristics.minCtaPerPage !== undefined
+                                ? { min_cta_per_page: options.uxHeuristics.minCtaPerPage }
+                                : {}),
+                        };
+                    }
+                }
                 if (options.goLive) {
                     stdinConfig.go_live = {
                         enabled: options.goLive.enabled ?? false,

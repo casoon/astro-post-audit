@@ -125,6 +125,9 @@ fn run() -> Result<i32> {
         ("structured_data_graph", checks::structured_data_graph::check_all),
         ("golive", checks::golive::check_all),
         ("external_links", checks::external_links::check_all),
+        ("images", checks::images::check_all),
+        ("ai_visibility", checks::ai_visibility::check_all),
+        ("ux_heuristics", checks::ux_heuristics::check_all),
     ];
 
     for &(name, check_fn) in registry {

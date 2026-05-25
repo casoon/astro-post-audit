@@ -2,6 +2,34 @@
 
 Fast post-build auditor for Astro sites. Checks SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output. No browser, no network — runs in <1s on typical sites.
 
+## Migrating to 0.3.0
+
+Version 0.3.0 enables several new checks **by default** that were previously opt-in or did not exist:
+
+| New default check | Rule ID | Effect |
+|-------------------|---------|--------|
+| Landmark structure | `a11y/missing-main` | **Error** if page has no `<main>` |
+| Duplicate IDs | `a11y/duplicate-id` | **Error** on duplicate `id` attributes |
+| ARIA roles | `a11y/invalid-role` | **Error** on invalid `role=` values |
+| Image dimensions | `images/missing-dimensions` | **Error** on `<img>` without `width`/`height` |
+| Lazy loading | `images/missing-lazy` | **Warning** on images below the fold without `loading="lazy"` |
+| Absolute OG image | `opengraph/image-not-absolute` | **Error** when `og:image` is not an absolute URL |
+| Twitter card values | `opengraph/twitter-card-invalid` | **Error** on invalid `twitter:card` values |
+
+**Recommended upgrade path:** run the audit once with `failOn: 'never'` to see what fires, fix findings incrementally, then tighten `failOn` again. Or use `writeBaseline: true` to adopt all current findings as a baseline before upgrading.
+
+To silence a new default check on existing sites, set it explicitly in `rules`:
+
+```js
+postAudit({
+  rules: {
+    a11y: { check_landmarks: false },
+    images: { check_missing_dimensions: false, warn_missing_lazy: false },
+    opengraph: { og_image_absolute_url: false, twitter_card_valid_values: false },
+  },
+})
+```
+
 ## Installation
 
 ```bash
@@ -66,12 +94,12 @@ postAudit({
 
 | Preset | What it enables |
 |--------|----------------|
-| `standard` | Comprehensive quality checks without aggressive extras. Canonical self-reference, heading gaps, meta description, Open Graph (title/description/image), a11y (skip link, img alt, button/label names), fragment validation, sitemap, security (target-blank), hreflang, assets, JSON-LD, content quality (duplicate titles/descriptions/H1). Warnings stay warnings. |
-| `strict` | Everything in `standard` plus orphan detection, fragment validation, inline-script warnings, robots.txt, Twitter Card, i18n audit, crawl budget, render blocking, privacy/security, structured data graph. Sets `strict: true` (warnings become errors). |
+| `standard` | Comprehensive quality checks without aggressive extras. Canonical self-reference, heading gaps, meta description, Open Graph (title/description/image + absolute image URL + twitter card validation), a11y (skip link, img alt, button/label names, landmark structure, duplicate IDs, ARIA roles), image dimensions/lazy loading, fragment validation, sitemap, security (target-blank), hreflang, assets, JSON-LD, content quality (duplicate titles/descriptions/H1). Warnings stay warnings. |
+| `strict` | Everything in `standard` plus orphan detection, extended robots.txt (disallow-all, crawl-delay), inline-script warnings, Twitter Card, OG type/url requirements, structured data property completeness, i18n audit, crawl budget, render blocking, privacy/security, structured data graph. Sets `strict: true` (warnings become errors). |
 | `production` | Alias for `strict`. |
 | `seo` | SEO signals only — canonical (self-reference, clusters), html basics (lang, title, meta description, viewport, length limits), Open Graph (all four tags), JSON-LD syntax, sitemap. |
-| `accessibility` | WCAG heuristics — lang attr, title, viewport, heading hierarchy (H1 required, single, no gaps), full a11y ruleset (img alt, link/button names, form labels, generic link text, aria-hidden, skip link), fragment validation. |
-| `performance` | Static performance signals — broken asset references, missing image dimensions (CLS), hashed filenames, render blocking scripts. |
+| `accessibility` | WCAG heuristics — lang attr, title, viewport, heading hierarchy (H1 required, single, no gaps), full a11y ruleset (img alt, link/button names, form labels, generic link text, aria-hidden, skip link, landmark structure, duplicate IDs, ARIA roles), fragment validation. |
+| `performance` | Static performance signals — broken asset references, missing image dimensions (CLS), lazy loading, srcset hints, hashed filenames, render blocking scripts. |
 | `relaxed` | Core SEO and link checks only. No heading gaps, no Open Graph, no structured data, no content quality. Broken links are warnings, not errors. Good starting point for existing sites with known issues. |
 
 ## Example configurations
@@ -164,6 +192,45 @@ postAudit({
   },
 })
 ```
+
+### AI-optimised content
+
+Enable AI visibility checks for content that should surface well in LLM-generated answers. Useful for documentation, blogs, and product pages targeting AI-assisted search.
+
+```js
+postAudit({
+  preset: 'seo',
+  failOn: 'errors',
+  aiVisibility: true,
+  rules: {
+    filters: { exclude: ['404.html'] },
+    headings: { no_skip: true },
+    structured_data: { check_json_ld: true },
+  },
+})
+```
+
+`aiVisibility: true` enables the opt-in AI visibility module, which checks LLM-readability (word count, lang attribute), citability (og:title, og:description, canonical, author schema), chunk quality (semantic sectioning, heading structure on long pages), and AI bot policy in robots.txt.
+
+### UX heuristics for marketing sites
+
+Enable UX heuristics to catch missing calls-to-action, generic link text, and missing trust signals:
+
+```js
+postAudit({
+  preset: 'standard',
+  failOn: 'errors',
+  uxHeuristics: {
+    maxLinksPerPage: 60,
+    minCtaPerPage: 2,
+  },
+  rules: {
+    filters: { exclude: ['404.html'] },
+  },
+})
+```
+
+Pass `uxHeuristics: true` to use the defaults (`maxLinksPerPage: 80`, `minCtaPerPage: 1`), or pass an object to override them.
 
 ### Environment-based gate (dev / staging / prod)
 
@@ -293,6 +360,8 @@ postAudit({
 | `goLive` | `GoLiveConfig` | — | Production readiness gate. See [Go-live gate](#go-live-gate). |
 | `pageOverview` | `boolean` | `false` | Print a page properties table (title, description, canonical, OG, H1, lang, JSON-LD) instead of running checks. |
 | `benchmark` | `boolean` | `false` | Print per-check timing breakdown. |
+| `aiVisibility` | `boolean` | `false` | Enable AI visibility checks (LLM-readability, citability, chunk quality). See [AI visibility](#ai-visibility). |
+| `uxHeuristics` | `boolean \| { maxLinksPerPage?: number, minCtaPerPage?: number }` | `false` | Enable UX heuristic checks (CTAs, generic link text, trust signals). See [UX heuristics](#ux-heuristics). |
 | `disable` | `boolean` | `false` | Disable the integration entirely. |
 | `rules` | `RulesConfig` | — | Inline check configuration — see full reference below. |
 
@@ -406,6 +475,9 @@ rules: {
   robots_txt: {
     require: false,                     // robots.txt must exist
     require_sitemap_link: false,        // Must contain a sitemap link
+    check_disallow_all: true,           // Error when User-agent: * blocks everything
+    max_crawl_delay: 10,                // Warn when Crawl-delay exceeds this value (seconds)
+    ai_bot_policy: false,               // Check AI bot (GPTBot, ClaudeBot, CCBot …) rules
   },
 
   // HTML basics
@@ -435,6 +507,9 @@ rules: {
     warn_generic_link_text: true,       // Warn on "click here", "mehr", "weiter"
     aria_hidden_focusable_check: true,  // Warn on aria-hidden on focusable elements
     require_skip_link: false,           // Require skip navigation link
+    check_landmarks: true,              // Require proper landmark structure (<main>, <nav>, …)
+    check_duplicate_ids: true,          // Error on duplicate id attributes
+    check_aria_roles: true,             // Validate role= values against WAI-ARIA spec
   },
 
   // Asset checks
@@ -453,6 +528,12 @@ rules: {
     require_og_description: false,      // Require og:description
     require_og_image: false,            // Require og:image
     require_twitter_card: false,        // Require twitter:card
+    require_og_type: false,             // Require og:type
+    require_og_url: false,              // Require og:url
+    og_image_absolute_url: true,        // og:image must be an absolute URL
+    require_twitter_image: false,       // Require twitter:image
+    twitter_card_valid_values: true,    // Validate twitter:card value against the spec
+    og_title_consistency: false,        // Warn when og:title and <title> differ significantly
   },
 
   // Structured data (JSON-LD)
@@ -495,6 +576,28 @@ rules: {
     block_domains: [],                  // Skip links to these domains
   },
 
+  // Image checks (HTML attribute-level)
+  images: {
+    check_missing_dimensions: true,     // Error on <img> without width/height (CLS risk)
+    warn_missing_lazy: true,            // Warn when images below the fold lack loading="lazy"
+    info_missing_srcset: true,          // Info when <img> has no srcset (responsive images)
+    format_hints: false,                // Info hint when JPEG/PNG/GIF could use a modern format
+  },
+
+  // AI Visibility — opt-in module
+  // Enable via top-level aiVisibility option or set enabled: true here
+  ai_visibility: {
+    enabled: false,                     // Enable AI visibility checks
+  },
+
+  // UX Heuristics — opt-in module
+  // Enable via top-level uxHeuristics option or set enabled: true here
+  ux_heuristics: {
+    enabled: false,                     // Enable UX heuristic checks
+    max_links_per_page: 80,             // Info when a page exceeds this link count
+    min_cta_per_page: 1,                // Warn when a page has fewer CTAs than this
+  },
+
   // Innovative dist-only audits
   i18n_audit: {
     enabled: false,                     // lang/hreflang/canonical consistency by locale route
@@ -526,11 +629,12 @@ rules: {
 - **Links** — Broken internal links, query parameters, fragment validation, orphan pages
 - **External Links** — HEAD requests to verify external URLs return 2xx, with domain filtering and concurrency control
 - **Sitemap** — Cross-reference with canonical URLs, stale entries, missing pages
-- **robots.txt** — Existence check, sitemap link verification
+- **robots.txt** — Existence check, sitemap link, disallow-all detection, crawl-delay threshold, AI bot policy (GPTBot, ClaudeBot, CCBot …)
 - **HTML** — `<html lang>`, `<title>`, viewport, meta description, heading hierarchy
-- **Accessibility** — img alt, link/button names, form labels (including wrapping labels), generic link text, skip link, aria-hidden on focusable elements
-- **Open Graph** — og:title, og:description, og:image, twitter:card
-- **Structured Data** — JSON-LD syntax, semantics, duplicate type detection
+- **Accessibility** — img alt, link/button names, form labels (including wrapping labels), generic link text, skip link, aria-hidden on focusable elements, landmark structure (`<main>`, `<nav>`, `<header>`, `<footer>`), duplicate IDs, WAI-ARIA role validation
+- **Open Graph** — og:title, og:description, og:image (absolute URL), og:type, og:url, twitter:card (valid values), twitter:image, title consistency
+- **Structured Data** — JSON-LD syntax, semantics, duplicate type detection, property completeness (author, datePublished, image, publisher, breadcrumb positions …)
+- **Images** — Missing `width`/`height` attributes (CLS), missing `loading="lazy"`, missing `srcset`, modern format hints
 - **Hreflang** — Multilingual link validation, x-default, self-reference, reciprocal links
 - **Security** — target="_blank" without noopener, mixed content, inline scripts
 - **Assets** — Broken references, image dimensions, file size limits, cache-busting hashes
@@ -540,6 +644,36 @@ rules: {
 - **Render Blocking** — Sync `<head>` scripts and missing `preload`/`preconnect` hints for critical resources
 - **Privacy/Security (Static)** — Third-party domain inventory, missing SRI, CSP-readiness, consent signals
 - **Structured Data Graph** — Cross-page JSON-LD entity conflicts (`@id`, type/name/url) and missing internal entity URLs
+- **AI Visibility** *(opt-in)* — LLM readability (word count, lang), citability (OG metadata, canonical, author schema), semantic structure, AI bot policy
+- **UX Heuristics** *(opt-in)* — Missing CTAs, generic link text ("click here", "mehr"), missing trust signals (Impressum, Datenschutz, contact), link density, interactive element density
+
+## AI visibility
+
+Enable via `aiVisibility: true` (top-level option) or `rules.ai_visibility.enabled: true`.
+
+| Rule ID | Level | Description |
+|---------|-------|-------------|
+| `ai-visibility/short-content` | Info | Page word count < 300 — may not be chunked by LLMs |
+| `ai-visibility/missing-lang` | Warning | Missing `<html lang>` — LLMs may not infer language |
+| `ai-visibility/missing-og-title` | Warning | No `og:title` — reduces citation quality |
+| `ai-visibility/missing-og-description` | Info | No `og:description` — reduces citation quality |
+| `ai-visibility/missing-canonical` | Warning | No canonical URL — LLMs may attribute content incorrectly |
+| `ai-visibility/missing-author-schema` | Info | No `author` in JSON-LD — reduces attribution quality |
+| `ai-visibility/no-semantic-sections` | Info | No `<article>` or `<section>` — poor chunk boundaries |
+| `ai-visibility/missing-subheadings` | Warning | Long page with no H2/H3 — poor chunk quality |
+| `ai-visibility/noindex-page` | Info | Page is noindexed — will not be crawled by AI bots |
+
+## UX heuristics
+
+Enable via `uxHeuristics: true` (top-level option) or `rules.ux_heuristics.enabled: true`. Pass an object to configure thresholds: `uxHeuristics: { maxLinksPerPage: 60, minCtaPerPage: 2 }`.
+
+| Rule ID | Level | Description |
+|---------|-------|-------------|
+| `ux/no-cta` | Warning | Page has no call-to-action (links/buttons with CTA keywords) |
+| `ux/generic-link-text` | Warning | Link with generic text ("click here", "mehr", "weiter", "read more") |
+| `ux/no-trust-signals` | Warning | No links to Impressum, Datenschutz, contact, or about pages |
+| `ux/high-link-density` | Info | Link count exceeds `max_links_per_page` (default 80) |
+| `ux/high-interactive-density` | Info | More than 20 interactive elements on a single page |
 
 ## Output
 

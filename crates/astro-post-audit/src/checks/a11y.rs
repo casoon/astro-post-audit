@@ -1,6 +1,6 @@
 use rayon::prelude::*;
 use scraper::{Html, Selector};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
@@ -55,6 +55,21 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             // Skip navigation link
             if config.a11y.require_skip_link {
                 check_skip_link(page, &html, &mut findings);
+            }
+
+            // Landmark structure
+            if config.a11y.check_landmarks {
+                check_landmarks(page, &html, &mut findings);
+            }
+
+            // Duplicate IDs
+            if config.a11y.check_duplicate_ids {
+                check_duplicate_ids(page, &html, &mut findings);
+            }
+
+            // ARIA role validation
+            if config.a11y.check_aria_roles {
+                check_aria_roles(page, &html, &mut findings);
             }
 
             findings
@@ -313,7 +328,6 @@ fn check_aria_hidden_focusable(
     html: &Html,
     findings: &mut Vec<Finding>,
 ) {
-    // Check for aria-hidden="true" on focusable elements
     let sel = Selector::parse("[aria-hidden='true']").unwrap();
 
     for el in html.select(&sel) {
@@ -335,4 +349,300 @@ fn check_aria_hidden_focusable(
             });
         }
     }
+}
+
+fn check_landmarks(
+    page: &crate::discovery::PageInfo,
+    html: &Html,
+    findings: &mut Vec<Finding>,
+) {
+    let main_sel = Selector::parse("main, [role='main']").unwrap();
+    let nav_sel = Selector::parse("nav, [role='navigation']").unwrap();
+    let header_sel = Selector::parse("body > header, [role='banner']").unwrap();
+    let footer_sel = Selector::parse("body > footer, [role='contentinfo']").unwrap();
+
+    let main_count = html.select(&main_sel).count();
+    if main_count == 0 {
+        findings.push(Finding {
+            level: Level::Error,
+            rule_id: "a11y/landmark-main-missing".into(),
+            file: page.rel_path.clone(),
+            selector: "body".into(),
+            message: "Page has no <main> element or role=\"main\"".into(),
+            help: "Add a <main> element to wrap the primary page content (WCAG 1.3.1, 2.4.1)".into(),
+            suggestion: Some("<main id=\"main-content\">...</main>".into()),
+            source_hint: None,
+            confidence: None,
+        });
+    } else if main_count > 1 {
+        findings.push(Finding {
+            level: Level::Error,
+            rule_id: "a11y/landmark-main-duplicate".into(),
+            file: page.rel_path.clone(),
+            selector: "main".into(),
+            message: format!("Page has {} <main> elements — only one is allowed", main_count),
+            help: "There must be exactly one <main> landmark per page".into(),
+            suggestion: None,
+            source_hint: None,
+            confidence: None,
+        });
+    }
+
+    if html.select(&nav_sel).next().is_none() {
+        findings.push(Finding {
+            level: Level::Warning,
+            rule_id: "a11y/landmark-nav-missing".into(),
+            file: page.rel_path.clone(),
+            selector: "body".into(),
+            message: "Page has no <nav> element or role=\"navigation\"".into(),
+            help: "Add a <nav> landmark for navigation regions (WCAG 2.4.1)".into(),
+            suggestion: None,
+            source_hint: None,
+            confidence: None,
+        });
+    }
+
+    if html.select(&header_sel).next().is_none() {
+        findings.push(Finding {
+            level: Level::Info,
+            rule_id: "a11y/landmark-header-missing".into(),
+            file: page.rel_path.clone(),
+            selector: "body".into(),
+            message: "Page has no top-level <header> or role=\"banner\"".into(),
+            help: "Add a <header> landmark at the top of the page".into(),
+            suggestion: None,
+            source_hint: None,
+            confidence: None,
+        });
+    }
+
+    if html.select(&footer_sel).next().is_none() {
+        findings.push(Finding {
+            level: Level::Info,
+            rule_id: "a11y/landmark-footer-missing".into(),
+            file: page.rel_path.clone(),
+            selector: "body".into(),
+            message: "Page has no top-level <footer> or role=\"contentinfo\"".into(),
+            help: "Add a <footer> landmark at the bottom of the page".into(),
+            suggestion: None,
+            source_hint: None,
+            confidence: None,
+        });
+    }
+}
+
+fn check_duplicate_ids(
+    page: &crate::discovery::PageInfo,
+    html: &Html,
+    findings: &mut Vec<Finding>,
+) {
+    let sel = Selector::parse("[id]").unwrap();
+    let aria_sel = Selector::parse("[aria-labelledby], [aria-describedby]").unwrap();
+
+    // Collect all id values and their occurrence count
+    let mut id_counts: HashMap<&str, usize> = HashMap::new();
+    for el in html.select(&sel) {
+        if let Some(id) = el.value().attr("id") {
+            *id_counts.entry(id).or_insert(0) += 1;
+        }
+    }
+
+    // Collect IDs referenced in ARIA attributes
+    let mut aria_referenced: HashSet<String> = HashSet::new();
+    for el in html.select(&aria_sel) {
+        for attr in ["aria-labelledby", "aria-describedby"] {
+            if let Some(val) = el.value().attr(attr) {
+                for id_ref in val.split_whitespace() {
+                    aria_referenced.insert(id_ref.to_string());
+                }
+            }
+        }
+    }
+
+    for (id, count) in &id_counts {
+        if *count > 1 {
+            let is_aria_ref = aria_referenced.contains(*id);
+            let rule_id = if is_aria_ref {
+                "a11y/duplicate-id-aria"
+            } else {
+                "a11y/duplicate-id"
+            };
+            findings.push(Finding {
+                level: Level::Error,
+                rule_id: rule_id.into(),
+                file: page.rel_path.clone(),
+                selector: format!("[id='{}']", id),
+                message: format!(
+                    "Duplicate id=\"{}\" found {} times on this page{}",
+                    id,
+                    count,
+                    if is_aria_ref { " (referenced by ARIA attribute)" } else { "" }
+                ),
+                help: "Each id must be unique per page — duplicate ids break ARIA references and form associations (WCAG 4.1.1)".into(),
+                suggestion: None,
+                source_hint: None,
+                confidence: None,
+            });
+        }
+    }
+}
+
+/// Valid WAI-ARIA roles (subset — abstract roles are listed separately).
+const VALID_ARIA_ROLES: &[&str] = &[
+    "alert", "alertdialog", "application", "article", "banner", "button",
+    "cell", "checkbox", "columnheader", "combobox", "complementary",
+    "contentinfo", "definition", "dialog", "directory", "document",
+    "feed", "figure", "form", "generic", "grid", "gridcell", "group",
+    "heading", "img", "link", "list", "listbox", "listitem", "log",
+    "main", "marquee", "math", "menu", "menubar", "menuitem", "menuitemcheckbox",
+    "menuitemradio", "navigation", "none", "note", "option", "presentation",
+    "progressbar", "radio", "radiogroup", "region", "row", "rowgroup",
+    "rowheader", "scrollbar", "search", "searchbox", "separator",
+    "slider", "spinbutton", "status", "switch", "tab", "table", "tablist",
+    "tabpanel", "term", "textbox", "timer", "toolbar", "tooltip", "tree",
+    "treegrid", "treeitem",
+];
+
+/// Abstract ARIA roles that must not be used directly in HTML.
+const ABSTRACT_ARIA_ROLES: &[&str] = &[
+    "command", "composite", "input", "landmark", "range",
+    "roletype", "section", "sectionhead", "select",
+    "structure", "widget", "window",
+];
+
+fn check_aria_roles(
+    page: &crate::discovery::PageInfo,
+    html: &Html,
+    findings: &mut Vec<Finding>,
+) {
+    let role_sel = Selector::parse("[role]").unwrap();
+
+    for el in html.select(&role_sel) {
+        let role_val = match el.value().attr("role") {
+            Some(r) => r,
+            None => continue,
+        };
+
+        // A role attribute can contain multiple space-separated tokens
+        for role in role_val.split_whitespace() {
+            if ABSTRACT_ARIA_ROLES.contains(&role) {
+                findings.push(Finding {
+                    level: Level::Error,
+                    rule_id: "a11y/aria-role-abstract".into(),
+                    file: page.rel_path.clone(),
+                    selector: format!("[role='{}']", role_val),
+                    message: format!("Abstract ARIA role \"{}\" must not be used in HTML", role),
+                    help: "Use a concrete role instead — abstract roles are base concepts, not usable in content".into(),
+                    suggestion: None,
+                    source_hint: None,
+                    confidence: None,
+                });
+                continue;
+            }
+
+            if !VALID_ARIA_ROLES.contains(&role) {
+                findings.push(Finding {
+                    level: Level::Error,
+                    rule_id: "a11y/aria-role-invalid".into(),
+                    file: page.rel_path.clone(),
+                    selector: format!("[role='{}']", role_val),
+                    message: format!("Unknown ARIA role \"{}\" — likely a typo", role),
+                    help: format!("Check the WAI-ARIA specification for valid role values. Did you mean one of: {:?}?",
+                        VALID_ARIA_ROLES.iter().filter(|&&r| {
+                            let d = strsim_distance(r, role);
+                            d <= 2 && d > 0
+                        }).take(3).collect::<Vec<_>>()),
+                    suggestion: None,
+                    source_hint: None,
+                    confidence: None,
+                });
+                continue;
+            }
+
+            // Check required ARIA attributes for specific roles
+            let tag = el.value().name();
+            let attrs = el.value();
+            match role {
+                "checkbox" | "switch" if attrs.attr("aria-checked").is_none() => {
+                    findings.push(Finding {
+                        level: Level::Error,
+                        rule_id: "a11y/aria-required-attr".into(),
+                        file: page.rel_path.clone(),
+                        selector: format!("{}[role='{}']", tag, role),
+                        message: format!("role=\"{}\" requires aria-checked attribute", role),
+                        help: "Add aria-checked=\"true\", \"false\", or \"mixed\"".into(),
+                        suggestion: Some("aria-checked=\"false\"".into()),
+                        source_hint: None,
+                        confidence: None,
+                    });
+                }
+                "checkbox" | "switch" => {}
+                "combobox" if attrs.attr("aria-expanded").is_none() => {
+                    findings.push(Finding {
+                        level: Level::Error,
+                        rule_id: "a11y/aria-required-attr".into(),
+                        file: page.rel_path.clone(),
+                        selector: format!("{}[role='combobox']", tag),
+                        message: "role=\"combobox\" requires aria-expanded attribute".into(),
+                        help: "Add aria-expanded=\"true\" or \"false\"".into(),
+                        suggestion: Some("aria-expanded=\"false\"".into()),
+                        source_hint: None,
+                        confidence: None,
+                    });
+                }
+                "combobox" => {}
+                "slider" => {
+                    let missing: Vec<&str> = ["aria-valuenow", "aria-valuemin", "aria-valuemax"]
+                        .iter()
+                        .copied()
+                        .filter(|&a| attrs.attr(a).is_none())
+                        .collect();
+                    if !missing.is_empty() {
+                        findings.push(Finding {
+                            level: Level::Error,
+                            rule_id: "a11y/aria-required-attr".into(),
+                            file: page.rel_path.clone(),
+                            selector: format!("{}[role='slider']", tag),
+                            message: format!(
+                                "role=\"slider\" requires missing attribute(s): {}",
+                                missing.join(", ")
+                            ),
+                            help: "Add aria-valuenow, aria-valuemin, and aria-valuemax".into(),
+                            suggestion: None,
+                            source_hint: None,
+                            confidence: None,
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+/// Simple edit-distance approximation for role typo suggestions (max 2 substitutions).
+fn strsim_distance(a: &str, b: &str) -> usize {
+    if a == b {
+        return 0;
+    }
+    if a.len().abs_diff(b.len()) > 3 {
+        return 99;
+    }
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let m = a.len();
+    let n = b.len();
+    let mut dp = vec![vec![0usize; n + 1]; m + 1];
+    for (i, row) in dp.iter_mut().enumerate() { row[0] = i; }
+    for j in 0..=n { dp[0][j] = j; }
+    for i in 1..=m {
+        for j in 1..=n {
+            dp[i][j] = if a[i-1] == b[j-1] {
+                dp[i-1][j-1]
+            } else {
+                1 + dp[i-1][j].min(dp[i][j-1]).min(dp[i-1][j-1])
+            };
+        }
+    }
+    dp[m][n]
 }

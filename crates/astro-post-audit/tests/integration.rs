@@ -212,7 +212,7 @@ fn html_basics_title_too_long() {
     fs::write(
         dir.path().join("index.html"),
         format!(
-            r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{}</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
+            r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{}</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
             long_title
         ),
     ).unwrap();
@@ -260,7 +260,7 @@ fn headings_multiple_h1() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("index.html"),
-        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>First</h1><h1>Second</h1></body></html>"#,
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>First</h1><h1>Second</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
@@ -401,7 +401,7 @@ fn a11y_form_label_wrapped_input_ok() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("index.html"),
-        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1><label>Search<input type="text" name="q"></label></body></html>"#,
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><label>Search<input type="text" name="q"></label></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
@@ -475,7 +475,7 @@ fn links_valid_internal_no_error() {
     // Overwrite with a valid link
     fs::write(
         dir.path().join("index.html"),
-        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home</title><link rel="canonical" href="https://example.com/"></head><body><h1>Home</h1><a href="/about/">About</a></body></html>"#,
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Home</h1><a href="/about/">About</a></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
@@ -825,7 +825,7 @@ fn strict_mode_warnings_become_errors() {
     // Create a page with only warnings (e.g., multiple h1)
     fs::write(
         dir.path().join("index.html"),
-        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>First</h1><h1>Second</h1></body></html>"#,
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>First</h1><h1>Second</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
     // Without strict: exit 0 (only warnings)
     let (_, _, code_normal) = run_audit(
@@ -1545,7 +1545,7 @@ fn severity_mapping_downgrades_error_to_warning() {
     // Page missing lang (normally an error)
     fs::write(
         dir.path().join("index.html"),
-        r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
+        r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
     let (json, code) = run_audit_json(
         dir.path(),
@@ -1570,7 +1570,7 @@ fn severity_mapping_off_suppresses_finding() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("index.html"),
-        r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
+        r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
     let (json, code) = run_audit_json(
         dir.path(),
@@ -1986,13 +1986,13 @@ fn canonical_cluster_detected() {
     let pages = dir.path().join("index.html");
     fs::write(
         &pages,
-        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home</title><link rel="canonical" href="https://example.com/"></head><body><h1>Home</h1></body></html>"#,
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Home</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
     let dup_dir = dir.path().join("duplicate");
     fs::create_dir_all(&dup_dir).unwrap();
     fs::write(
         dup_dir.join("index.html"),
-        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Duplicate</title><link rel="canonical" href="https://example.com/"></head><body><h1>Duplicate</h1></body></html>"#,
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Duplicate</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Duplicate</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     assert_eq!(code, 0, "Clusters are warnings, not errors");
@@ -2160,7 +2160,7 @@ fn preset_with_user_override() {
     // Use strict preset but disable opengraph
     let (json, _) = run_audit_json(
         dir.path(),
-        r#"{"site":{"base_url":"https://example.com"},"preset":"strict","opengraph":{"require_og_title":false,"require_og_description":false,"require_og_image":false,"require_twitter_card":false}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"preset":"strict","opengraph":{"require_og_title":false,"require_og_description":false,"require_og_image":false,"require_twitter_card":false,"require_og_type":false,"require_og_url":false,"og_image_absolute_url":false,"twitter_card_valid_values":false}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
@@ -2220,7 +2220,7 @@ fn max_warnings_fails_when_threshold_exceeded() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("index.html"),
-        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>This title is intentionally much longer than sixty characters to trigger warning</title><link rel="canonical" href="https://example.com/"></head><body><h1>Home</h1></body></html>"#,
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>This title is intentionally much longer than sixty characters to trigger warning</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Home</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
     let (json, code) = run_audit_json(
         dir.path(),
@@ -2614,4 +2614,524 @@ fn config_parity_severity_level_names_valid() {
     }"#;
     let (_stdout, _stderr, code) = run_audit(dir.path(), config);
     assert_ne!(code, 2, "All severity level names must be accepted");
+}
+
+// ==========================================================================
+// A11y: Landmark structure (#20)
+// ==========================================================================
+
+#[test]
+fn a11y_landmark_main_missing() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><h1>Test</h1></body></html>"#,
+    ).unwrap();
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "a11y/landmark-main-missing"),
+        "Missing <main> should be reported"
+    );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn a11y_landmark_main_duplicate() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>First</h1></main><main><p>Second</p></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "a11y/landmark-main-duplicate"),
+        "Two <main> elements should be reported"
+    );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn a11y_landmark_nav_missing() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><main><h1>Test</h1></main></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "a11y/landmark-nav-missing"),
+        "Missing <nav> should be a warning"
+    );
+}
+
+#[test]
+fn a11y_landmark_all_present_no_landmark_errors() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    let landmark_errors: Vec<_> = findings
+        .iter()
+        .filter(|f| f["rule_id"].as_str().unwrap_or("").starts_with("a11y/landmark-"))
+        .collect();
+    assert!(landmark_errors.is_empty(), "Complete landmark structure should produce no landmark findings");
+}
+
+// ==========================================================================
+// A11y: Duplicate ID detection (#21)
+// ==========================================================================
+
+#[test]
+fn a11y_duplicate_id_detected() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><div id="foo">First</div><div id="foo">Second</div></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "a11y/duplicate-id"),
+        "Duplicate id should be reported"
+    );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn a11y_duplicate_id_aria_ref() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><span id="label">Label</span><span id="label">Dupe</span><button aria-labelledby="label">Click</button></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "a11y/duplicate-id-aria"),
+        "Duplicate id referenced by ARIA should be reported as duplicate-id-aria"
+    );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn a11y_unique_ids_pass() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><div id="unique1">A</div><div id="unique2">B</div></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"].as_str().unwrap_or("").starts_with("a11y/duplicate-id")),
+        "Unique ids should produce no duplicate-id findings"
+    );
+}
+
+// ==========================================================================
+// A11y: ARIA role validation (#22)
+// ==========================================================================
+
+#[test]
+fn a11y_aria_role_invalid() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><div role="buttton">Typo</div></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "a11y/aria-role-invalid"),
+        "Typo in role name should be reported"
+    );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn a11y_aria_role_abstract() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><div role="widget">Abstract</div></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "a11y/aria-role-abstract"),
+        "Abstract role should be reported"
+    );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn a11y_aria_checkbox_missing_checked() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><div role="checkbox">No aria-checked</div></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "a11y/aria-required-attr"),
+        "role=checkbox without aria-checked should be reported"
+    );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn a11y_aria_valid_roles_pass() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><div role="alert">Valid</div><span role="status">Also valid</span><div role="checkbox" aria-checked="false">Checked</div></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"].as_str().unwrap_or("").starts_with("a11y/aria-role")),
+        "Valid ARIA roles should produce no role findings"
+    );
+}
+
+// ==========================================================================
+// SEO: Open Graph extended (#23)
+// ==========================================================================
+
+#[test]
+fn og_type_missing() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"opengraph":{"require_og_type":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "opengraph/type-missing"),
+        "Missing og:type should be reported when required"
+    );
+}
+
+#[test]
+fn og_url_missing() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"opengraph":{"require_og_url":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "opengraph/url-missing"),
+        "Missing og:url should be reported when required"
+    );
+}
+
+#[test]
+fn og_image_relative_url() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"><meta property="og:image" content="/images/hero.jpg"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "opengraph/image-not-absolute"),
+        "Relative og:image should be reported as error"
+    );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn twitter_card_invalid_value() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"><meta name="twitter:card" content="large_image"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "opengraph/twitter-card-invalid"),
+        "Invalid twitter:card value should be reported"
+    );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn og_type_present_pass() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"><meta property="og:type" content="website"><meta property="og:url" content="https://example.com/"><meta name="twitter:card" content="summary_large_image"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"opengraph":{"require_og_type":true,"require_og_url":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"] == "opengraph/type-missing"),
+        "Present og:type should not be reported"
+    );
+    assert!(
+        !findings.iter().any(|f| f["rule_id"] == "opengraph/twitter-card-invalid"),
+        "Valid twitter:card should not be reported"
+    );
+}
+
+// ==========================================================================
+// Structured Data: property completeness (#24)
+// ==========================================================================
+
+#[test]
+fn structured_data_article_no_author() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"><script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Test"}</script></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "structured-data/article-missing-author"),
+        "Article without author should be reported"
+    );
+}
+
+#[test]
+fn structured_data_faqpage_no_answer() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"><script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What?"}]}</script></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "structured-data/faq-missing-answer"),
+        "FAQPage without acceptedAnswer should be reported"
+    );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn structured_data_breadcrumb_no_position() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","name":"Home"}]}</script></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "structured-data/breadcrumb-missing-position"),
+        "BreadcrumbList item without position should be reported"
+    );
+    assert_eq!(code, 1);
+}
+
+// ==========================================================================
+// Images: CLS & efficiency (#25)
+// ==========================================================================
+
+#[test]
+fn image_missing_width_height() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><img src="/photo.jpg" alt="Photo"></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "images/missing-dimensions"),
+        "Image without width/height should be reported as error"
+    );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn image_missing_lazy_loading() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><img src="/hero.jpg" alt="Hero" width="800" height="600"><img src="/second.jpg" alt="Second" width="400" height="300"></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "images/missing-lazy"),
+        "Second image without loading=lazy should be warned"
+    );
+}
+
+#[test]
+fn image_format_hint_jpeg() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><img src="/photo.jpg" alt="Photo" width="400" height="300" loading="lazy"></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"images":{"format_hints":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "images/legacy-format"),
+        "JPEG image should suggest WebP when format_hints is enabled"
+    );
+}
+
+#[test]
+fn image_complete_pass() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><img src="/hero.webp" alt="Hero" width="800" height="600" loading="eager" srcset="/hero-400.webp 400w, /hero.webp 800w"></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"images":{"format_hints":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"].as_str().unwrap_or("").starts_with("images/")),
+        "Complete image markup should produce no image findings"
+    );
+}
+
+// ==========================================================================
+// robots.txt: extended audit (#26)
+// ==========================================================================
+
+#[test]
+fn robots_global_disallow_all() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    fs::write(
+        dir.path().join("robots.txt"),
+        "User-agent: *\nDisallow: /\n",
+    ).unwrap();
+    let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "robots-txt/disallow-all"),
+        "Global Disallow: / should be reported as error"
+    );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn robots_ai_citation_bot_blocked() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    fs::write(
+        dir.path().join("robots.txt"),
+        "User-agent: *\nAllow: /\n\nUser-agent: GPTBot\nDisallow: /\n",
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"robots_txt":{"ai_bot_policy":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "robots-txt/ai-citation-bot-blocked"),
+        "Blocked AI citation bot should be warned when ai_bot_policy is true"
+    );
+}
+
+#[test]
+fn robots_clean_pass() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    fs::write(
+        dir.path().join("robots.txt"),
+        "User-agent: *\nAllow: /\nSitemap: https://example.com/sitemap.xml\n",
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"robots_txt":{"require":true,"require_sitemap_link":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"].as_str().unwrap_or("").starts_with("robots-txt/")),
+        "Clean robots.txt should produce no findings"
+    );
+}
+
+// ==========================================================================
+// AI Visibility module (#27)
+// ==========================================================================
+
+#[test]
+fn ai_visibility_disabled_by_default() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"].as_str().unwrap_or("").starts_with("ai-visibility/")),
+        "AI visibility checks should not run without aiVisibility:true"
+    );
+}
+
+#[test]
+fn ai_visibility_rich_page_pass() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test Article</title><link rel="canonical" href="https://example.com/"><meta property="og:title" content="Test Article"><meta property="og:description" content="A rich article with good AI visibility signals."><script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Test","author":{"@type":"Person","name":"Author"}}</script></head><body><header><nav><a href="/">Home</a></nav></header><main><article><h1>Test Article</h1><h2>Section 1</h2><p>This is a well structured article with enough content to satisfy AI visibility requirements. It has multiple paragraphs and clear semantic structure with headings. The content is substantive and provides real value to readers.</p><h2>Section 2</h2><p>More content here to ensure the word count is above the minimum threshold for AI citation systems to consider this page worth indexing and referencing.</p></article></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"ai_visibility":{"enabled":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    let ai_errors: Vec<_> = findings
+        .iter()
+        .filter(|f| {
+            f["rule_id"].as_str().unwrap_or("").starts_with("ai-visibility/")
+                && f["level"] == "error"
+        })
+        .collect();
+    assert!(ai_errors.is_empty(), "Rich page should produce no AI visibility errors");
+}
+
+// ==========================================================================
+// UX Heuristics module (#28)
+// ==========================================================================
+
+#[test]
+fn ux_disabled_by_default() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"].as_str().unwrap_or("").starts_with("ux/")),
+        "UX checks should not run without uxHeuristics:true"
+    );
+}
+
+#[test]
+fn ux_no_cta_found() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><p>No calls to action here.</p></main><footer><a href="/impressum/">Impressum</a></footer></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"ux_heuristics":{"enabled":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "ux/no-cta"),
+        "Page without CTA should be reported"
+    );
+}
+
+#[test]
+fn ux_no_trust_signals() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><a href="/products/">Buy now</a></main><footer></footer></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"},"ux_heuristics":{"enabled":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "ux/no-trust-signals"),
+        "Page without trust signal links should be reported"
+    );
 }

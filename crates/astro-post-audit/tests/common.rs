@@ -66,7 +66,9 @@ pub fn write_valid_page(dir: &Path, rel_path: &str, title: &str, h1: &str, canon
   <link rel="canonical" href="https://example.com{canonical_path}">
 </head>
 <body>
-  <h1>{h1}</h1>
+  <header><nav><a href="/">Home</a></nav></header>
+  <main><h1>{h1}</h1></main>
+  <footer><a href="/">Home</a></footer>
 </body>
 </html>"#
         ),

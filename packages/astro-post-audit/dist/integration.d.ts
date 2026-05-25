@@ -77,6 +77,37 @@ export interface RulesConfig {
         require?: boolean;
         /** `robots.txt` must contain a link to the sitemap. @default false */
         require_sitemap_link?: boolean;
+        /** Error if `User-agent: *` with `Disallow: /` blocks all crawlers. @default true */
+        check_disallow_all?: boolean;
+        /** Warn if `Crawl-delay` exceeds this value in seconds (0 = disabled). @default 10 */
+        max_crawl_delay?: number;
+        /** Warn if AI citation bots (GPTBot, ClaudeBot, PerplexityBot) are blocked. @default false */
+        ai_bot_policy?: boolean;
+    };
+    /** Image HTML attribute checks for CLS prevention and responsive image best practices. */
+    images?: {
+        /** Error if `<img>` is missing both `width` and `height` (causes Cumulative Layout Shift). @default true */
+        check_missing_dimensions?: boolean;
+        /** Warn if `<img>` beyond the first on a page has no `loading` attribute. @default true */
+        warn_missing_lazy?: boolean;
+        /** Info if `<img>` has no `srcset` (no responsive image markup). @default true */
+        info_missing_srcset?: boolean;
+        /** Info if `<img>` uses a legacy format (`.jpg`, `.png`, `.gif`) — suggests WebP/AVIF. @default false */
+        format_hints?: boolean;
+    };
+    /** AI visibility scoring — checks static signals that influence AI search citation probability. @default false */
+    ai_visibility?: {
+        /** Enable AI visibility checks. @default false */
+        enabled?: boolean;
+    };
+    /** UX heuristic checks — CTA clarity, trust signals, cognitive load. @default false */
+    ux_heuristics?: {
+        /** Enable UX heuristics module. @default false */
+        enabled?: boolean;
+        /** Warn if a page exceeds this many links (cognitive load). @default 80 */
+        max_links_per_page?: number;
+        /** Warn if a page has fewer than this many CTA-like elements. @default 1 */
+        min_cta_per_page?: number;
     };
     /** Basic HTML structure checks. */
     html_basics?: {
@@ -120,6 +151,12 @@ export interface RulesConfig {
         aria_hidden_focusable_check?: boolean;
         /** Require a skip navigation link (e.g. `<a href="#main-content">`). @default false */
         require_skip_link?: boolean;
+        /** Check for semantic landmark elements (`<main>`, `<nav>`, `<header>`, `<footer>`). @default true */
+        check_landmarks?: boolean;
+        /** Detect duplicate `id` attributes on a page. Duplicate ids break ARIA references. @default true */
+        check_duplicate_ids?: boolean;
+        /** Validate ARIA `role` values against the WAI-ARIA spec. @default true */
+        check_aria_roles?: boolean;
     };
     /** Asset reference and size checks. */
     assets?: {
@@ -146,6 +183,18 @@ export interface RulesConfig {
         require_og_image?: boolean;
         /** Require `twitter:card` meta tag. @default false */
         require_twitter_card?: boolean;
+        /** Require `og:type` meta tag (e.g. `"website"`, `"article"`). @default false */
+        require_og_type?: boolean;
+        /** Require `og:url` canonical property. @default false */
+        require_og_url?: boolean;
+        /** Error if `og:image` is a relative URL (must be absolute for social sharing). @default true */
+        og_image_absolute_url?: boolean;
+        /** Require `twitter:image` meta tag. @default false */
+        require_twitter_image?: boolean;
+        /** Validate `twitter:card` value against the allowed set (`summary`, `summary_large_image`, `app`, `player`). @default true */
+        twitter_card_valid_values?: boolean;
+        /** Warn when `og:title` and `<title>` differ significantly in length. @default false */
+        og_title_consistency?: boolean;
     };
     /** Structured data (JSON-LD) validation. */
     structured_data?: {
@@ -325,6 +374,22 @@ export interface PostAuditOptions {
      * goLive: { enabled: process.env.DEPLOY_CONTEXT === "production", forbiddenDomains: ["staging.example.com"] }
      */
     goLive?: GoLiveConfig;
+    /**
+     * Enable AI visibility scoring. Checks static signals (word count, schema, OG tags, semantic HTML)
+     * that influence how AI search systems (Perplexity, ChatGPT Search, Claude) cite your content.
+     * Pass `true` to enable with defaults, or an object for fine-grained control.
+     * @default false
+     */
+    aiVisibility?: boolean;
+    /**
+     * Enable UX heuristic checks. Evaluates CTA clarity, trust signals, and cognitive load.
+     * Pass `true` to enable with defaults, or an object for fine-grained control.
+     * @default false
+     */
+    uxHeuristics?: boolean | {
+        maxLinksPerPage?: number;
+        minCtaPerPage?: number;
+    };
 }
 interface RuntimeDeps {
     execFileSync: typeof execFileSync;
