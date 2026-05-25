@@ -120,6 +120,21 @@
                             "description": "`<button>` elements must have an accessible name.",
                             "type": "boolean"
                         },
+                        "check_aria_roles": {
+                            "default": true,
+                            "description": "Validate ARIA `role` values against the WAI-ARIA spec.",
+                            "type": "boolean"
+                        },
+                        "check_duplicate_ids": {
+                            "default": true,
+                            "description": "Detect duplicate `id` attributes on a page. Duplicate ids break ARIA references.",
+                            "type": "boolean"
+                        },
+                        "check_landmarks": {
+                            "default": true,
+                            "description": "Check for semantic landmark elements (`<main>`, `<nav>`, `<header>`, `<footer>`).",
+                            "type": "boolean"
+                        },
                         "img_alt_required": {
                             "default": true,
                             "description": "`<img>` elements must have an `alt` attribute.",
@@ -138,6 +153,19 @@
                         "warn_generic_link_text": {
                             "default": true,
                             "description": "Warn on generic link text like \"click here\", \"mehr\", \"weiter\".",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
+                "ai_visibility": {
+                    "additionalProperties": false,
+                    "default": false,
+                    "description": "AI visibility scoring — checks static signals that influence AI search citation probability.",
+                    "properties": {
+                        "enabled": {
+                            "default": false,
+                            "description": "Enable AI visibility checks.",
                             "type": "boolean"
                         }
                     },
@@ -408,6 +436,33 @@
                     },
                     "type": "object"
                 },
+                "images": {
+                    "additionalProperties": false,
+                    "description": "Image HTML attribute checks for CLS prevention and responsive image best practices.",
+                    "properties": {
+                        "check_missing_dimensions": {
+                            "default": true,
+                            "description": "Error if `<img>` is missing both `width` and `height` (causes Cumulative Layout Shift).",
+                            "type": "boolean"
+                        },
+                        "format_hints": {
+                            "default": false,
+                            "description": "Info if `<img>` uses a legacy format (`.jpg`, `.png`, `.gif`) — suggests WebP/AVIF.",
+                            "type": "boolean"
+                        },
+                        "info_missing_srcset": {
+                            "default": true,
+                            "description": "Info if `<img>` has no `srcset` (no responsive image markup).",
+                            "type": "boolean"
+                        },
+                        "warn_missing_lazy": {
+                            "default": true,
+                            "description": "Warn if `<img>` beyond the first on a page has no `loading` attribute.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
                 "links": {
                     "additionalProperties": false,
                     "description": "Internal link consistency checks.",
@@ -449,6 +504,16 @@
                     "additionalProperties": false,
                     "description": "Open Graph and Twitter Card meta tag checks.",
                     "properties": {
+                        "og_image_absolute_url": {
+                            "default": true,
+                            "description": "Error if `og:image` is a relative URL (must be absolute for social sharing).",
+                            "type": "boolean"
+                        },
+                        "og_title_consistency": {
+                            "default": false,
+                            "description": "Warn when `og:title` and `<title>` differ significantly in length.",
+                            "type": "boolean"
+                        },
                         "require_og_description": {
                             "default": false,
                             "description": "Require `og:description` meta tag.",
@@ -464,9 +529,29 @@
                             "description": "Require `og:title` meta tag.",
                             "type": "boolean"
                         },
+                        "require_og_type": {
+                            "default": false,
+                            "description": "Require `og:type` meta tag (e.g. `\"website\"`, `\"article\"`).",
+                            "type": "boolean"
+                        },
+                        "require_og_url": {
+                            "default": false,
+                            "description": "Require `og:url` canonical property.",
+                            "type": "boolean"
+                        },
                         "require_twitter_card": {
                             "default": false,
                             "description": "Require `twitter:card` meta tag.",
+                            "type": "boolean"
+                        },
+                        "require_twitter_image": {
+                            "default": false,
+                            "description": "Require `twitter:image` meta tag.",
+                            "type": "boolean"
+                        },
+                        "twitter_card_valid_values": {
+                            "default": true,
+                            "description": "Validate `twitter:card` value against the allowed set (`summary`, `summary_large_image`, `app`, `player`).",
                             "type": "boolean"
                         }
                     },
@@ -517,6 +602,21 @@
                     "additionalProperties": false,
                     "description": "`robots.txt` file checks.",
                     "properties": {
+                        "ai_bot_policy": {
+                            "default": false,
+                            "description": "Warn if AI citation bots (GPTBot, ClaudeBot, PerplexityBot) are blocked.",
+                            "type": "boolean"
+                        },
+                        "check_disallow_all": {
+                            "default": true,
+                            "description": "Error if `User-agent: *` with `Disallow: /` blocks all crawlers.",
+                            "type": "boolean"
+                        },
+                        "max_crawl_delay": {
+                            "default": 10,
+                            "description": "Warn if `Crawl-delay` exceeds this value in seconds (0 = disabled).",
+                            "type": "number"
+                        },
                         "require": {
                             "default": false,
                             "description": "`robots.txt` must exist.",
@@ -653,12 +753,40 @@
                         }
                     },
                     "type": "object"
+                },
+                "ux_heuristics": {
+                    "additionalProperties": false,
+                    "default": false,
+                    "description": "UX heuristic checks — CTA clarity, trust signals, cognitive load.",
+                    "properties": {
+                        "enabled": {
+                            "default": false,
+                            "description": "Enable UX heuristics module.",
+                            "type": "boolean"
+                        },
+                        "max_links_per_page": {
+                            "default": 80,
+                            "description": "Warn if a page exceeds this many links (cognitive load).",
+                            "type": "number"
+                        },
+                        "min_cta_per_page": {
+                            "default": 1,
+                            "description": "Warn if a page has fewer than this many CTA-like elements.",
+                            "type": "number"
+                        }
+                    },
+                    "type": "object"
                 }
             },
             "type": "object"
         }
     },
     "properties": {
+        "aiVisibility": {
+            "default": false,
+            "description": "Enable AI visibility scoring. Checks static signals (word count, schema, OG tags, semantic HTML)\nthat influence how AI search systems (Perplexity, ChatGPT Search, Claude) cite your content.\nPass `true` to enable with defaults, or an object for fine-grained control.",
+            "type": "boolean"
+        },
         "baseline": {
             "description": "Path to a baseline file (relative to project root). When set, only findings that are\n*new* since the baseline was written will be reported. If the file does not exist,\na warning is logged and the audit runs normally.",
             "type": "string"
@@ -752,6 +880,27 @@
         "throwOnError": {
             "description": "Throw an error when the audit finds issues (fails the build). Default: false",
             "type": "boolean"
+        },
+        "uxHeuristics": {
+            "anyOf": [
+                {
+                    "additionalProperties": false,
+                    "properties": {
+                        "maxLinksPerPage": {
+                            "type": "number"
+                        },
+                        "minCtaPerPage": {
+                            "type": "number"
+                        }
+                    },
+                    "type": "object"
+                },
+                {
+                    "type": "boolean"
+                }
+            ],
+            "default": false,
+            "description": "Enable UX heuristic checks. Evaluates CTA clarity, trust signals, and cognitive load.\nPass `true` to enable with defaults, or an object for fine-grained control."
         },
         "writeBaseline": {
             "description": "Write current findings as the new baseline and exit with code 0.\nUse this once to adopt the plugin on a site with existing issues.",
