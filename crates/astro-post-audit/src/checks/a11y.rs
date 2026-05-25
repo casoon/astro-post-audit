@@ -354,8 +354,16 @@ fn check_aria_hidden_focusable(
 fn check_landmarks(page: &crate::discovery::PageInfo, html: &Html, findings: &mut Vec<Finding>) {
     let main_sel = Selector::parse("main, [role='main']").unwrap();
     let nav_sel = Selector::parse("nav, [role='navigation']").unwrap();
-    let header_sel = Selector::parse("body > header, [role='banner']").unwrap();
-    let footer_sel = Selector::parse("body > footer, [role='contentinfo']").unwrap();
+    // <header>/<footer> are banner/contentinfo landmarks unless nested inside
+    // sectioning content — a <div> wrapper must not disqualify them (#31, #32)
+    let header_sel = Selector::parse(
+        "header:not(article header):not(aside header):not(main header):not(nav header):not(section header), [role='banner']",
+    )
+    .unwrap();
+    let footer_sel = Selector::parse(
+        "footer:not(article footer):not(aside footer):not(main footer):not(nav footer):not(section footer), [role='contentinfo']",
+    )
+    .unwrap();
 
     let main_count = html.select(&main_sel).count();
     if main_count == 0 {
