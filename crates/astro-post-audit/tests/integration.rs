@@ -2716,6 +2716,44 @@ fn a11y_landmark_all_present_no_landmark_errors() {
 }
 
 // ==========================================================================
+// A11y: Landmark false positives with div wrappers (#31, #32)
+// ==========================================================================
+
+#[test]
+fn a11y_landmark_header_inside_div_no_false_positive() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><div id="site-content"><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></div></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "a11y/landmark-header-missing"),
+        "<header> inside <div> must not trigger landmark-header-missing (false positive #31)"
+    );
+}
+
+#[test]
+fn a11y_landmark_footer_inside_div_no_false_positive() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><div id="site-content"><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></div></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "a11y/landmark-footer-missing"),
+        "<footer> inside <div> must not trigger landmark-footer-missing (false positive #32)"
+    );
+}
+
+// ==========================================================================
 // A11y: Duplicate ID detection (#21)
 // ==========================================================================
 
