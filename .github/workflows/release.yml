@@ -99,6 +99,7 @@ jobs:
           path: |
             ${{ env.ARCHIVE_NAME }}
             ${{ env.ARCHIVE_NAME }}.sha256
+          retention-days: 1
 
   release:
     needs: build
