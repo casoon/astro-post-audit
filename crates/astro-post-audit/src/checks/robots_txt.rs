@@ -70,7 +70,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     if config.robots_txt.check_disallow_all {
         for block in &blocks {
             let is_global = block.agents.iter().any(|a| a == "*");
-            let has_disallow_all = block.disallows.iter().any(|d| d == "/" || d.is_empty());
+            let has_disallow_all = block.disallows.iter().any(|d| d == "/");
             // Only flag if there's no Allow: / or Allow entries that override
             let has_allow_all = block.allows.iter().any(|a| a == "/");
 
@@ -95,7 +95,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         for bot in &["Googlebot", "Bingbot"] {
             for block in &blocks {
                 let is_bot = block.agents.iter().any(|a| a.eq_ignore_ascii_case(bot));
-                let has_disallow_all = block.disallows.iter().any(|d| d == "/" || d.is_empty());
+                let has_disallow_all = block.disallows.iter().any(|d| d == "/");
                 let has_allow_all = block.allows.iter().any(|a| a == "/");
 
                 if is_bot && has_disallow_all && !has_allow_all {
@@ -154,7 +154,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 let is_citation_bot = AI_CITATION_BOTS
                     .iter()
                     .any(|b| agent.eq_ignore_ascii_case(b));
-                let has_disallow = block.disallows.iter().any(|d| d == "/" || d.is_empty());
+                let has_disallow = block.disallows.iter().any(|d| d == "/");
                 let has_allow = block.allows.iter().any(|a| a == "/");
 
                 if is_citation_bot && has_disallow && !has_allow {

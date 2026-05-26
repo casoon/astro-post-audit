@@ -751,6 +751,54 @@ fn robots_txt_with_sitemap_ok() {
         .any(|f| f["rule_id"].as_str().unwrap().starts_with("robots-txt/")));
 }
 
+#[test]
+fn robots_txt_empty_disallow_is_not_disallow_all() {
+    // "Disallow:" with an empty value means "allow everything" per RFC 9309.
+    // It must NOT trigger the disallow-all error.
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    fs::write(
+        dir.path().join("robots.txt"),
+        "User-agent: *\nDisallow:\n\nSitemap: https://example.com/sitemap.xml\n",
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"robots_txt":{"check_disallow_all":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "robots-txt/disallow-all"),
+        "Empty Disallow: must not trigger disallow-all, got: {:?}",
+        findings
+    );
+}
+
+#[test]
+fn robots_txt_disallow_slash_is_disallow_all() {
+    // "Disallow: /" must still trigger the disallow-all error.
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    fs::write(
+        dir.path().join("robots.txt"),
+        "User-agent: *\nDisallow: /\n",
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"robots_txt":{"check_disallow_all":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "robots-txt/disallow-all"),
+        "Disallow: / must trigger disallow-all"
+    );
+}
+
 // ==========================================================================
 // Edge cases: empty file, whitespace, malformed HTML
 // ==========================================================================
