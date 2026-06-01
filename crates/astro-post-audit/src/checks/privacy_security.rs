@@ -18,7 +18,9 @@ const TRACKER_DOMAINS: &[&str] = &[
 ];
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
-    if !config.privacy_security.enabled {
+    let enabled = config.privacy_security.enabled;
+    let gdpr = config.privacy_security.gdpr;
+    if !enabled && !gdpr {
         return Vec::new();
     }
 
@@ -37,6 +39,15 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
     for page in &index.pages {
         let html = page.parse_html();
+
+        if gdpr {
+            check_gdpr(page, &html, index, &mut findings);
+        }
+
+        if !enabled {
+            continue;
+        }
+
         let mut third_party_domains: HashSet<String> = HashSet::new();
 
         for el in html.select(&url_sel) {
@@ -149,6 +160,142 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     }
 
     findings
+}
+
+/// Public CDN hosts whose use leaks visitor IPs to third parties (GDPR-relevant).
+const CDN_HOSTS: &[&str] = &[
+    "unpkg.com",
+    "cdn.jsdelivr.net",
+    "jsdelivr.net",
+    "cdnjs.cloudflare.com",
+    "code.jquery.com",
+    "stackpath.bootstrapcdn.com",
+    "maxcdn.bootstrapcdn.com",
+];
+
+/// GDPR/DSGVO checks: detect third-party transfers that send visitor IPs abroad
+/// without consent (Google Fonts, YouTube, Google Maps, public CDNs, external images).
+fn check_gdpr(
+    page: &crate::discovery::PageInfo,
+    html: &scraper::Html,
+    index: &SiteIndex,
+    findings: &mut Vec<Finding>,
+) {
+    let url_sel = Selector::parse("[src], [href]").unwrap();
+    let iframe_sel = Selector::parse("iframe[src]").unwrap();
+
+    let mut push = |rule: &str, selector: String, message: String, help: &str| {
+        findings.push(Finding {
+            level: Level::Warning,
+            rule_id: rule.into(),
+            file: page.rel_path.clone(),
+            selector,
+            message,
+            help: help.into(),
+            suggestion: None,
+            source_hint: None,
+            confidence: Some(Confidence::Medium),
+        });
+    };
+
+    // 1. Google Fonts + 4. CDNs + 5. external images: scan all resource URLs once.
+    let mut google_fonts = false;
+    let mut cdn_hosts: HashSet<String> = HashSet::new();
+    let mut external_image_hosts: HashSet<String> = HashSet::new();
+
+    for el in html.select(&url_sel) {
+        let value = el
+            .value()
+            .attr("src")
+            .or_else(|| el.value().attr("href"))
+            .unwrap_or("");
+        let Some(host) = host_from_url(value) else {
+            continue;
+        };
+
+        if host == "fonts.googleapis.com" || host == "fonts.gstatic.com" {
+            google_fonts = true;
+        }
+        if CDN_HOSTS
+            .iter()
+            .any(|c| host == *c || host.ends_with(&format!(".{c}")))
+        {
+            cdn_hosts.insert(host.clone());
+        }
+        if el.value().name() == "img" && is_third_party_host(&host, index.base_url.as_deref()) {
+            external_image_hosts.insert(host);
+        }
+    }
+
+    if google_fonts {
+        push(
+            "privacy-security/google-fonts-external",
+            "link[href*='fonts.googleapis.com']".into(),
+            "Page loads fonts from Google servers (fonts.googleapis.com/gstatic.com)".into(),
+            "Self-host your fonts using `@fontsource` to prevent external requests to Google servers.",
+        );
+    }
+    if !cdn_hosts.is_empty() {
+        push(
+            "privacy-security/cdn-resources",
+            "script[src], link[href]".into(),
+            format!(
+                "Page loads resources from public CDN(s): {}",
+                join_limited(&cdn_hosts, 4)
+            ),
+            "Install the package via npm and bundle it locally using Astro/Vite instead of using a public CDN.",
+        );
+    }
+    if !external_image_hosts.is_empty() {
+        push(
+            "privacy-security/external-images",
+            "img[src]".into(),
+            format!(
+                "Page embeds images from external domain(s): {}",
+                join_limited(&external_image_hosts, 4)
+            ),
+            "Downloading images from external servers transfers user IPs. Download the image and host it locally in `src/assets/`.",
+        );
+    }
+
+    // 2. YouTube embeds + 3. Google Maps embeds.
+    let mut youtube = false;
+    let mut maps = false;
+    for el in html.select(&iframe_sel) {
+        let Some(src) = el.value().attr("src") else {
+            continue;
+        };
+        let Some(host) = host_from_url(src) else {
+            continue;
+        };
+        if (host == "youtube.com" || host == "www.youtube.com") && !youtube {
+            youtube = true;
+        }
+        let is_maps = host == "maps.google.com"
+            || host == "maps.googleapis.com"
+            || (host.ends_with(".google.com") && src.contains("/maps"))
+            || (host == "google.com" && src.contains("/maps"));
+        if is_maps {
+            maps = true;
+        }
+    }
+
+    if youtube {
+        push(
+            "privacy-security/youtube-direct-embed",
+            "iframe[src*='youtube.com']".into(),
+            "YouTube iframe uses youtube.com instead of the privacy-enhanced domain".into(),
+            "Use youtube-nocookie.com or implement a consent wrapper/lazy-loading placeholder for video embeds.",
+        );
+    }
+    if maps {
+        push(
+            "privacy-security/google-maps-embed",
+            "iframe[src*='google.com/maps']".into(),
+            "Page embeds Google Maps directly via iframe".into(),
+            "Direct Google Maps embeds transfer IP addresses to Google without consent. Use a static preview image or gate it behind a cookie banner.",
+        );
+    }
 }
 
 fn host_from_url(value: &str) -> Option<String> {

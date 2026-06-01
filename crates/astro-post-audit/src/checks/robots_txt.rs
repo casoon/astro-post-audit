@@ -1,3 +1,5 @@
+use url::Url;
+
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::report::{Finding, Level};
@@ -203,7 +205,127 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         }
     }
 
+    // Contradiction checks need the rules that apply to the wildcard (*) user-agent group.
+    if config.robots_txt.check_noindex_contradiction || config.robots_txt.check_sitemap_blocked {
+        let (disallows, allows) = wildcard_rules(&blocks);
+
+        // noindex page that is also Disallow'd: crawlers can't see the noindex tag.
+        if config.robots_txt.check_noindex_contradiction {
+            for page in &index.pages {
+                if page.noindex && path_is_disallowed(&disallows, &allows, &page.route) {
+                    findings.push(Finding {
+                        level: Level::Error,
+                        rule_id: "robots/blocked-noindex-contradiction".into(),
+                        file: page.rel_path.clone(),
+                        selector: "meta[name='robots']".into(),
+                        message: format!(
+                            "Page '{}' is Disallow'd in robots.txt but also has noindex",
+                            page.route
+                        ),
+                        help: "Crawlers blocked by robots.txt cannot read the noindex tag, so the page may stay indexed. Allow crawling, or drop the noindex and remove internal links instead.".into(),
+                        suggestion: None,
+                        source_hint: None,
+                        confidence: None,
+                    });
+                }
+            }
+        }
+
+        // Sitemap URLs that robots.txt blocks send mixed signals to search engines.
+        if config.robots_txt.check_sitemap_blocked {
+            for url in &index.sitemap_urls {
+                let path = Url::parse(url)
+                    .ok()
+                    .map(|u| u.path().to_string())
+                    .unwrap_or_else(|| url.clone());
+                if path_is_disallowed(&disallows, &allows, &path) {
+                    findings.push(Finding {
+                        level: Level::Warning,
+                        rule_id: "sitemap/entry-blocked-by-robots".into(),
+                        file: "sitemap.xml".into(),
+                        selector: String::new(),
+                        message: format!("Sitemap URL '{}' is blocked by robots.txt", url),
+                        help: "A sitemap should only list crawlable URLs. Remove the entry or allow it in robots.txt.".into(),
+                        suggestion: None,
+                        source_hint: None,
+                        confidence: None,
+                    });
+                }
+            }
+        }
+    }
+
     findings
+}
+
+/// Collect Disallow/Allow rules that apply to the wildcard (`*`) user-agent group.
+fn wildcard_rules(blocks: &[RobotsBlock]) -> (Vec<String>, Vec<String>) {
+    let mut disallows = Vec::new();
+    let mut allows = Vec::new();
+    for block in blocks {
+        if block.agents.iter().any(|a| a == "*") {
+            disallows.extend(block.disallows.iter().cloned());
+            allows.extend(block.allows.iter().cloned());
+        }
+    }
+    (disallows, allows)
+}
+
+/// Determine whether `path` is disallowed, applying RFC 9309 longest-match
+/// precedence (the more specific rule wins; on equal specificity, Allow wins).
+fn path_is_disallowed(disallows: &[String], allows: &[String], path: &str) -> bool {
+    let best_disallow = disallows
+        .iter()
+        .filter_map(|r| rule_match_len(r, path))
+        .max();
+    let best_allow = allows.iter().filter_map(|r| rule_match_len(r, path)).max();
+    match (best_disallow, best_allow) {
+        (Some(d), Some(a)) => d > a,
+        (Some(_), None) => true,
+        _ => false,
+    }
+}
+
+/// If `pattern` matches `path`, return its specificity (count of literal,
+/// non-wildcard characters); otherwise None. Supports `*` wildcards and the
+/// `$` end-anchor. An empty pattern (`Disallow:`) never matches (allow-all).
+fn rule_match_len(pattern: &str, path: &str) -> Option<usize> {
+    if pattern.is_empty() {
+        return None;
+    }
+    let anchored = pattern.ends_with('$');
+    let pat = if anchored {
+        &pattern[..pattern.len() - 1]
+    } else {
+        pattern
+    };
+
+    let parts: Vec<&str> = pat.split('*').collect();
+    let mut pos = 0usize;
+    for (i, part) in parts.iter().enumerate() {
+        if part.is_empty() {
+            continue;
+        }
+        if i == 0 {
+            if !path[pos..].starts_with(part) {
+                return None;
+            }
+            pos += part.len();
+        } else {
+            match path[pos..].find(part) {
+                Some(idx) => pos += idx + part.len(),
+                None => return None,
+            }
+        }
+    }
+
+    // With `$`, the match must consume the whole path (unless the pattern ended
+    // with a `*`, in which case any suffix is allowed).
+    if anchored && !pat.ends_with('*') && pos != path.len() {
+        return None;
+    }
+
+    Some(pat.chars().filter(|&c| c != '*').count())
 }
 
 struct RobotsBlock {

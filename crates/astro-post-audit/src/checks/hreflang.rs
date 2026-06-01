@@ -90,6 +90,42 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             }
         }
 
+        // Check that internal hreflang targets actually exist in the build
+        if config.hreflang.require_target_exists {
+            for (lang, href) in &entries {
+                if lang == "x-default" {
+                    continue;
+                }
+                if !normalize::is_internal(href, index.base_url.as_deref()) {
+                    continue; // can't verify cross-origin targets statically
+                }
+                if let Some(resolved) =
+                    normalize::resolve_href(href, &page.route, index.base_url.as_deref())
+                {
+                    let normalized =
+                        normalize::normalize_path(&resolved, &config.url_normalization);
+                    if !index.route_exists(&normalized) {
+                        findings.push(Finding {
+                            level: Level::Warning,
+                            rule_id: "hreflang/target-missing".into(),
+                            file: page.rel_path.clone(),
+                            selector: format!("link[hreflang='{}'][href='{}']", lang, href),
+                            message: format!(
+                                "Hreflang target '{}' (lang='{}') does not exist in the build",
+                                href, lang
+                            ),
+                            help:
+                                "Ensure the translated page is generated, or fix the hreflang href."
+                                    .into(),
+                            suggestion: None,
+                            source_hint: None,
+                            confidence: None,
+                        });
+                    }
+                }
+            }
+        }
+
         all_hreflangs.insert(page.route.clone(), entries);
     }
 

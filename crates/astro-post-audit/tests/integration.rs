@@ -3355,3 +3355,445 @@ fn ux_no_trust_signals() {
         "Page without trust signal links should be reported"
     );
 }
+
+// ==========================================================================
+// URL depth (#35)
+// ==========================================================================
+
+#[test]
+fn links_url_depth_exceeded() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(
+        dir.path(),
+        "blog/seo/technical/crawl-budget/index.html",
+        "Deep",
+        "Deep",
+        "/blog/seo/technical/crawl-budget/",
+    );
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"links":{"max_url_depth":3}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "links/url-depth"),
+        "Deeply nested URL should be flagged"
+    );
+}
+
+#[test]
+fn links_url_depth_within_limit_ok() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(
+        dir.path(),
+        "blog/post/index.html",
+        "Post",
+        "Post",
+        "/blog/post/",
+    );
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"links":{"max_url_depth":3}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"] == "links/url-depth"),
+        "Shallow URL should not be flagged"
+    );
+}
+
+// ==========================================================================
+// Alt-text quality heuristics (#39)
+// ==========================================================================
+
+#[test]
+fn a11y_invalid_alt_filename() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><main><h1>Test</h1><img src="/a.png" alt="DSC_0281.jpg" width="10" height="10"><img src="/b.png" alt="image" width="10" height="10"><img src="/c.png" alt="x" width="10" height="10"></main></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    let count = findings
+        .iter()
+        .filter(|f| f["rule_id"] == "a11y/invalid-img-alt")
+        .count();
+    assert!(
+        count >= 3,
+        "Filename, placeholder, and too-short alts should all be flagged, got {count}"
+    );
+}
+
+#[test]
+fn a11y_good_alt_not_flagged() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><main><h1>Test</h1><img src="/a.png" alt="A red bicycle leaning on a wall" width="10" height="10"><img src="/spacer.png" alt="" width="10" height="10"></main></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "a11y/invalid-img-alt"),
+        "Descriptive and empty (decorative) alts should not be flagged"
+    );
+}
+
+// ==========================================================================
+// Hreflang target existence (#38)
+// ==========================================================================
+
+#[test]
+fn hreflang_target_missing() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home</title><link rel="canonical" href="https://example.com/"><link rel="alternate" hreflang="fr" href="https://example.com/fr/"></head><body><main><h1>Home</h1></main></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"hreflang":{"check_hreflang":true,"require_target_exists":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "hreflang/target-missing"),
+        "Missing hreflang target should be flagged"
+    );
+}
+
+// ==========================================================================
+// robots.txt contradictions (#36)
+// ==========================================================================
+
+#[test]
+fn robots_noindex_contradiction() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("robots.txt"),
+        "User-agent: *\nDisallow: /secret/\n",
+    )
+    .unwrap();
+    fs::create_dir_all(dir.path().join("secret")).unwrap();
+    fs::write(
+        dir.path().join("secret/index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Secret</title><meta name="robots" content="noindex"><link rel="canonical" href="https://example.com/secret/"></head><body><main><h1>Secret</h1></main></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"robots_txt":{"check_noindex_contradiction":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "robots/blocked-noindex-contradiction"),
+        "Disallowed + noindex page should be flagged"
+    );
+}
+
+#[test]
+fn robots_sitemap_entry_blocked() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("robots.txt"),
+        "User-agent: *\nDisallow: /private/\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("sitemap.xml"),
+        r#"<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://example.com/private/page/</loc></url></urlset>"#,
+    ).unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"robots_txt":{"check_sitemap_blocked":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "sitemap/entry-blocked-by-robots"),
+        "Sitemap URL blocked by robots.txt should be flagged"
+    );
+}
+
+// ==========================================================================
+// GDPR / DSGVO (#41)
+// ==========================================================================
+
+#[test]
+fn gdpr_third_party_transfers() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"><link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto"><script src="https://unpkg.com/foo@1/dist/foo.js"></script></head><body><main><h1>Test</h1><iframe src="https://www.youtube.com/embed/abc"></iframe><iframe src="https://www.google.com/maps/embed?pb=1"></iframe><img src="https://cdn.othersite.com/pic.png" alt="external picture" width="10" height="10"></main></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"privacy_security":{"gdpr":true}}"#,
+    );
+    let ids: Vec<&str> = json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["rule_id"].as_str().unwrap())
+        .collect();
+    assert!(
+        ids.contains(&"privacy-security/google-fonts-external"),
+        "google fonts"
+    );
+    assert!(ids.contains(&"privacy-security/cdn-resources"), "cdn");
+    assert!(
+        ids.contains(&"privacy-security/youtube-direct-embed"),
+        "youtube"
+    );
+    assert!(ids.contains(&"privacy-security/google-maps-embed"), "maps");
+    assert!(
+        ids.contains(&"privacy-security/external-images"),
+        "external images"
+    );
+}
+
+// ==========================================================================
+// OG image existence and dimensions (#34)
+// ==========================================================================
+
+/// Minimal valid 1x1 RGBA PNG.
+const PNG_1X1: &[u8] = &[
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+    0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+    0x42, 0x60, 0x82,
+];
+
+#[test]
+fn opengraph_image_broken() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"><meta property="og:image" content="https://example.com/missing.png"></head><body><main><h1>Test</h1></main></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"opengraph":{"check_image_exists":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "opengraph/image-broken"),
+        "Missing local og:image should be flagged"
+    );
+}
+
+#[test]
+fn opengraph_image_invalid_dimensions() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("og.png"), PNG_1X1).unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"><meta property="og:image" content="/og.png"></head><body><main><h1>Test</h1></main></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"opengraph":{"check_image_exists":true,"check_image_dimensions":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "opengraph/image-invalid-dimensions"),
+        "1x1 og:image should be flagged as below recommended dimensions"
+    );
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "opengraph/image-broken"),
+        "Existing og:image should not be reported as broken"
+    );
+}
+
+// ==========================================================================
+// Redirect analysis (#33)
+// ==========================================================================
+
+fn write_redirect(dir: &Path, rel: &str, target: &str) {
+    let full = dir.join(rel);
+    if let Some(parent) = full.parent() {
+        fs::create_dir_all(parent).unwrap();
+    }
+    fs::write(
+        &full,
+        format!(
+            r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url={target}"><title>Redirecting</title></head><body></body></html>"#
+        ),
+    )
+    .unwrap();
+}
+
+#[test]
+fn redirects_chain_and_link() {
+    let dir = TempDir::new().unwrap();
+    write_redirect(dir.path(), "old/index.html", "/mid/");
+    write_redirect(dir.path(), "mid/index.html", "/new/");
+    write_valid_page(dir.path(), "new/index.html", "New", "New", "/new/");
+    // A page linking to the first redirect.
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home</title><link rel="canonical" href="https://example.com/"></head><body><main><h1>Home</h1><a href="/old/">Old</a></main></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"redirects":{"enabled":true}}"#,
+    );
+    let ids: Vec<&str> = json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["rule_id"].as_str().unwrap())
+        .collect();
+    assert!(
+        ids.contains(&"redirects/chain"),
+        "redirect chain should be flagged"
+    );
+    assert!(
+        ids.contains(&"links/redirect-target"),
+        "link to redirect should be flagged"
+    );
+}
+
+#[test]
+fn redirects_loop() {
+    let dir = TempDir::new().unwrap();
+    write_redirect(dir.path(), "x/index.html", "/y/");
+    write_redirect(dir.path(), "y/index.html", "/x/");
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"redirects":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "redirects/loop"),
+        "redirect loop should be flagged"
+    );
+}
+
+// ==========================================================================
+// JS bloat (#37)
+// ==========================================================================
+
+#[test]
+fn js_bloat_over_threshold() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("app.js"), vec![b'a'; 120 * 1024]).unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><main><h1>Test</h1></main><script src="/app.js"></script></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"js_bloat":{"enabled":true,"max_kb":100}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "performance/js-bloat"),
+        "Heavy client JS should be flagged"
+    );
+}
+
+// ==========================================================================
+// Content collection sync (#40)
+// ==========================================================================
+
+#[test]
+fn content_sync_missing_page() {
+    let proj = TempDir::new().unwrap();
+    let content = proj.path().join("src/content/blog");
+    fs::create_dir_all(&content).unwrap();
+    fs::write(
+        content.join("hidden-post.md"),
+        "---\ntitle: Hidden\n---\nbody",
+    )
+    .unwrap();
+    fs::write(
+        content.join("visible-post.md"),
+        "---\ntitle: Visible\n---\nbody",
+    )
+    .unwrap();
+
+    let dist = proj.path().join("dist");
+    fs::create_dir_all(&dist).unwrap();
+    write_valid_page(
+        &dist,
+        "blog/visible-post/index.html",
+        "Visible",
+        "Visible",
+        "/blog/visible-post/",
+    );
+
+    let cfg = format!(
+        r#"{{"site":{{"base_url":"https://example.com"}},"content_sync":{{"enabled":true}},"project_root":"{}"}}"#,
+        proj.path().to_str().unwrap()
+    );
+    let (json, _) = run_audit_json(&dist, &cfg);
+    let findings = json["findings"].as_array().unwrap();
+    let missing: Vec<&str> = findings
+        .iter()
+        .filter(|f| f["rule_id"] == "content/missing-page")
+        .map(|f| f["file"].as_str().unwrap())
+        .collect();
+    assert!(
+        missing.iter().any(|f| f.contains("hidden-post")),
+        "Unrendered content item should be flagged, got {missing:?}"
+    );
+    assert!(
+        !missing.iter().any(|f| f.contains("visible-post")),
+        "Rendered content item should not be flagged"
+    );
+}
+
+// ==========================================================================
+// HTML5 syntax validation (#42)
+// ==========================================================================
+
+#[test]
+fn html_validation_reports_syntax_error() {
+    let dir = TempDir::new().unwrap();
+    // Duplicate attribute reliably triggers an html5ever parse error.
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><main><h1 id="a" id="b">Test</h1></main></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"html_validation":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "html/syntax-error"),
+        "Malformed HTML should produce a syntax-error finding"
+    );
+}
+
+#[test]
+fn html_validation_disabled_by_default() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><main><h1 id="a" id="b">Test</h1></main></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"] == "html/syntax-error"),
+        "HTML validation should be off unless explicitly enabled"
+    );
+}

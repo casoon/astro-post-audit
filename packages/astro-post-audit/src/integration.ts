@@ -62,6 +62,8 @@ export interface RulesConfig {
     detect_orphan_pages?: boolean;
     /** Warn on `http://` in internal links (mixed content). @default true */
     check_mixed_content?: boolean;
+    /** Warn when a page's URL nesting depth (path segments) exceeds this value. Disabled when unset. */
+    max_url_depth?: number;
   };
   /** Sitemap cross-reference checks. */
   sitemap?: {
@@ -86,6 +88,10 @@ export interface RulesConfig {
     max_crawl_delay?: number;
     /** Warn if AI citation bots (GPTBot, ClaudeBot, PerplexityBot) are blocked. @default false */
     ai_bot_policy?: boolean;
+    /** Error when a page is `Disallow`'d in robots.txt yet also has a `noindex` meta tag. @default false */
+    check_noindex_contradiction?: boolean;
+    /** Warn when a URL listed in the sitemap is blocked by robots.txt. @default false */
+    check_sitemap_blocked?: boolean;
   };
   /** Image HTML attribute checks for CLS prevention and responsive image best practices. */
   images?: {
@@ -160,6 +166,8 @@ export interface RulesConfig {
     check_duplicate_ids?: boolean;
     /** Validate ARIA `role` values against the WAI-ARIA spec. @default true */
     check_aria_roles?: boolean;
+    /** Flag low-quality `alt` text (file names, placeholder words like "image"/"logo", too short). @default true */
+    check_alt_quality?: boolean;
   };
   /** Asset reference and size checks. */
   assets?: {
@@ -198,6 +206,12 @@ export interface RulesConfig {
     twitter_card_valid_values?: boolean;
     /** Warn when `og:title` and `<title>` differ significantly in length. @default false */
     og_title_consistency?: boolean;
+    /** Verify that a local `og:image` (own domain or relative) exists in `dist/`. @default false */
+    check_image_exists?: boolean;
+    /** Warn if a local `og:image` is below the recommended 1200x630 dimensions. @default false */
+    check_image_dimensions?: boolean;
+    /** Warn if a local `og:image` file exceeds this size in KB. Disabled when unset. */
+    og_image_max_size_kb?: number;
   };
   /** Structured data (JSON-LD) validation. */
   structured_data?: {
@@ -218,6 +232,8 @@ export interface RulesConfig {
     require_self_reference?: boolean;
     /** Hreflang links must be reciprocal (A→B and B→A). @default false */
     require_reciprocal?: boolean;
+    /** Warn when an internal hreflang target does not exist in the build. @default false */
+    require_target_exists?: boolean;
   };
   /** Security heuristic checks. */
   security?: {
@@ -278,11 +294,40 @@ export interface RulesConfig {
   privacy_security?: {
     /** Enable privacy/security checks in dist output. @default false */
     enabled?: boolean;
+    /** Enable GDPR/DSGVO third-party transfer checks (Google Fonts, YouTube, Maps, public CDNs, external images). @default false */
+    gdpr?: boolean;
   };
   /** Cross-page structured-data graph consistency checks. */
   structured_data_graph?: {
     /** Enable cross-page JSON-LD consistency checks in dist output. @default false */
     enabled?: boolean;
+  };
+  /** Static meta-refresh redirect analysis (links to redirects, chains, loops). */
+  redirects?: {
+    /** Enable redirect analysis in dist output. @default false */
+    enabled?: boolean;
+  };
+  /** Client-side JavaScript bloat detection per route. */
+  js_bloat?: {
+    /** Enable JS bloat detection. @default false */
+    enabled?: boolean;
+    /** Warn when a route's total local JS exceeds this size in KB. @default 100 */
+    max_kb?: number;
+  };
+  /**
+   * Cross-check `src/content/` collection items against generated pages.
+   * Requires the project root, which the integration passes automatically.
+   */
+  content_sync?: {
+    /** Warn about content items with no corresponding build page. @default false */
+    enabled?: boolean;
+  };
+  /** Native HTML5 syntax validation using the html5ever tokenizer (offline). */
+  html_validation?: {
+    /** Report HTML5 parse/syntax errors. @default false */
+    enabled?: boolean;
+    /** Maximum distinct syntax errors reported per page. @default 20 */
+    max_per_page?: number;
   };
 }
 
@@ -743,6 +788,10 @@ export default function postAudit(
         if (options.writeBaseline) stdinConfig.write_baseline = true;
         if (options.hints?.sourceFiles && rootDir) {
           stdinConfig.hints = { source_files: true };
+          stdinConfig.project_root = rootDir;
+        }
+        // content_sync needs the project root to locate src/content/.
+        if (resolvedRules.content_sync?.enabled && rootDir && !stdinConfig.project_root) {
           stdinConfig.project_root = rootDir;
         }
         if (options.maxErrors != null)

@@ -45,6 +45,8 @@ pub struct PageInfo {
     pub h1_count: usize,
     /// Heading levels in document order (h1..h6).
     pub heading_levels: Vec<u8>,
+    /// Target URL of a `<meta http-equiv="refresh" content="0;url=...">`, if the page is a redirect.
+    pub meta_refresh_target: Option<String>,
 }
 
 impl PageInfo {
@@ -149,6 +151,7 @@ impl SiteIndex {
         let viewport_sel = Selector::parse("meta[name='viewport']").ok();
         let h1_sel = Selector::parse("h1").ok();
         let headings_sel = Selector::parse("h1, h2, h3, h4, h5, h6").ok();
+        let meta_refresh_sel = Selector::parse("meta[http-equiv='refresh'][content]").ok();
 
         // Read and pre-extract metadata in parallel
         let pages: Vec<PageInfo> = html_files
@@ -231,6 +234,11 @@ impl SiteIndex {
                             .collect()
                     })
                     .unwrap_or_default();
+                let meta_refresh_target = meta_refresh_sel
+                    .as_ref()
+                    .and_then(|sel| html.select(sel).next())
+                    .and_then(|el| el.value().attr("content"))
+                    .and_then(parse_meta_refresh_target);
 
                 let route = normalize::file_path_to_route(rel, &norm_config);
                 let absolute_url = base_url
@@ -254,6 +262,7 @@ impl SiteIndex {
                     has_viewport,
                     h1_count,
                     heading_levels,
+                    meta_refresh_target,
                 })
             })
             .collect();
@@ -294,6 +303,23 @@ impl SiteIndex {
     /// Check if a file (relative path) exists in dist.
     pub fn file_exists(&self, rel_path: &str) -> bool {
         self.dist_path.join(rel_path).exists()
+    }
+}
+
+/// Parse the redirect target from a `meta http-equiv="refresh"` content value
+/// (e.g. `"0;url=/target/"` -> `Some("/target/")`).
+fn parse_meta_refresh_target(content: &str) -> Option<String> {
+    let lower = content.to_lowercase();
+    let pos = lower.find("url=")?;
+    let target = content[(pos + 4)..]
+        .trim()
+        .trim_matches('\'')
+        .trim_matches('"')
+        .trim();
+    if target.is_empty() {
+        None
+    } else {
+        Some(target.to_string())
     }
 }
 

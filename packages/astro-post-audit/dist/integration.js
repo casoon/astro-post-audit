@@ -274,6 +274,10 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                     stdinConfig.hints = { source_files: true };
                     stdinConfig.project_root = rootDir;
                 }
+                // content_sync needs the project root to locate src/content/.
+                if (resolvedRules.content_sync?.enabled && rootDir && !stdinConfig.project_root) {
+                    stdinConfig.project_root = rootDir;
+                }
                 if (options.maxErrors != null)
                     stdinConfig.max_errors = options.maxErrors;
                 if (options.pageOverview !== undefined)

@@ -104,21 +104,106 @@ fn check_img_alt(
             }
         }
 
-        if attrs.attr("alt").is_none() {
-            let src = attrs.attr("src").unwrap_or("(unknown)");
-            findings.push(Finding {
-                level: Level::Error,
-                rule_id: "a11y/img-alt".into(),
-                file: page.rel_path.clone(),
-                selector: format!("img[src='{}']", src),
-                message: format!("Image missing alt attribute: src='{}'", src),
-                help: "Add an `alt` prop to <Image>/<Picture> or the <img> tag. Use alt=\"\" only for decorative images.".into(),
-                suggestion: Some("alt=\"...\"".into()),
-                source_hint: None,
-                confidence: None,
-            });
+        match attrs.attr("alt") {
+            None => {
+                let src = attrs.attr("src").unwrap_or("(unknown)");
+                findings.push(Finding {
+                    level: Level::Error,
+                    rule_id: "a11y/img-alt".into(),
+                    file: page.rel_path.clone(),
+                    selector: format!("img[src='{}']", src),
+                    message: format!("Image missing alt attribute: src='{}'", src),
+                    help: "Add an `alt` prop to <Image>/<Picture> or the <img> tag. Use alt=\"\" only for decorative images.".into(),
+                    suggestion: Some("alt=\"...\"".into()),
+                    source_hint: None,
+                    confidence: None,
+                });
+            }
+            Some(alt) if config.a11y.check_alt_quality => {
+                let src = attrs.attr("src").unwrap_or("(unknown)");
+                if let Some(reason) = low_quality_alt_reason(alt, src) {
+                    findings.push(Finding {
+                        level: Level::Warning,
+                        rule_id: "a11y/invalid-img-alt".into(),
+                        file: page.rel_path.clone(),
+                        selector: format!("img[src='{}']", src),
+                        message: format!("Image alt text looks low-quality ({}): alt='{}'", reason, alt),
+                        help: "Describe the image's meaning for screen-reader users. Use alt=\"\" only for purely decorative images.".into(),
+                        suggestion: None,
+                        source_hint: None,
+                        confidence: Some(crate::report::Confidence::Medium),
+                    });
+                }
+            }
+            Some(_) => {}
         }
     }
+}
+
+/// Words that signal a non-descriptive, placeholder alt value (matched as the
+/// whole trimmed alt, case-insensitive).
+const SUSPICIOUS_ALT_WORDS: &[&str] = &[
+    "image",
+    "img",
+    "photo",
+    "picture",
+    "pic",
+    "placeholder",
+    "logo",
+    "icon",
+    "alt-text",
+    "alt text",
+    "untitled",
+    "thumbnail",
+    "banner",
+];
+
+const ALT_IMAGE_EXTENSIONS: &[&str] = &[
+    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".svg", ".bmp",
+];
+
+/// Return a human-readable reason if the alt text is heuristically low quality,
+/// or None if it looks acceptable. A genuinely empty alt ("") is decorative and skipped.
+fn low_quality_alt_reason(alt: &str, src: &str) -> Option<&'static str> {
+    let trimmed = alt.trim();
+    if trimmed.is_empty() {
+        return None; // decorative, handled elsewhere
+    }
+    let lower = trimmed.to_lowercase();
+
+    // Looks like a filename (has an image extension)
+    if ALT_IMAGE_EXTENSIONS.iter().any(|ext| lower.ends_with(ext)) {
+        return Some("looks like a filename");
+    }
+
+    // Equals the image's own filename (with or without extension)
+    let basename = src
+        .split('?')
+        .next()
+        .unwrap_or(src)
+        .rsplit('/')
+        .next()
+        .unwrap_or(src)
+        .to_lowercase();
+    let stem = basename
+        .rsplit_once('.')
+        .map(|(s, _)| s)
+        .unwrap_or(&basename);
+    if !basename.is_empty() && (lower == basename || lower == stem) {
+        return Some("matches the file name");
+    }
+
+    // Placeholder / generic words
+    if SUSPICIOUS_ALT_WORDS.contains(&lower.as_str()) {
+        return Some("generic placeholder word");
+    }
+
+    // Too short to be meaningful (1–2 characters)
+    if trimmed.chars().count() < 3 {
+        return Some("too short");
+    }
+
+    None
 }
 
 fn check_link_names(

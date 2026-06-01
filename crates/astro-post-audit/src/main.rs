@@ -131,6 +131,10 @@ fn run() -> Result<i32> {
         ("images", checks::images::check_all),
         ("ai_visibility", checks::ai_visibility::check_all),
         ("ux_heuristics", checks::ux_heuristics::check_all),
+        ("redirects", checks::redirects::check_all),
+        ("js_bloat", checks::js_bloat::check_all),
+        ("content_sync", checks::content_sync::check_all),
+        ("html_validation", checks::html_validation::check_all),
     ];
 
     for &(name, check_fn) in registry {

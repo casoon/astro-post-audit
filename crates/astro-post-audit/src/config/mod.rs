@@ -54,6 +54,10 @@ pub struct Config {
     pub render_blocking: RenderBlockingConfig,
     pub privacy_security: PrivacySecurityConfig,
     pub structured_data_graph: StructuredDataGraphConfig,
+    pub redirects: RedirectsConfig,
+    pub js_bloat: JsBloatConfig,
+    pub content_sync: ContentSyncConfig,
+    pub html_validation: HtmlValidationConfig,
     pub images: ImagesConfig,
     pub ai_visibility: AiVisibilityConfig,
     pub ux_heuristics: UxHeuristicsConfig,
@@ -150,6 +154,8 @@ pub struct LinksConfig {
     pub check_fragments: bool,
     pub detect_orphan_pages: bool,
     pub check_mixed_content: bool,
+    /// Warn when a page's URL depth (path segments) exceeds this value. None = disabled.
+    pub max_url_depth: Option<usize>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -197,6 +203,8 @@ pub struct A11yConfig {
     pub check_duplicate_ids: bool,
     /// Validate ARIA role values and required role attributes. @default true
     pub check_aria_roles: bool,
+    /// Flag low-quality alt text (filename, placeholder words, too short). @default true
+    pub check_alt_quality: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -229,6 +237,12 @@ pub struct OpenGraphConfig {
     pub twitter_card_valid_values: bool,
     /// Warn when og:title and <title> differ by more than 50% in length. @default false
     pub og_title_consistency: bool,
+    /// Verify that a local og:image (own domain / relative) exists in dist. @default false
+    pub check_image_exists: bool,
+    /// Warn if a local og:image does not match recommended dimensions (1200x630). @default false
+    pub check_image_dimensions: bool,
+    /// Warn if a local og:image file exceeds this size in KB. None = disabled.
+    pub og_image_max_size_kb: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -246,6 +260,8 @@ pub struct HreflangConfig {
     pub require_x_default: bool,
     pub require_self_reference: bool,
     pub require_reciprocal: bool,
+    /// Warn when an internal hreflang target does not exist in the build. @default false
+    pub require_target_exists: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -287,6 +303,10 @@ pub struct RobotsTxtConfig {
     pub max_crawl_delay: u32,
     /// Warn if AI citation bots (GPTBot, ClaudeBot, PerplexityBot) are blocked. @default false
     pub ai_bot_policy: bool,
+    /// Error when a page is Disallow'd in robots.txt yet also carries a noindex meta. @default false
+    pub check_noindex_contradiction: bool,
+    /// Warn when a sitemap URL is blocked by robots.txt. @default false
+    pub check_sitemap_blocked: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -311,12 +331,55 @@ pub struct RenderBlockingConfig {
 #[serde(default)]
 pub struct PrivacySecurityConfig {
     pub enabled: bool,
+    /// Enable GDPR/DSGVO third-party transfer checks (Google Fonts, YouTube, Maps, CDNs, external images). @default false
+    pub gdpr: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct StructuredDataGraphConfig {
     pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct RedirectsConfig {
+    /// Analyze static meta-refresh redirects (chains, loops, links to redirect pages). @default false
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct JsBloatConfig {
+    /// Enable client-side JS bloat detection per route. @default false
+    pub enabled: bool,
+    /// Warn when a route's total local JS exceeds this size in KB. @default 100
+    pub max_kb: u64,
+}
+
+impl Default for JsBloatConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_kb: 100,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct ContentSyncConfig {
+    /// Warn about content collection items (src/content) with no generated page. @default false
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct HtmlValidationConfig {
+    /// Report HTML5 parse/syntax errors collected by the html5ever tokenizer. @default false
+    pub enabled: bool,
+    /// Maximum distinct syntax errors reported per page. @default 20
+    pub max_per_page: Option<usize>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -415,6 +478,7 @@ impl Default for LinksConfig {
             check_fragments: false,
             detect_orphan_pages: false,
             check_mixed_content: true,
+            max_url_depth: None,
         }
     }
 }
@@ -467,6 +531,7 @@ impl Default for A11yConfig {
             check_landmarks: true,
             check_duplicate_ids: true,
             check_aria_roles: true,
+            check_alt_quality: true,
         }
     }
 }
@@ -484,6 +549,9 @@ impl Default for OpenGraphConfig {
             require_twitter_image: false,
             twitter_card_valid_values: true,
             og_title_consistency: false,
+            check_image_exists: false,
+            check_image_dimensions: false,
+            og_image_max_size_kb: None,
         }
     }
 }
@@ -527,6 +595,8 @@ impl Default for RobotsTxtConfig {
             check_disallow_all: true,
             max_crawl_delay: 10,
             ai_bot_policy: false,
+            check_noindex_contradiction: false,
+            check_sitemap_blocked: false,
         }
     }
 }

@@ -120,6 +120,11 @@
                             "description": "`<button>` elements must have an accessible name.",
                             "type": "boolean"
                         },
+                        "check_alt_quality": {
+                            "default": true,
+                            "description": "Flag low-quality `alt` text (file names, placeholder words like \"image\"/\"logo\", too short).",
+                            "type": "boolean"
+                        },
                         "check_aria_roles": {
                             "default": true,
                             "description": "Validate ARIA `role` values against the WAI-ARIA spec.",
@@ -264,6 +269,18 @@
                     },
                     "type": "object"
                 },
+                "content_sync": {
+                    "additionalProperties": false,
+                    "description": "Cross-check `src/content/` collection items against generated pages.\nRequires the project root, which the integration passes automatically.",
+                    "properties": {
+                        "enabled": {
+                            "default": false,
+                            "description": "Warn about content items with no corresponding build page.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
                 "crawl_budget": {
                     "additionalProperties": false,
                     "description": "Crawl budget audit for URL variants, indexability mismatches, and duplicate clusters.",
@@ -379,6 +396,11 @@
                             "description": "Hreflang must include a self-referencing entry.",
                             "type": "boolean"
                         },
+                        "require_target_exists": {
+                            "default": false,
+                            "description": "Warn when an internal hreflang target does not exist in the build.",
+                            "type": "boolean"
+                        },
                         "require_x_default": {
                             "default": false,
                             "description": "Require an `x-default` hreflang entry.",
@@ -424,6 +446,23 @@
                     },
                     "type": "object"
                 },
+                "html_validation": {
+                    "additionalProperties": false,
+                    "description": "Native HTML5 syntax validation using the html5ever tokenizer (offline).",
+                    "properties": {
+                        "enabled": {
+                            "default": false,
+                            "description": "Report HTML5 parse/syntax errors.",
+                            "type": "boolean"
+                        },
+                        "max_per_page": {
+                            "default": 20,
+                            "description": "Maximum distinct syntax errors reported per page.",
+                            "type": "number"
+                        }
+                    },
+                    "type": "object"
+                },
                 "i18n_audit": {
                     "additionalProperties": false,
                     "description": "I18n consistency audit across route locale, lang, hreflang, and canonical signals.",
@@ -463,6 +502,23 @@
                     },
                     "type": "object"
                 },
+                "js_bloat": {
+                    "additionalProperties": false,
+                    "description": "Client-side JavaScript bloat detection per route.",
+                    "properties": {
+                        "enabled": {
+                            "default": false,
+                            "description": "Enable JS bloat detection.",
+                            "type": "boolean"
+                        },
+                        "max_kb": {
+                            "default": 100,
+                            "description": "Warn when a route's total local JS exceeds this size in KB.",
+                            "type": "number"
+                        }
+                    },
+                    "type": "object"
+                },
                 "links": {
                     "additionalProperties": false,
                     "description": "Internal link consistency checks.",
@@ -496,6 +552,10 @@
                             "default": true,
                             "description": "Warn on query parameters (`?foo=bar`) in internal links.",
                             "type": "boolean"
+                        },
+                        "max_url_depth": {
+                            "description": "Warn when a page's URL nesting depth (path segments) exceeds this value. Disabled when unset.",
+                            "type": "number"
                         }
                     },
                     "type": "object"
@@ -504,10 +564,24 @@
                     "additionalProperties": false,
                     "description": "Open Graph and Twitter Card meta tag checks.",
                     "properties": {
+                        "check_image_dimensions": {
+                            "default": false,
+                            "description": "Warn if a local `og:image` is below the recommended 1200x630 dimensions.",
+                            "type": "boolean"
+                        },
+                        "check_image_exists": {
+                            "default": false,
+                            "description": "Verify that a local `og:image` (own domain or relative) exists in `dist/`.",
+                            "type": "boolean"
+                        },
                         "og_image_absolute_url": {
                             "default": true,
                             "description": "Error if `og:image` is a relative URL (must be absolute for social sharing).",
                             "type": "boolean"
+                        },
+                        "og_image_max_size_kb": {
+                            "description": "Warn if a local `og:image` file exceeds this size in KB. Disabled when unset.",
+                            "type": "number"
                         },
                         "og_title_consistency": {
                             "default": false,
@@ -565,6 +639,23 @@
                             "default": false,
                             "description": "Enable privacy/security checks in dist output.",
                             "type": "boolean"
+                        },
+                        "gdpr": {
+                            "default": false,
+                            "description": "Enable GDPR/DSGVO third-party transfer checks (Google Fonts, YouTube, Maps, public CDNs, external images).",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
+                "redirects": {
+                    "additionalProperties": false,
+                    "description": "Static meta-refresh redirect analysis (links to redirects, chains, loops).",
+                    "properties": {
+                        "enabled": {
+                            "default": false,
+                            "description": "Enable redirect analysis in dist output.",
+                            "type": "boolean"
                         }
                     },
                     "type": "object"
@@ -610,6 +701,16 @@
                         "check_disallow_all": {
                             "default": true,
                             "description": "Error if `User-agent: *` with `Disallow: /` blocks all crawlers.",
+                            "type": "boolean"
+                        },
+                        "check_noindex_contradiction": {
+                            "default": false,
+                            "description": "Error when a page is `Disallow`'d in robots.txt yet also has a `noindex` meta tag.",
+                            "type": "boolean"
+                        },
+                        "check_sitemap_blocked": {
+                            "default": false,
+                            "description": "Warn when a URL listed in the sitemap is blocked by robots.txt.",
                             "type": "boolean"
                         },
                         "max_crawl_delay": {

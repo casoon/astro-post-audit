@@ -25,7 +25,42 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         findings.extend(check_orphan_pages(index, config));
     }
 
+    if let Some(max_depth) = config.links.max_url_depth {
+        findings.extend(check_url_depth(index, max_depth));
+    }
+
     findings
+}
+
+/// Warn about pages whose URL nesting depth exceeds `max_depth`.
+/// Depth is the number of non-empty path segments in the normalized route
+/// (e.g. `/blog/seo/technical/crawl-budget/` -> depth 4).
+fn check_url_depth(index: &SiteIndex, max_depth: usize) -> Vec<Finding> {
+    index
+        .pages
+        .iter()
+        .filter_map(|page| {
+            let depth = page.route.split('/').filter(|s| !s.is_empty()).count();
+            if depth > max_depth {
+                Some(Finding {
+                    level: Level::Warning,
+                    rule_id: "links/url-depth".into(),
+                    file: page.rel_path.clone(),
+                    selector: String::new(),
+                    message: format!(
+                        "URL is {} levels deep (max recommended: {}): {}",
+                        depth, max_depth, page.route
+                    ),
+                    help: "Deeply nested URLs are crawled less efficiently. Flatten the structure or use a shallower slug.".into(),
+                    suggestion: None,
+                    source_hint: None,
+                    confidence: None,
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
