@@ -226,7 +226,8 @@ fn run() -> Result<i32> {
             break;
         }
         if show_progress {
-            draw_progress(idx, total_checks, name);
+            // 1-based: the bar fills to total/total on the last check.
+            draw_progress(idx + 1, total_checks, name);
         }
         let t = Instant::now();
         let mut new_findings = check_fn(&site_index, &config);
