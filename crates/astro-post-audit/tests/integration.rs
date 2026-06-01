@@ -3739,10 +3739,13 @@ fn content_sync_missing_page() {
         "/blog/visible-post/",
     );
 
-    let cfg = format!(
-        r#"{{"site":{{"base_url":"https://example.com"}},"content_sync":{{"enabled":true}},"project_root":"{}"}}"#,
-        proj.path().to_str().unwrap()
-    );
+    // Build via serde_json so the (possibly backslashed Windows) path is escaped correctly.
+    let cfg = serde_json::json!({
+        "site": {"base_url": "https://example.com"},
+        "content_sync": {"enabled": true},
+        "project_root": proj.path().to_str().unwrap(),
+    })
+    .to_string();
     let (json, _) = run_audit_json(&dist, &cfg);
     let findings = json["findings"].as_array().unwrap();
     let missing: Vec<&str> = findings
