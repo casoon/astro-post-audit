@@ -2,6 +2,27 @@
 
 Fast post-build auditor for Astro sites. Checks SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output. No browser, no network — runs in <1s on typical sites.
 
+## What's new in 0.4.x
+
+New checks (all opt-in unless noted) and diagnostics:
+
+| Area | What | Rule IDs | How to enable |
+|------|------|----------|---------------|
+| Redirects | Static meta-refresh analysis: links to redirect pages, chains, loops | `links/redirect-target`, `redirects/chain`, `redirects/loop` | `rules.redirects.enabled` |
+| Open Graph image | og:image existence, dimensions (1200×630), file size | `opengraph/image-broken`, `opengraph/image-invalid-dimensions`, `opengraph/image-too-large` | `rules.opengraph.check_image_exists` / `check_image_dimensions` / `og_image_max_size_kb` |
+| URL depth | Warn on deeply nested URLs | `links/url-depth` | `rules.links.max_url_depth` |
+| robots.txt contradictions | `noindex` on a `Disallow`'d page; sitemap URL blocked by robots | `robots/blocked-noindex-contradiction`, `sitemap/entry-blocked-by-robots` | `rules.robots_txt.check_noindex_contradiction` / `check_sitemap_blocked` |
+| Hreflang targets | Internal hreflang target missing from build | `hreflang/target-missing` | `rules.hreflang.require_target_exists` |
+| Alt-text quality | Filename/placeholder/too-short alt text — **on by default (Warning)** | `a11y/invalid-img-alt` | `rules.a11y.check_alt_quality` (default `true`) |
+| GDPR / DSGVO | Google Fonts, YouTube, Maps, public CDNs, external images | `privacy-security/google-fonts-external`, `youtube-direct-embed`, `google-maps-embed`, `cdn-resources`, `external-images` | `rules.privacy_security.gdpr` |
+| JS bloat | Heavy client-side JS per route | `performance/js-bloat` | `rules.js_bloat.enabled` (+ `max_kb`) |
+| Content sync | `src/content/` items with no generated page | `content/missing-page` | `rules.content_sync.enabled` |
+| HTML5 validation | Native html5ever syntax errors (offline) | `html/syntax-error` | `rules.html_validation.enabled` |
+| Progress bar | Live activity on stderr during the run | — | `progress` (auto in a TTY) |
+| Debug mode | Resolved config, discovery stats, per-check counts on stderr | — | `debug: true` |
+
+**One new default:** `a11y.check_alt_quality` is enabled by default and emits `a11y/invalid-img-alt` **warnings** for alt text that matches the file name, is a placeholder word (`image`, `logo`, `photo`, …), or is shorter than 3 characters. To silence it: `rules: { a11y: { check_alt_quality: false } }`.
+
 ## Migrating to 0.3.0
 
 Version 0.3.0 enables several new checks **by default** that were previously opt-in or did not exist:
@@ -360,6 +381,8 @@ postAudit({
 | `goLive` | `GoLiveConfig` | — | Production readiness gate. See [Go-live gate](#go-live-gate). |
 | `pageOverview` | `boolean` | `false` | Print a page properties table (title, description, canonical, OG, H1, lang, JSON-LD) instead of running checks. |
 | `benchmark` | `boolean` | `false` | Print per-check timing breakdown. |
+| `progress` | `boolean` | auto | Live progress bar on stderr while checks run. Auto-on in an interactive terminal, silent in CI. Set `true`/`false` to force. |
+| `debug` | `boolean` | `false` | Verbose diagnostics on stderr (resolved config, discovery stats, per-check counts/timings). Never touches the stdout report; replaces the progress bar. See [Diagnostics](#diagnostics). |
 | `aiVisibility` | `boolean` | `false` | Enable AI visibility checks (LLM-readability, citability, chunk quality). See [AI visibility](#ai-visibility). |
 | `uxHeuristics` | `boolean \| { maxLinksPerPage?: number, minCtaPerPage?: number }` | `false` | Enable UX heuristic checks (CTAs, generic link text, trust signals). See [UX heuristics](#ux-heuristics). |
 | `disable` | `boolean` | `false` | Disable the integration entirely. |
@@ -461,6 +484,7 @@ rules: {
     check_fragments: false,             // Validate #fragment targets exist
     detect_orphan_pages: false,         // Warn about pages with no incoming links
     check_mixed_content: true,          // Warn on http:// in internal links
+    max_url_depth: undefined,           // Warn when URL nesting depth exceeds this (e.g. 3)
   },
 
   // Sitemap cross-reference
@@ -478,6 +502,8 @@ rules: {
     check_disallow_all: true,           // Error when User-agent: * blocks everything
     max_crawl_delay: 10,                // Warn when Crawl-delay exceeds this value (seconds)
     ai_bot_policy: false,               // Check AI bot (GPTBot, ClaudeBot, CCBot …) rules
+    check_noindex_contradiction: false, // Error when a Disallow'd page also has noindex
+    check_sitemap_blocked: false,       // Warn when a sitemap URL is blocked by robots.txt
   },
 
   // HTML basics
@@ -510,6 +536,7 @@ rules: {
     check_landmarks: true,              // Require proper landmark structure (<main>, <nav>, …)
     check_duplicate_ids: true,          // Error on duplicate id attributes
     check_aria_roles: true,             // Validate role= values against WAI-ARIA spec
+    check_alt_quality: true,            // Warn on filename/placeholder/too-short alt text
   },
 
   // Asset checks
@@ -534,6 +561,9 @@ rules: {
     require_twitter_image: false,       // Require twitter:image
     twitter_card_valid_values: true,    // Validate twitter:card value against the spec
     og_title_consistency: false,        // Warn when og:title and <title> differ significantly
+    check_image_exists: false,          // Verify a local og:image exists in dist
+    check_image_dimensions: false,      // Warn if local og:image is below 1200×630
+    og_image_max_size_kb: undefined,    // Warn if local og:image exceeds this size in KB
   },
 
   // Structured data (JSON-LD)
@@ -549,6 +579,7 @@ rules: {
     require_x_default: false,           // Require x-default entry
     require_self_reference: false,      // Must include self-referencing entry
     require_reciprocal: false,          // Links must be reciprocal (A→B and B→A)
+    require_target_exists: false,       // Warn when an internal hreflang target is missing
   },
 
   // Security
@@ -610,9 +641,29 @@ rules: {
   },
   privacy_security: {
     enabled: false,                     // Third-party domains, SRI/CSP readiness, consent indicators
+    gdpr: false,                        // GDPR/DSGVO transfers: Google Fonts, YouTube, Maps, CDNs, external images
   },
   structured_data_graph: {
     enabled: false,                     // Cross-page JSON-LD entity consistency and missing internal URLs
+  },
+
+  // Static meta-refresh redirect analysis
+  redirects: {
+    enabled: false,                     // Links to redirect pages, redirect chains, loops
+  },
+  // Client-side JS bloat per route
+  js_bloat: {
+    enabled: false,                     // Warn when a route's total local JS is too large
+    max_kb: 100,                        // Threshold in KB
+  },
+  // Content collection ↔ generated page sync (needs project root, passed automatically)
+  content_sync: {
+    enabled: false,                     // Warn about src/content items with no build page
+  },
+  // Native HTML5 syntax validation (offline, via html5ever)
+  html_validation: {
+    enabled: false,                     // Report HTML5 parse/syntax errors
+    max_per_page: 20,                   // Cap distinct errors reported per page
   },
 
   // Override severity per rule ID
@@ -626,23 +677,26 @@ rules: {
 
 - **Note on signal type** — Most checks are deterministic (broken links, missing tags). The five dist-only audits are heuristic by design and should be tuned via `severity` for your project.
 - **SEO** — Canonical tags (including cluster detection), robots meta, URL normalization (trailing slash, index.html)
-- **Links** — Broken internal links, query parameters, fragment validation, orphan pages
+- **Links** — Broken internal links, query parameters, fragment validation, orphan pages, URL depth, links pointing at redirect pages
 - **External Links** — HEAD requests to verify external URLs return 2xx, with domain filtering and concurrency control
 - **Sitemap** — Cross-reference with canonical URLs, stale entries, missing pages
-- **robots.txt** — Existence check, sitemap link, disallow-all detection, crawl-delay threshold, AI bot policy (GPTBot, ClaudeBot, CCBot …)
-- **HTML** — `<html lang>`, `<title>`, viewport, meta description, heading hierarchy
-- **Accessibility** — img alt, link/button names, form labels (including wrapping labels), generic link text, skip link, aria-hidden on focusable elements, landmark structure (`<main>`, `<nav>`, `<header>`, `<footer>`), duplicate IDs, WAI-ARIA role validation
-- **Open Graph** — og:title, og:description, og:image (absolute URL), og:type, og:url, twitter:card (valid values), twitter:image, title consistency
+- **robots.txt** — Existence check, sitemap link, disallow-all detection, crawl-delay threshold, AI bot policy (GPTBot, ClaudeBot, CCBot …), noindex/Disallow contradiction, sitemap entries blocked by robots
+- **Redirects** — Static meta-refresh redirect chains, loops, and internal links that point at redirect pages
+- **HTML** — `<html lang>`, `<title>`, viewport, meta description, heading hierarchy, native HTML5 syntax validation *(opt-in)*
+- **Accessibility** — img alt + alt-text quality heuristics, link/button names, form labels (including wrapping labels), generic link text, skip link, aria-hidden on focusable elements, landmark structure (`<main>`, `<nav>`, `<header>`, `<footer>`), duplicate IDs, WAI-ARIA role validation
+- **Open Graph** — og:title, og:description, og:image (absolute URL + existence/dimensions/size), og:type, og:url, twitter:card (valid values), twitter:image, title consistency
 - **Structured Data** — JSON-LD syntax, semantics, duplicate type detection, property completeness (author, datePublished, image, publisher, breadcrumb positions …)
 - **Images** — Missing `width`/`height` attributes (CLS), missing `loading="lazy"`, missing `srcset`, modern format hints
-- **Hreflang** — Multilingual link validation, x-default, self-reference, reciprocal links
+- **Hreflang** — Multilingual link validation, x-default, self-reference, reciprocal links, target existence
 - **Security** — target="_blank" without noopener, mixed content, inline scripts
 - **Assets** — Broken references, image dimensions, file size limits, cache-busting hashes
+- **Performance** — Client-side JS bloat per route *(opt-in)*
 - **Content Quality** — Duplicate titles, descriptions, H1s, near-identical pages
+- **Content Sync** *(opt-in)* — `src/content/` collection items with no corresponding generated page
 - **I18n Audit** — Consistency between localized routes, `html[lang]`, `hreflang`, and canonical
 - **Crawl Budget** — Query/variant URL dilution, duplicate canonical clusters, and indexability mismatches
 - **Render Blocking** — Sync `<head>` scripts and missing `preload`/`preconnect` hints for critical resources
-- **Privacy/Security (Static)** — Third-party domain inventory, missing SRI, CSP-readiness, consent signals
+- **Privacy/Security (Static)** — Third-party domain inventory, missing SRI, CSP-readiness, consent signals, GDPR/DSGVO transfers *(opt-in: Google Fonts, YouTube, Maps, public CDNs, external images)*
 - **Structured Data Graph** — Cross-page JSON-LD entity conflicts (`@id`, type/name/url) and missing internal entity URLs
 - **AI Visibility** *(opt-in)* — LLM readability (word count, lang), citability (OG metadata, canonical, author schema), semantic structure, AI bot policy
 - **UX Heuristics** *(opt-in)* — Missing CTAs, generic link text ("click here", "mehr"), missing trust signals (Impressum, Datenschutz, contact), link density, interactive element density
@@ -674,6 +728,52 @@ Enable via `uxHeuristics: true` (top-level option) or `rules.ux_heuristics.enabl
 | `ux/no-trust-signals` | Warning | No links to Impressum, Datenschutz, contact, or about pages |
 | `ux/high-link-density` | Info | Link count exceeds `max_links_per_page` (default 80) |
 | `ux/high-interactive-density` | Info | More than 20 interactive elements on a single page |
+
+## GDPR / DSGVO
+
+Enable via `rules.privacy_security.gdpr: true`. Detects third-party transfers that send visitor IPs abroad without consent — particularly relevant in the DACH region. All findings are warnings.
+
+| Rule ID | Description |
+|---------|-------------|
+| `privacy-security/google-fonts-external` | Loads fonts from `fonts.googleapis.com` / `fonts.gstatic.com` — self-host with `@fontsource` |
+| `privacy-security/youtube-direct-embed` | YouTube iframe uses `youtube.com` instead of `youtube-nocookie.com` / a consent wrapper |
+| `privacy-security/google-maps-embed` | Direct Google Maps iframe — use a static preview or gate behind consent |
+| `privacy-security/cdn-resources` | Scripts/styles from public CDNs (unpkg, jsDelivr, cdnjs, …) — bundle locally instead |
+| `privacy-security/external-images` | `<img>` from a third-party domain — host the image locally in `src/assets/` |
+
+## Diagnostics
+
+Two stderr-only diagnostics help you see what the audit is doing — neither touches the report on stdout, so JSON/SARIF output stays clean.
+
+### Progress bar
+
+A live single-line progress bar over the check phases. Auto-enabled when stderr is an interactive terminal and silent in CI / when piped. Force it with `progress: true` / `false`.
+
+```
+  Auditing 770 pages…
+  [████████████░░░░░░░░░░] 14/27  crawl_budget
+```
+
+### Debug mode
+
+`debug: true` prints verbose diagnostics on stderr and replaces the progress bar:
+
+```js
+postAudit({ debug: true })
+```
+
+```
+[debug] effective config:
+Config { preset: None, strict: false, ... }            ← resolved config after preset merge
+[debug] discovery: 770 HTML file(s) found, 2 excluded by filters, 768 parsed into pages (180 ms)
+[debug] sitemap.xml: 768 URL(s)
+[debug]  1/27 seo                        12 finding(s)  40 ms
+[debug]  2/27 links                       3 finding(s)  95 ms
+...
+[debug] 27/27 html_validation             0 finding(s)   2 ms
+```
+
+Use it to confirm which config actually applies, what discovery found/filtered, and which check produces (or misses) findings and how long it takes.
 
 ## Output
 
