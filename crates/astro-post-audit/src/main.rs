@@ -87,7 +87,6 @@ fn draw_progress(done: usize, total: usize, label: &str) {
     let _ = err.flush();
 }
 
-
 fn run() -> Result<i32> {
     let cli = Cli::parse();
 
