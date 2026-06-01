@@ -264,8 +264,12 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                 }
                 if (options.benchmark !== undefined)
                     stdinConfig.benchmark = options.benchmark;
-                if (options.progress !== undefined)
+                if (options.progress === 'verbose') {
+                    stdinConfig.progress_verbose = true;
+                }
+                else if (options.progress !== undefined) {
                     stdinConfig.progress = options.progress;
+                }
                 if (options.debug !== undefined)
                     stdinConfig.debug = options.debug;
                 if (options.maxWarnings != null)

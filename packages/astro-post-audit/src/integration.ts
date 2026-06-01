@@ -399,9 +399,10 @@ export interface PostAuditOptions {
   /**
    * Show a live progress bar on stderr while checks run.
    * Defaults to auto: on in an interactive terminal, silent in CI.
-   * Set `true`/`false` to force it.
+   * Set `true`/`false` to force, or `'verbose'` to print each check as its
+   * own line with findings count and timing instead of an animated bar.
    */
-  progress?: boolean;
+  progress?: boolean | 'verbose';
   /**
    * Verbose diagnostics on stderr: the resolved config (after preset merge),
    * discovery stats (files found / excluded by filters / parsed, sitemap status),
@@ -792,7 +793,11 @@ export default function postAudit(
           stdinConfig.strict = options.strict;
         }
         if (options.benchmark !== undefined) stdinConfig.benchmark = options.benchmark;
-        if (options.progress !== undefined) stdinConfig.progress = options.progress;
+        if (options.progress === 'verbose') {
+          stdinConfig.progress_verbose = true;
+        } else if (options.progress !== undefined) {
+          stdinConfig.progress = options.progress;
+        }
         if (options.debug !== undefined) stdinConfig.debug = options.debug;
         if (options.maxWarnings != null) stdinConfig.max_warnings = options.maxWarnings;
         if (options.baseline)

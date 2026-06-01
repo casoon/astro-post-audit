@@ -391,9 +391,10 @@ export interface PostAuditOptions {
     /**
      * Show a live progress bar on stderr while checks run.
      * Defaults to auto: on in an interactive terminal, silent in CI.
-     * Set `true`/`false` to force it.
+     * Set `true`/`false` to force, or `'verbose'` to print each check as its
+     * own line with findings count and timing instead of an animated bar.
      */
-    progress?: boolean;
+    progress?: boolean | 'verbose';
     /**
      * Verbose diagnostics on stderr: the resolved config (after preset merge),
      * discovery stats (files found / excluded by filters / parsed, sitemap status),

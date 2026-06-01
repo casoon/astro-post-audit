@@ -87,12 +87,6 @@ fn draw_progress(done: usize, total: usize, label: &str) {
     let _ = err.flush();
 }
 
-/// Erase the progress line so it leaves no residue before the report prints.
-fn clear_progress() {
-    let mut err = std::io::stderr();
-    let _ = write!(err, "\r\x1b[2K");
-    let _ = err.flush();
-}
 
 fn run() -> Result<i32> {
     let cli = Cli::parse();
@@ -162,11 +156,14 @@ fn run() -> Result<i32> {
     // Live progress is drawn on stderr so it never corrupts stdout reports
     // (works with any output format). Auto-enabled only in an interactive
     // terminal (silent in CI / when piped).
-    let show_progress = !config.page_overview
+    let show_verbose = !config.page_overview && !debug && config.progress_verbose;
+    let show_bar = !config.page_overview
         && !debug
+        && !config.progress_verbose
         && config
             .progress
             .unwrap_or_else(|| std::io::stderr().is_terminal());
+    let show_progress = show_bar || show_verbose;
 
     // Page properties overview mode (informational, exits before checks)
     if config.page_overview {
@@ -219,18 +216,22 @@ fn run() -> Result<i32> {
     let total_checks = registry.len();
     if show_progress {
         eprintln!("  Auditing {} pages…", site_index.pages.len());
+        if show_verbose {
+            eprintln!();
+        }
     }
 
     for (idx, &(name, check_fn)) in registry.iter().enumerate() {
         if max_errors.is_some_and(|m| error_count >= m) {
             break;
         }
-        if show_progress {
+        if show_bar {
             // 1-based: the bar fills to total/total on the last check.
             draw_progress(idx + 1, total_checks, name);
         }
         let t = Instant::now();
         let mut new_findings = check_fn(&site_index, &config);
+        let elapsed_ms = t.elapsed().as_millis();
         if !config.severity.overrides.is_empty() {
             use config::SeverityLevel;
             new_findings.retain_mut(|f| {
@@ -248,8 +249,12 @@ fn run() -> Result<i32> {
         if bench {
             check_timings.push(report::CheckTiming {
                 name: name.to_string(),
-                duration_ms: t.elapsed().as_millis(),
+                duration_ms: elapsed_ms,
             });
+        }
+        if show_verbose {
+            let n = new_findings.len();
+            eprintln!("    {name:<24}  {n:>5} finding(s)   {elapsed_ms:>5}ms");
         }
         if debug {
             eprintln!(
@@ -258,7 +263,7 @@ fn run() -> Result<i32> {
                 total_checks,
                 name,
                 new_findings.len(),
-                t.elapsed().as_millis()
+                elapsed_ms
             );
         }
         error_count += new_findings
@@ -269,8 +274,9 @@ fn run() -> Result<i32> {
     }
     let _ = error_count;
 
-    if show_progress {
-        clear_progress();
+    if show_bar {
+        // Keep the completed bar visible instead of erasing it.
+        let _ = writeln!(std::io::stderr());
     }
 
     // Populate source-file hints when enabled

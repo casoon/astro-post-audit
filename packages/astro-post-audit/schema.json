@@ -968,8 +968,12 @@
             "type": "string"
         },
         "progress": {
-            "description": "Show a live progress bar on stderr while checks run.\nDefaults to auto: on in an interactive terminal, silent in CI.\nSet `true`/`false` to force it.",
-            "type": "boolean"
+            "description": "Show a live progress bar on stderr while checks run.\nDefaults to auto: on in an interactive terminal, silent in CI.\nSet `true`/`false` to force, or `'verbose'` to print each check as its\nown line with findings count and timing instead of an animated bar.",
+            "enum": [
+                false,
+                true,
+                "verbose"
+            ]
         },
         "reports": {
             "$ref": "#/definitions/ReportsConfig",
