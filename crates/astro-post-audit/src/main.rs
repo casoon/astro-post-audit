@@ -55,17 +55,35 @@ fn main() {
 /// Width of the textual progress bar (in cells).
 const PROGRESS_BAR_WIDTH: usize = 22;
 
-/// Redraw the single-line progress bar on stderr. `done` checks of `total` are
-/// complete; `label` names the check about to run.
-fn draw_progress(done: usize, total: usize, label: &str) {
+/// Build the progress line, clamped to `max_cols` so it never wraps the
+/// terminal (a wrapped line can't be fully erased by a single `\x1b[2K`).
+fn render_progress_line(done: usize, total: usize, label: &str, max_cols: usize) -> String {
     let filled = (done * PROGRESS_BAR_WIDTH)
         .checked_div(total)
         .unwrap_or(PROGRESS_BAR_WIDTH)
         .min(PROGRESS_BAR_WIDTH);
     let bar: String = "█".repeat(filled) + &"░".repeat(PROGRESS_BAR_WIDTH - filled);
+    let line = format!("  [{bar}] {done}/{total}  {label}");
+    // Leave one spare column so the cursor never lands past the last cell.
+    let limit = max_cols.saturating_sub(1);
+    line.chars().take(limit).collect()
+}
+
+/// Terminal width of stderr (where the bar is drawn), falling back to 80.
+fn stderr_width() -> usize {
+    terminal_size::terminal_size_of(std::io::stderr())
+        .map(|(w, _)| w.0 as usize)
+        .filter(|&w| w > 0)
+        .unwrap_or(80)
+}
+
+/// Redraw the single-line progress bar on stderr. `done` checks of `total` are
+/// complete; `label` names the check about to run.
+fn draw_progress(done: usize, total: usize, label: &str) {
+    let line = render_progress_line(done, total, label, stderr_width());
     let mut err = std::io::stderr();
     // \r returns to column 0, \x1b[2K clears the line before redrawing.
-    let _ = write!(err, "\r\x1b[2K  [{bar}] {done}/{total}  {label}");
+    let _ = write!(err, "\r\x1b[2K{line}");
     let _ = err.flush();
 }
 
@@ -355,5 +373,24 @@ fn run() -> Result<i32> {
         Ok(1)
     } else {
         Ok(0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::render_progress_line;
+
+    #[test]
+    fn progress_line_clamped_to_terminal_width() {
+        // Long check name in a narrow terminal must not exceed the width.
+        let line = render_progress_line(17, 27, "structured_data_graph", 51);
+        assert!(line.chars().count() <= 50, "line too wide: {:?}", line);
+    }
+
+    #[test]
+    fn progress_line_full_on_wide_terminal() {
+        let line = render_progress_line(17, 27, "structured_data_graph", 120);
+        assert!(line.contains("17/27"));
+        assert!(line.ends_with("structured_data_graph"));
     }
 }

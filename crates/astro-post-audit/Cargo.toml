@@ -1,6 +1,6 @@
 [package]
 name = "astro-post-audit"
-version = "0.4.2"
+version = "0.4.3"
 edition = "2021"
 description = "Fast post-build auditor for Astro sites: SEO, links, and lightweight WCAG checks"
 license = "MIT"
@@ -33,6 +33,9 @@ scraper = "0.22"
 
 # Image dimension probing (header-only, no full decode) — used for og:image checks
 imagesize = "0.13"
+
+# Terminal width detection (keeps the progress bar from wrapping)
+terminal_size = "0.4"
 
 # URL handling
 url = "2"
