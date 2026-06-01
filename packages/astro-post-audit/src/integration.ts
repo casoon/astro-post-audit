@@ -402,6 +402,13 @@ export interface PostAuditOptions {
    * Set `true`/`false` to force it.
    */
   progress?: boolean;
+  /**
+   * Verbose diagnostics on stderr: the resolved config (after preset merge),
+   * discovery stats (files found / excluded by filters / parsed, sitemap status),
+   * and per-check finding counts + timings. Never touches the report on stdout.
+   * Replaces the progress bar when enabled. @default false
+   */
+  debug?: boolean;
   /** Disable the integration (useful for dev mode). */
   disable?: boolean;
   /** Throw an error when the audit finds issues (fails the build). Default: false */
@@ -786,6 +793,7 @@ export default function postAudit(
         }
         if (options.benchmark !== undefined) stdinConfig.benchmark = options.benchmark;
         if (options.progress !== undefined) stdinConfig.progress = options.progress;
+        if (options.debug !== undefined) stdinConfig.debug = options.debug;
         if (options.maxWarnings != null) stdinConfig.max_warnings = options.maxWarnings;
         if (options.baseline)
           stdinConfig.baseline = resolve(

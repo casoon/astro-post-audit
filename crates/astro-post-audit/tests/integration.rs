@@ -3800,3 +3800,25 @@ fn html_validation_disabled_by_default() {
         "HTML validation should be off unless explicitly enabled"
     );
 }
+
+// ==========================================================================
+// Debug mode
+// ==========================================================================
+
+#[test]
+fn debug_mode_writes_diagnostics_to_stderr_only() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (stdout, stderr, _) = run_audit(
+        dir.path(),
+        r#"{"debug":true,"format":"json","site":{"base_url":"https://example.com"}}"#,
+    );
+    // stdout must stay clean, parseable JSON
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("stdout not valid JSON: {e}\n{stdout}"));
+    assert!(parsed.get("summary").is_some());
+    // diagnostics go to stderr
+    assert!(stderr.contains("[debug] effective config"), "config dump");
+    assert!(stderr.contains("[debug] discovery:"), "discovery stats");
+    assert!(stderr.contains("[debug]  1/"), "per-check lines");
+}

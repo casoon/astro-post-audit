@@ -71,6 +71,10 @@ pub struct SiteIndex {
     pub dist_path: PathBuf,
     /// Base URL (if provided)
     pub base_url: Option<String>,
+    /// Total HTML files found in dist before include/exclude filtering (diagnostics).
+    pub html_total: usize,
+    /// HTML files remaining after include/exclude filtering (diagnostics).
+    pub html_matched: usize,
 }
 
 impl SiteIndex {
@@ -103,8 +107,8 @@ impl SiteIndex {
             Some(builder.build()?)
         };
 
-        // Discover HTML files
-        let html_files: Vec<(String, PathBuf)> = WalkDir::new(&dist_path)
+        // Discover all HTML files first (for diagnostics), then apply include/exclude.
+        let all_html: Vec<(String, PathBuf)> = WalkDir::new(&dist_path)
             .follow_links(false)
             .into_iter()
             .filter_map(|e| e.ok())
@@ -122,22 +126,29 @@ impl SiteIndex {
                     .ok()?
                     .to_string_lossy()
                     .replace('\\', "/");
-
-                // Apply include/exclude filters (patterns always use forward slashes)
-                if let Some(ref inc) = include_set {
-                    if !inc.is_match(&rel) {
-                        return None;
-                    }
-                }
-                if let Some(ref exc) = exclude_set {
-                    if exc.is_match(&rel) {
-                        return None;
-                    }
-                }
-
                 Some((rel, abs))
             })
             .collect();
+        let html_total = all_html.len();
+
+        let html_files: Vec<(String, PathBuf)> = all_html
+            .into_iter()
+            .filter(|(rel, _)| {
+                // Apply include/exclude filters (patterns always use forward slashes)
+                if let Some(ref inc) = include_set {
+                    if !inc.is_match(rel) {
+                        return false;
+                    }
+                }
+                if let Some(ref exc) = exclude_set {
+                    if exc.is_match(rel) {
+                        return false;
+                    }
+                }
+                true
+            })
+            .collect();
+        let html_matched = html_files.len();
 
         let base_url = config.site.base_url.clone();
         let norm_config = config.url_normalization.clone();
@@ -292,6 +303,8 @@ impl SiteIndex {
             sitemap_parse_error,
             dist_path,
             base_url,
+            html_total,
+            html_matched,
         })
     }
 

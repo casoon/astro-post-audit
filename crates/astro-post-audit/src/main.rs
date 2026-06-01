@@ -89,6 +89,11 @@ fn run() -> Result<i32> {
     };
     config.validate()?;
 
+    let debug = config.debug;
+    if debug {
+        eprintln!("[debug] effective config:\n{config:#?}");
+    }
+
     // Validate dist path
     if !cli.dist_path.is_dir() {
         anyhow::bail!(
@@ -105,6 +110,29 @@ fn run() -> Result<i32> {
     let site_index = SiteIndex::build(&cli.dist_path, &config, include, exclude)?;
     let discovery_ms = t_start.elapsed().as_millis();
 
+    if debug {
+        let filtered = site_index
+            .html_total
+            .saturating_sub(site_index.html_matched);
+        eprintln!(
+            "[debug] discovery: {} HTML file(s) found, {} excluded by filters, {} parsed into pages ({} ms)",
+            site_index.html_total,
+            filtered,
+            site_index.pages.len(),
+            discovery_ms
+        );
+        match &site_index.sitemap_parse_error {
+            Some(err) => eprintln!("[debug] sitemap.xml: parse error: {err}"),
+            None if site_index.sitemap_urls.is_empty() => {
+                eprintln!("[debug] sitemap.xml: not found or empty")
+            }
+            None => eprintln!(
+                "[debug] sitemap.xml: {} URL(s)",
+                site_index.sitemap_urls.len()
+            ),
+        }
+    }
+
     // Parse format from config
     let format = match config.format.as_deref() {
         Some("json") => report::Format::Json,
@@ -117,6 +145,7 @@ fn run() -> Result<i32> {
     // (works with any output format). Auto-enabled only in an interactive
     // terminal (silent in CI / when piped).
     let show_progress = !config.page_overview
+        && !debug
         && config
             .progress
             .unwrap_or_else(|| std::io::stderr().is_terminal());
@@ -202,6 +231,16 @@ fn run() -> Result<i32> {
                 name: name.to_string(),
                 duration_ms: t.elapsed().as_millis(),
             });
+        }
+        if debug {
+            eprintln!(
+                "[debug] {:>2}/{} {:<24} {:>4} finding(s)  {} ms",
+                idx + 1,
+                total_checks,
+                name,
+                new_findings.len(),
+                t.elapsed().as_millis()
+            );
         }
         error_count += new_findings
             .iter()

@@ -896,6 +896,11 @@
             "description": "Print per-check timing benchmarks in the output.",
             "type": "boolean"
         },
+        "debug": {
+            "default": false,
+            "description": "Verbose diagnostics on stderr: the resolved config (after preset merge),\ndiscovery stats (files found / excluded by filters / parsed, sitemap status),\nand per-check finding counts + timings. Never touches the report on stdout.\nReplaces the progress bar when enabled.",
+            "type": "boolean"
+        },
         "disable": {
             "description": "Disable the integration (useful for dev mode).",
             "type": "boolean"

@@ -266,6 +266,8 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                     stdinConfig.benchmark = options.benchmark;
                 if (options.progress !== undefined)
                     stdinConfig.progress = options.progress;
+                if (options.debug !== undefined)
+                    stdinConfig.debug = options.debug;
                 if (options.maxWarnings != null)
                     stdinConfig.max_warnings = options.maxWarnings;
                 if (options.baseline)

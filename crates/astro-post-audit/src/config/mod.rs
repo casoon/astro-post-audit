@@ -33,6 +33,8 @@ pub struct Config {
     pub benchmark: bool,
     /// Show a live progress bar on stderr. None = auto (on when stderr is a TTY and format is text).
     pub progress: Option<bool>,
+    /// Emit verbose diagnostics on stderr: resolved config, discovery stats, per-check counts.
+    pub debug: bool,
     pub site: SiteConfig,
     pub filters: FilterConfig,
     pub url_normalization: UrlNormalizationConfig,
