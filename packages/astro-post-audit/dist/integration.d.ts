@@ -388,6 +388,12 @@ export interface PostAuditOptions {
     };
     /** Print per-check timing benchmarks in the output. */
     benchmark?: boolean;
+    /**
+     * Show a live progress bar on stderr while checks run.
+     * Defaults to auto: on in an interactive terminal, silent in CI.
+     * Set `true`/`false` to force it.
+     */
+    progress?: boolean;
     /** Disable the integration (useful for dev mode). */
     disable?: boolean;
     /** Throw an error when the audit finds issues (fails the build). Default: false */

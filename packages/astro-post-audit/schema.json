@@ -962,6 +962,10 @@
             ],
             "type": "string"
         },
+        "progress": {
+            "description": "Show a live progress bar on stderr while checks run.\nDefaults to auto: on in an interactive terminal, silent in CI.\nSet `true`/`false` to force it.",
+            "type": "boolean"
+        },
         "reports": {
             "$ref": "#/definitions/ReportsConfig",
             "description": "Write one or more report files. Supports `json`, `markdown`, and `sarif` (SARIF 2.1.0) formats.\nMultiple formats can be active simultaneously. Takes precedence over `output`/`outputMarkdown` when both are set."

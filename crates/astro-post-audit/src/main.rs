@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use std::io::Read;
+use std::io::{IsTerminal, Read, Write};
 use std::path::PathBuf;
 use std::process;
 use std::time::Instant;
@@ -52,6 +52,30 @@ fn main() {
     }
 }
 
+/// Width of the textual progress bar (in cells).
+const PROGRESS_BAR_WIDTH: usize = 22;
+
+/// Redraw the single-line progress bar on stderr. `done` checks of `total` are
+/// complete; `label` names the check about to run.
+fn draw_progress(done: usize, total: usize, label: &str) {
+    let filled = (done * PROGRESS_BAR_WIDTH)
+        .checked_div(total)
+        .unwrap_or(PROGRESS_BAR_WIDTH)
+        .min(PROGRESS_BAR_WIDTH);
+    let bar: String = "█".repeat(filled) + &"░".repeat(PROGRESS_BAR_WIDTH - filled);
+    let mut err = std::io::stderr();
+    // \r returns to column 0, \x1b[2K clears the line before redrawing.
+    let _ = write!(err, "\r\x1b[2K  [{bar}] {done}/{total}  {label}");
+    let _ = err.flush();
+}
+
+/// Erase the progress line so it leaves no residue before the report prints.
+fn clear_progress() {
+    let mut err = std::io::stderr();
+    let _ = write!(err, "\r\x1b[2K");
+    let _ = err.flush();
+}
+
 fn run() -> Result<i32> {
     let cli = Cli::parse();
 
@@ -88,6 +112,14 @@ fn run() -> Result<i32> {
         Some("sarif") => report::Format::Sarif,
         _ => report::Format::Text,
     };
+
+    // Live progress is drawn on stderr so it never corrupts stdout reports
+    // (works with any output format). Auto-enabled only in an interactive
+    // terminal (silent in CI / when piped).
+    let show_progress = !config.page_overview
+        && config
+            .progress
+            .unwrap_or_else(|| std::io::stderr().is_terminal());
 
     // Page properties overview mode (informational, exits before checks)
     if config.page_overview {
@@ -137,9 +169,17 @@ fn run() -> Result<i32> {
         ("html_validation", checks::html_validation::check_all),
     ];
 
-    for &(name, check_fn) in registry {
+    let total_checks = registry.len();
+    if show_progress {
+        eprintln!("  Auditing {} pages…", site_index.pages.len());
+    }
+
+    for (idx, &(name, check_fn)) in registry.iter().enumerate() {
         if max_errors.is_some_and(|m| error_count >= m) {
             break;
+        }
+        if show_progress {
+            draw_progress(idx, total_checks, name);
         }
         let t = Instant::now();
         let mut new_findings = check_fn(&site_index, &config);
@@ -170,6 +210,10 @@ fn run() -> Result<i32> {
         findings.extend(new_findings);
     }
     let _ = error_count;
+
+    if show_progress {
+        clear_progress();
+    }
 
     // Populate source-file hints when enabled
     if config.hints.source_files {
