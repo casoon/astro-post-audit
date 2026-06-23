@@ -60,7 +60,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: packages/astro-post-audit
-        run: npm ci
+        run: npm install
 
       - name: Verify binary compatibility
         working-directory: packages/astro-post-audit
