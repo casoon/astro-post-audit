@@ -15,7 +15,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = dirname(here);
 const packageNodeModules = join(packageRoot, "node_modules");
-const astroCli = join(packageNodeModules, "astro", "astro.js");
+const astroCli = join(packageNodeModules, "astro", "bin", "astro.mjs");
 const integrationUrl = pathToFileURL(join(here, "integration.js")).href;
 
 function writeProject(
@@ -79,8 +79,10 @@ const title = "Home";
     <link rel="canonical" href="https://example.com/" />
   </head>
   <body>
-    <h1>Home</h1>
-    <a href="/">Home</a>
+    <main>
+      <h1>Home</h1>
+      <a href="/">Home</a>
+    </main>
   </body>
 </html>`,
       "{ throwOnError: true }",

@@ -666,14 +666,16 @@ export default function postAudit(
   return {
     name: "astro-post-audit",
     hooks: {
-      "astro:config:done": ({ config }) => {
+      "astro:config:done": ({ config, buildOutput }) => {
         siteUrl = config.site?.toString();
         rootDir = fileURLToPath(config.root);
         // Bridge Astro's trailingSlash config automatically
         if (config.trailingSlash) {
           astroTrailingSlash = config.trailingSlash;
         }
-        astroOutput = config.output;
+        // buildOutput (Astro v7+) is resolved after adapter overrides; fall back
+        // to config.output for Astro v5/v6 where buildOutput is not provided.
+        astroOutput = (buildOutput as string | undefined) ?? config.output;
       },
 
       "astro:build:done": ({ dir, logger }) => {

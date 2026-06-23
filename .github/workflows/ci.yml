@@ -66,6 +66,10 @@ jobs:
         working-directory: packages/astro-post-audit
         run: npm run verify:binary
 
+      - name: Run TypeScript tests
+        working-directory: packages/astro-post-audit
+        run: npm test
+
       - name: Type check
         working-directory: packages/astro-post-audit
         run: npx tsc --noEmit
