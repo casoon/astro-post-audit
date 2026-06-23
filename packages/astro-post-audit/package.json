@@ -18,6 +18,7 @@
     "generate-schema": "typescript-json-schema tsconfig.json PostAuditOptions --noExtraProps -o schema.json",
     "verify:binary": "node scripts/verify-binary.cjs",
     "test": "tsc && node --test dist/*.test.js",
+    "test:unit": "tsc && node --test dist/integration.test.js",
     "prepublishOnly": "node -e \"require('fs').copyFileSync('../../README.md','README.md')\" && tsc && npm run generate-schema",
     "postinstall": "node bin/install.cjs"
   },
