@@ -44,20 +44,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         .pages
         .par_iter()
         .flat_map(|page| {
-            let html = page.parse_html();
-            let text: String = html
-                .select(&content_sel)
-                // A selector list such as the default `article, main, .prose`
-                // may match nested containers. Only extract from outermost
-                // matches so their descendant text is not counted repeatedly.
-                .filter(|el| {
-                    !el.ancestors()
-                        .filter_map(ElementRef::wrap)
-                        .any(|ancestor| content_sel.matches(&ancestor))
-                })
-                .flat_map(|el| el.text())
-                .collect::<Vec<_>>()
-                .join(" ");
+            let text = content_text(page, &content_sel);
             let word_count = text.split_whitespace().count();
             if word_count == 0 {
                 return Vec::new();
@@ -74,6 +61,22 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             findings
         })
         .collect()
+}
+
+fn content_text(page: &PageInfo, content_selector: &Selector) -> String {
+    let html = page.parse_html();
+    html.select(content_selector)
+        // A selector list such as the default `article, main, .prose` may
+        // match nested containers. Only extract outermost matches so their
+        // descendant text is not counted repeatedly.
+        .filter(|el| {
+            !el.ancestors()
+                .filter_map(ElementRef::wrap)
+                .any(|ancestor| content_selector.matches(&ancestor))
+        })
+        .flat_map(|el| el.text())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 const GERMAN_SIGNAL_WORDS: &[&str] = &[
@@ -123,20 +126,18 @@ fn language_mismatch_finding(
         return None;
     }
 
-    Some(Finding {
-        level: Level::Info,
-        rule_id: "content-style/language-mismatch".into(),
-        file: page.rel_path.clone(),
-        selector: "html[lang]".into(),
-        message: format!(
+    Some(Finding::new(
+        Level::Info,
+        "content-style/language-mismatch",
+        page.rel_path.clone(),
+        "html[lang]",
+        format!(
             "html lang declares {expected_name}, but {other_name} signal words dominate ({other_count} vs {expected_count}); examples: {}",
             examples.join(", ")
         ),
-        help: "Confirm the page language manually, then align html lang or exclude mixed-language content from this heuristic.".into(),
-        suggestion: None,
-        source_hint: None,
-        confidence: Some(Confidence::Low),
-    })
+        "Confirm the page language manually, then align html lang or exclude mixed-language content from this heuristic.",
+        Some(Confidence::Low),
+    ))
 }
 
 fn count_signal_words(text: &str, signals: &[&str]) -> (usize, Vec<String>) {
@@ -279,22 +280,20 @@ fn build_finding(
     message: String,
     excerpt: Option<String>,
 ) -> Finding {
-    Finding {
-        level: level_from_severity(&rule.level),
-        rule_id: format!("content-style/{}", rule.id),
-        file: page.rel_path.clone(),
-        selector: content_selector.to_string(),
-        message: match excerpt {
+    Finding::new(
+        level_from_severity(&rule.level),
+        format!("content-style/{}", rule.id),
+        page.rel_path.clone(),
+        content_selector,
+        match excerpt {
             Some(excerpt) => format!("{message} — Example: \"{excerpt}\""),
             None => message,
         },
-        help: rule.help.clone().unwrap_or_else(|| {
+        rule.help.clone().unwrap_or_else(|| {
             "Heuristic content-style finding — confirm manually, then adjust wording or override the rule's threshold/severity in config.".into()
         }),
-        suggestion: None,
-        source_hint: None,
-        confidence: Some(Confidence::Low),
-    }
+        Some(Confidence::Low),
+    )
 }
 
 fn match_count_and_excerpt(regex: &Regex, text: &str) -> Option<(usize, String)> {
