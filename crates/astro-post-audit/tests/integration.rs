@@ -3889,6 +3889,34 @@ fn content_style_em_dash_density_triggers() {
 }
 
 #[test]
+fn content_style_long_technical_text_allows_normal_contrast_and_dash_usage() {
+    let dir = TempDir::new().unwrap();
+    let filler =
+        "fundierte technische Analyse mit Kontext und nachvollziehbaren Details ".repeat(210);
+    let contrasts = (0..4)
+        .map(|_| {
+            "Diese Entscheidung ist nicht beliebig, sondern durch die Schnittstelle begründet. "
+        })
+        .collect::<String>();
+    let dashes = (0..10)
+        .map(|_| "Der Vergleich — mit allen Randbedingungen — bleibt dokumentiert. ")
+        .collect::<String>();
+    write_article_page(dir.path(), "post.html", &(filler + &contrasts + &dashes));
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "content-style/contrast-formula-density"
+                || f["rule_id"] == "content-style/em-dash-density"),
+        "normal technical prose must not trigger the conservative defaults: {findings:?}"
+    );
+}
+
+#[test]
 fn content_style_clean_article_no_findings() {
     let dir = TempDir::new().unwrap();
     let mut body = String::new();

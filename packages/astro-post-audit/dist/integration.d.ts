@@ -312,6 +312,12 @@ export interface RulesConfig {
          * Use this to add one pattern without redefining the whole list.
          */
         extra_rules?: StyleRule[];
+        /** Override built-in density thresholds without replacing the default ruleset. */
+        thresholds?: {
+            em_dash_density?: number;
+            contrast_formula_density?: number;
+            contrast_formula_density_en?: number;
+        };
         /** Built-in or custom rule IDs to disable (for example `em-dash-density`). */
         disabled_rules?: string[];
         /** Language consistency heuristic for German and English content. */

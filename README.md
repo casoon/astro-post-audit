@@ -828,14 +828,29 @@ Enable via `contentStyle: true` (top-level option), `rules.content_style.enabled
 
 For archive or taxonomy pages whose card structure cannot be recognised reliably, use `exclude` with dist-relative globs. It only disables content-style checks for those pages; link, accessibility, SEO and all other checks still run. For example: `exclude: ["tags/**", "serien/**"]`.
 
+Tune built-in density rules without copying their regexes:
+
+```ts
+rules: {
+  content_style: {
+    enabled: true,
+    thresholds: {
+      em_dash_density: 16,
+      contrast_formula_density: 6,
+      contrast_formula_density_en: 6,
+    },
+  },
+}
+```
+
 The built-in ruleset is kept in sync with the [`anti-ai-copy` skill](https://github.com/casoon/casoon-agent-skills)'s checklist:
 
 | Rule ID | Level | Description |
 |---------|-------|-------------|
-| `content-style/em-dash-density` | Info | More than 8 em-dashes (`—`) per 1000 words |
-| `content-style/contrast-formula-density` | Info | German: more than 2.5 "nicht/kein X, sondern Y" contrast constructions per 1000 words |
+| `content-style/em-dash-density` | Info | More than 12 em-dashes (`—`) per 1000 words |
+| `content-style/contrast-formula-density` | Info | German: more than 4 "nicht/kein X, sondern Y" contrast constructions per 1000 words |
 | `content-style/chatbot-leftover` | Warning | German: unedited chatbot phrases ("Ich hoffe, das hilft", "Gerne!", "Lass uns eintauchen") |
-| `content-style/contrast-formula-density-en` | Info | English: more than 2.5 "not X, but Y" contrast constructions per 1000 words |
+| `content-style/contrast-formula-density-en` | Info | English: more than 4 "not X, but Y" contrast constructions per 1000 words |
 | `content-style/chatbot-leftover-en` | Warning | English: unedited chatbot phrases ("I hope this helps", "Happy to help!", "Let's dive in") |
 | `content-style/language-mismatch` | Info | `<html lang>` conflicts with a strong German/English function-word signal |
 

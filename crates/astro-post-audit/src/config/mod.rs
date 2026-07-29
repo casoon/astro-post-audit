@@ -374,11 +374,21 @@ pub struct ContentStyleConfig {
     /// Always appended to whichever ruleset is in effect (built-in or `rules`).
     /// Use this to add one pattern without redefining the whole list.
     pub extra_rules: Vec<StyleRule>,
+    /// Overrides thresholds of built-in density rules without replacing their regexes.
+    pub thresholds: ContentStyleThresholds,
     /// Rule IDs to disable without copying and replacing the built-in ruleset.
     /// Use the short ID (for example `em-dash-density`), not `content-style/...`.
     pub disabled_rules: Vec<String>,
     /// Heuristic that compares common language signal words with `<html lang>`.
     pub language_detection: LanguageDetectionConfig,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct ContentStyleThresholds {
+    pub em_dash_density: Option<f64>,
+    pub contrast_formula_density: Option<f64>,
+    pub contrast_formula_density_en: Option<f64>,
 }
 
 /// Lightweight language-consistency heuristic for German and English content.
@@ -402,7 +412,7 @@ pub fn default_style_rules() -> Vec<StyleRule> {
             id: "em-dash-density".into(),
             rule_type: StyleRuleType::DensityPer1000Words,
             pattern: Some("—".into()),
-            threshold: Some(8.0),
+            threshold: Some(12.0),
             min_sentences: default_min_sentences(),
             level: SeverityLevel::Info,
             message: Some(
@@ -417,7 +427,7 @@ pub fn default_style_rules() -> Vec<StyleRule> {
             id: "contrast-formula-density".into(),
             rule_type: StyleRuleType::DensityPer1000Words,
             pattern: Some(r"\b(nicht|kein|keine)\b[^.!?]{0,80}sondern".into()),
-            threshold: Some(2.5),
+            threshold: Some(4.0),
             min_sentences: default_min_sentences(),
             level: SeverityLevel::Info,
             message: Some(
@@ -443,7 +453,7 @@ pub fn default_style_rules() -> Vec<StyleRule> {
             id: "contrast-formula-density-en".into(),
             rule_type: StyleRuleType::DensityPer1000Words,
             pattern: Some(r"\bnot\b[^.!?]{0,80}\bbut\b".into()),
-            threshold: Some(2.5),
+            threshold: Some(4.0),
             min_sentences: default_min_sentences(),
             level: SeverityLevel::Info,
             message: Some(
@@ -894,6 +904,7 @@ impl Default for ContentStyleConfig {
             exclude: Vec::new(),
             rules: None,
             extra_rules: Vec::new(),
+            thresholds: ContentStyleThresholds::default(),
             disabled_rules: Vec::new(),
             language_detection: LanguageDetectionConfig::default(),
         }

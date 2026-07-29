@@ -27,8 +27,21 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         return Vec::new();
     };
 
-    let mut all_rules: Vec<StyleRule> =
-        cs.rules.clone().unwrap_or_else(config::default_style_rules);
+    let mut all_rules: Vec<StyleRule> = cs.rules.clone().unwrap_or_else(|| {
+        let mut rules = config::default_style_rules();
+        for rule in &mut rules {
+            let threshold = match rule.id.as_str() {
+                "em-dash-density" => cs.thresholds.em_dash_density,
+                "contrast-formula-density" => cs.thresholds.contrast_formula_density,
+                "contrast-formula-density-en" => cs.thresholds.contrast_formula_density_en,
+                _ => None,
+            };
+            if let Some(threshold) = threshold {
+                rule.threshold = Some(threshold);
+            }
+        }
+        rules
+    });
     all_rules.extend(cs.extra_rules.iter().cloned());
 
     let compiled: Vec<CompiledRule> = all_rules

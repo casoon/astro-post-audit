@@ -342,6 +342,22 @@
                                 "$ref": "#/definitions/StyleRule"
                             },
                             "type": "array"
+                        },
+                        "thresholds": {
+                            "additionalProperties": false,
+                            "description": "Override built-in density thresholds without replacing the default ruleset.",
+                            "properties": {
+                                "contrast_formula_density": {
+                                    "type": "number"
+                                },
+                                "contrast_formula_density_en": {
+                                    "type": "number"
+                                },
+                                "em_dash_density": {
+                                    "type": "number"
+                                }
+                            },
+                            "type": "object"
                         }
                     },
                     "type": "object"
