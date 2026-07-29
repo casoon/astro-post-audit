@@ -2,6 +2,21 @@
 
 Fast post-build auditor for Astro sites. Checks SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output. No browser, no network — runs in <1s on typical sites.
 
+## What's new in 0.5.0
+
+Content-style checks are now available as an opt-in editorial audit. They look
+for repeatable writing patterns without treating style as a correctness issue:
+
+| Area | What | Rule IDs | How to enable |
+|------|------|----------|---------------|
+| Content style | Built-in German and English checks for em-dash density, repeated contrast formulas, and chatbot leftovers | `content-style/*` | `contentStyle: true`, `rules.content_style.enabled`, or `preset: 'editorial'` |
+| Language consistency | Low-confidence check for a clear German/English text signal that conflicts with `<html lang>` | `content-style/language-mismatch` | Included with content style; tune with `rules.content_style.language_detection` |
+| Custom editorial rules | Add regex, density, or sentence-rhythm checks without changing the auditor | — | `rules.content_style.extra_rules` (append) or `rules.content_style.rules` (replace) |
+
+`contentStyle: true` combines with an existing `rules.content_style` object, so detailed configuration such as `content_selector`, `extra_rules`, and `disabled_rules` is retained.
+
+No migration is required: content-style checks are disabled by default. See [Content style](#content-style) for the complete configuration and its false-positive limits.
+
 ## What's new in 0.4.x
 
 New checks (all opt-in unless noted) and diagnostics:
@@ -640,6 +655,12 @@ rules: {
     // extra_rules: [                   // Always appended to whichever ruleset is in effect
     //   { id: "custom-word", type: "presence", pattern: "unleash", level: "warning" },
     // ],
+    disabled_rules: [],                 // Disable built-in/custom rules by short ID
+    language_detection: {
+      enabled: true,                    // Compare German/English text signals with html[lang]
+      min_signal_words: 12,             // Require this many signals for the other language
+      mismatch_ratio: 2,                // Other-language signals must be this many times higher
+    },
   },
 
   // Innovative dist-only audits
