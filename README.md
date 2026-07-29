@@ -2,6 +2,13 @@
 
 Fast post-build auditor for Astro sites. Checks SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output. No browser, no network — runs in <1s on typical sites.
 
+## What's new in 0.5.3
+
+| Area | What | Rule IDs | How to enable |
+|------|------|----------|---------------|
+| Source analysis | Static Astro/Tailwind inventory, exact duplicate signatures, safe utility conflicts, and component-complexity signals | `source-analysis/*` | `rules.source_analysis.enabled` |
+| Terminal report | Updated [Runemark](https://crates.io/crates/runemark) presentation dependency | — | Enabled for text output by default |
+
 ## What's new in 0.5.2
 
 | Area | What | Rule IDs | How to enable |
@@ -22,8 +29,26 @@ for repeatable writing patterns without treating style as a correctness issue:
 | Content style | Built-in German and English checks for em-dash density, repeated contrast formulas, and chatbot leftovers | `content-style/*` | `contentStyle: true`, `rules.content_style.enabled`, or `preset: 'editorial'` |
 | Language consistency | Low-confidence check for a clear German/English text signal that conflicts with `<html lang>` | `content-style/language-mismatch` | Included with content style; tune with `rules.content_style.language_detection` |
 | Custom editorial rules | Add regex, density, or sentence-rhythm checks without changing the auditor | — | `rules.content_style.extra_rules` (append) or `rules.content_style.rules` (replace) |
+| Source analysis | Opt-in inventory, exact utility duplicates, safe same-variant conflicts, and Astro complexity signals | `source-analysis/*` | `rules.source_analysis.enabled` |
 
 `contentStyle: true` combines with an existing `rules.content_style` object, so detailed configuration such as `content_selector`, `extra_rules`, and `disabled_rules` is retained.
+
+### Source analysis (Astro + Tailwind)
+
+Source analysis is deliberately opt-in and only evaluates quoted static `class` and `class:list` entries. It never executes JavaScript or guesses dynamic classes. It adds advisory `info` findings for utility-family inventory, repeated exact signatures, duplicate or mutually exclusive utilities within the same variant scope, and oversized Astro components.
+
+```ts
+postAudit({
+  rules: {
+    source_analysis: {
+      enabled: true,
+      exclude: ["src/components/generated/**"],
+      min_duplicate_occurrences: 3,
+      max_component_lines: 300,
+    },
+  },
+});
+```
 
 No migration is required: content-style checks are disabled by default. See [Content style](#content-style) for the complete configuration and its false-positive limits.
 

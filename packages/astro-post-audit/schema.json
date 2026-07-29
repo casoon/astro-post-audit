@@ -894,6 +894,64 @@
                     },
                     "type": "object"
                 },
+                "source_analysis": {
+                    "additionalProperties": false,
+                    "description": "Opt-in static analysis of Astro/Tailwind source files. Dynamic expressions are\nnot evaluated; findings are advisory and leave normal dist-only audits unchanged.",
+                    "properties": {
+                        "component_complexity": {
+                            "default": true,
+                            "description": "Report Astro components that cross advisory static complexity thresholds.",
+                            "type": "boolean"
+                        },
+                        "duplicate_signatures": {
+                            "default": true,
+                            "description": "Report exact repeated static utility signatures.",
+                            "type": "boolean"
+                        },
+                        "enabled": {
+                            "default": false,
+                            "description": "Enable source analysis and pass Astro's project root to the binary.",
+                            "type": "boolean"
+                        },
+                        "exclude": {
+                            "description": "Project-root-relative source glob patterns to exclude.",
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        "extensions": {
+                            "description": "Additional source file extensions to inspect (without `.`).",
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        "max_component_lines": {
+                            "type": "number"
+                        },
+                        "max_component_props": {
+                            "type": "number"
+                        },
+                        "max_component_slots": {
+                            "type": "number"
+                        },
+                        "min_duplicate_occurrences": {
+                            "type": "number"
+                        },
+                        "tailwind_inventory": {
+                            "default": true,
+                            "description": "Emit a Tailwind utility-family inventory.",
+                            "type": "boolean"
+                        },
+                        "utility_conflicts": {
+                            "default": true,
+                            "description": "Report only duplicate or mutually exclusive utilities in the same variant scope.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
+                },
                 "structured_data": {
                     "additionalProperties": false,
                     "description": "Structured data (JSON-LD) validation.",

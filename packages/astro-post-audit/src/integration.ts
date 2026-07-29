@@ -329,6 +329,30 @@ export interface RulesConfig {
     };
   };
   /**
+   * Opt-in static analysis of Astro/Tailwind source files. Dynamic expressions are
+   * not evaluated; findings are advisory and leave normal dist-only audits unchanged.
+   */
+  source_analysis?: {
+    /** Enable source analysis and pass Astro's project root to the binary. @default false */
+    enabled?: boolean;
+    /** Additional source file extensions to inspect (without `.`). */
+    extensions?: string[];
+    /** Project-root-relative source glob patterns to exclude. */
+    exclude?: string[];
+    /** Emit a Tailwind utility-family inventory. @default true */
+    tailwind_inventory?: boolean;
+    /** Report exact repeated static utility signatures. @default true */
+    duplicate_signatures?: boolean;
+    /** Report only duplicate or mutually exclusive utilities in the same variant scope. @default true */
+    utility_conflicts?: boolean;
+    /** Report Astro components that cross advisory static complexity thresholds. @default true */
+    component_complexity?: boolean;
+    min_duplicate_occurrences?: number;
+    max_component_lines?: number;
+    max_component_props?: number;
+    max_component_slots?: number;
+  };
+  /**
    * Override severity per rule ID.
    * @example `{ "html/title-too-long": "off", "a11y/img-alt": "error" }`
    */
@@ -922,6 +946,10 @@ export default function postAudit(
         }
         // content_sync needs the project root to locate src/content/.
         if (resolvedRules.content_sync?.enabled && rootDir && !stdinConfig.project_root) {
+          stdinConfig.project_root = rootDir;
+        }
+        // Source analysis is opt-in: only then expose the project root to the binary.
+        if (resolvedRules.source_analysis?.enabled && rootDir) {
           stdinConfig.project_root = rootDir;
         }
         if (options.maxErrors != null)

@@ -84,7 +84,7 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "astro-post-audit"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -1027,9 +1027,9 @@ dependencies = [
 
 [[package]]
 name = "runemark"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32b7bd32b279d686e258d7dabb11864671948168d3f4e2260e72528e3cf88895"
+checksum = "ec1b987e9cf427794c2eed20ca30339f8b66b67bd477613788747115b02a29c6"
 
 [[package]]
 name = "rustc-demangle"

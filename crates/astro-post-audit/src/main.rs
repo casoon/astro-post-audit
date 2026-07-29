@@ -213,6 +213,7 @@ fn run() -> Result<i32> {
         ("js_bloat", checks::js_bloat::check_all),
         ("content_sync", checks::content_sync::check_all),
         ("html_validation", checks::html_validation::check_all),
+        ("source_analysis", checks::source_analysis::check_all),
     ];
 
     let total_checks = registry.len();

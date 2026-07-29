@@ -73,6 +73,8 @@ pub struct Config {
     pub ux_heuristics: UxHeuristicsConfig,
     pub fonts: FontsConfig,
     pub view_transitions: ViewTransitionsConfig,
+    /// Opt-in static analysis of Astro/Tailwind source files.
+    pub source_analysis: SourceAnalysisConfig,
     pub severity: SeverityConfig,
     pub hints: HintsConfig,
     /// Project root directory, used for source-file hint resolution.
@@ -646,6 +648,51 @@ pub struct ViewTransitionsConfig {
     pub check_external_reload: bool,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct SourceAnalysisConfig {
+    /// Enable source-aware checks. Existing dist-only audits are unaffected when false.
+    pub enabled: bool,
+    /// Additional source file extensions to inspect (without the leading dot).
+    pub extensions: Vec<String>,
+    /// Glob patterns relative to project_root to exclude from source analysis.
+    pub exclude: Vec<String>,
+    /// Emit a compact Tailwind utility inventory. @default true when enabled
+    pub tailwind_inventory: bool,
+    /// Report exact repeated static class signatures. @default true when enabled
+    pub duplicate_signatures: bool,
+    /// Report provable duplicate and mutually exclusive utility tokens. @default true when enabled
+    pub utility_conflicts: bool,
+    /// Report Astro components crossing static complexity thresholds. @default true when enabled
+    pub component_complexity: bool,
+    /// Minimum exact occurrences before a repeated signature is reported. @default 3
+    pub min_duplicate_occurrences: usize,
+    /// Advisory source-line threshold for an Astro component. @default 300
+    pub max_component_lines: usize,
+    /// Advisory declared Props member threshold for an Astro component. @default 12
+    pub max_component_props: usize,
+    /// Advisory named-slot threshold for an Astro component. @default 6
+    pub max_component_slots: usize,
+}
+
+impl Default for SourceAnalysisConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            extensions: Vec::new(),
+            exclude: Vec::new(),
+            tailwind_inventory: true,
+            duplicate_signatures: true,
+            utility_conflicts: true,
+            component_complexity: true,
+            min_duplicate_occurrences: 3,
+            max_component_lines: 300,
+            max_component_props: 12,
+            max_component_slots: 6,
+        }
+    }
+}
+
 impl Default for ViewTransitionsConfig {
     fn default() -> Self {
         Self {
@@ -1009,6 +1056,21 @@ impl Config {
                         Some(_) => {}
                     },
                     StyleRuleType::Presence => {}
+                }
+            }
+        }
+        if self.source_analysis.enabled {
+            if self.project_root.as_deref().is_none_or(str::is_empty) {
+                anyhow::bail!("source_analysis.enabled requires project_root");
+            }
+            if self.source_analysis.min_duplicate_occurrences < 2 {
+                anyhow::bail!("source_analysis.min_duplicate_occurrences must be at least 2");
+            }
+            for pattern in &self.source_analysis.exclude {
+                if let Err(e) = Glob::new(pattern) {
+                    anyhow::bail!(
+                        "source_analysis.exclude contains an invalid glob '{pattern}': {e}"
+                    );
                 }
             }
         }
