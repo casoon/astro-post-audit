@@ -171,7 +171,7 @@ pub fn resolve_href(href: &str, page_route: &str, base_url: Option<&str>) -> Opt
             page_route.to_string()
         } else {
             match page_route.rfind('/') {
-                Some(pos) => page_route[..=pos].to_string(),
+                Some(pos) => page_route.get(..=pos).unwrap_or("/").to_string(),
                 None => "/".to_string(),
             }
         };

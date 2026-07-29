@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 use scraper::Selector;
 use url::Url;
@@ -7,6 +8,9 @@ use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::normalize;
 use crate::report::{Finding, Level};
+
+static HREFLANG_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("link[rel='alternate'][hreflang]").expect("valid selector"));
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     if !config.hreflang.check_hreflang {
@@ -31,10 +35,9 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
     for page in &index.pages {
         let html = page.parse_html();
-        let sel = Selector::parse("link[rel='alternate'][hreflang]").unwrap();
 
         let entries: Vec<(String, String)> = html
-            .select(&sel)
+            .select(&HREFLANG_SEL)
             .filter_map(|el| {
                 let lang = el.value().attr("hreflang")?.to_string();
                 let href = el.value().attr("href")?.to_string();

@@ -131,8 +131,11 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             if let Ok(parsed) = Url::parse(url_str) {
                 let route = normalize::normalize_path(parsed.path(), norm);
                 // Find the page for this route
-                if let Some(&idx) = index.route_to_index.get(&route) {
-                    let page = &index.pages[idx];
+                if let Some(page) = index
+                    .route_to_index
+                    .get(&route)
+                    .and_then(|&idx| index.pages.get(idx))
+                {
                     if let Some(ref canonical) = page.canonical {
                         // Compare normalized forms to avoid false positives
                         let norm_sitemap_url = normalize_url(url_str, norm);

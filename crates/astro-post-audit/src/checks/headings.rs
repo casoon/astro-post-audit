@@ -45,26 +45,26 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             // No heading level skip
             if config.headings.no_skip {
                 for window in page.heading_levels.windows(2) {
-                    let prev = window[0];
-                    let curr = window[1];
-                    if curr > prev + 1 {
-                        findings.push(Finding {
-                            level: Level::Warning,
-                            rule_id: "headings/skip-level".into(),
-                            file: page.rel_path.clone(),
-                            selector: format!("h{}", curr),
-                            message: format!(
-                                "Heading level skip: <h{}> follows <h{}> (missing <h{}>)",
-                                curr,
-                                prev,
-                                prev + 1
-                            ),
-                            help: "Don't skip heading levels; use sequential heading hierarchy"
-                                .into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                    if let [prev, curr] = window {
+                        if *curr > *prev + 1 {
+                            findings.push(Finding {
+                                level: Level::Warning,
+                                rule_id: "headings/skip-level".into(),
+                                file: page.rel_path.clone(),
+                                selector: format!("h{}", curr),
+                                message: format!(
+                                    "Heading level skip: <h{}> follows <h{}> (missing <h{}>)",
+                                    curr,
+                                    prev,
+                                    prev + 1
+                                ),
+                                help: "Don't skip heading levels; use sequential heading hierarchy"
+                                    .into(),
+                                suggestion: None,
+                                source_hint: None,
+                                confidence: None,
+                            });
+                        }
                     }
                 }
             }

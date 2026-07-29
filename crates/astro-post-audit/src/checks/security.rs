@@ -1,9 +1,19 @@
 use rayon::prelude::*;
 use scraper::Selector;
+use std::sync::LazyLock;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::report::{Finding, Level};
+
+static TARGET_BLANK_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("a[target='_blank']").expect("valid selector"));
+static INLINE_SCRIPT_SEL: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse(
+        "script:not([src]):not([type='application/ld+json']):not([type='application/json'])",
+    )
+    .expect("valid selector")
+});
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     index
@@ -15,8 +25,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             // target="_blank" without rel="noopener"
             if config.security.check_target_blank {
-                let sel = Selector::parse("a[target='_blank']").unwrap();
-                for el in html.select(&sel) {
+                for el in html.select(&TARGET_BLANK_SEL) {
                     let rel = el.value().attr("rel").unwrap_or("");
                     if !rel.contains("noopener") && !rel.contains("noreferrer") {
                         let href = el.value().attr("href").unwrap_or("(no href)");
@@ -45,8 +54,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             // Inline scripts
             if config.security.warn_inline_scripts {
-                let sel = Selector::parse("script:not([src]):not([type='application/ld+json']):not([type='application/json'])").unwrap();
-                let inline_count = html.select(&sel).count();
+                let inline_count = html.select(&INLINE_SCRIPT_SEL).count();
                 if inline_count > 0 {
                     findings.push(Finding {
                         level: Level::Warning,

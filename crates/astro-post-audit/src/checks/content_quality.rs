@@ -1,10 +1,18 @@
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 use scraper::Selector;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::report::{Finding, Level};
+
+static TITLE_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("title").expect("valid selector"));
+static META_DESC_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("meta[name='description']").expect("valid selector"));
+static H1_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("h1").expect("valid selector"));
 
 /// Truncate a string to approximately `max_chars` characters, safe for multi-byte UTF-8.
 fn truncate_str(s: &str, max_chars: usize) -> String {
@@ -39,8 +47,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
         // Title
         if cq.detect_duplicate_titles {
-            let sel = Selector::parse("title").unwrap();
-            if let Some(el) = html.select(&sel).next() {
+            if let Some(el) = html.select(&TITLE_SEL).next() {
                 let text: String = el.text().collect();
                 let trimmed = text.trim().to_string();
                 if !trimmed.is_empty() {
@@ -54,8 +61,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
         // Meta description
         if cq.detect_duplicate_descriptions {
-            let sel = Selector::parse("meta[name='description']").unwrap();
-            if let Some(el) = html.select(&sel).next() {
+            if let Some(el) = html.select(&META_DESC_SEL).next() {
                 if let Some(content) = el.value().attr("content") {
                     let trimmed = content.trim().to_string();
                     if !trimmed.is_empty() {
@@ -70,8 +76,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
         // H1
         if cq.detect_duplicate_h1 {
-            let sel = Selector::parse("h1").unwrap();
-            if let Some(el) = html.select(&sel).next() {
+            if let Some(el) = html.select(&H1_SEL).next() {
                 let text: String = el.text().collect();
                 let trimmed = text.trim().to_string();
                 if !trimmed.is_empty() {

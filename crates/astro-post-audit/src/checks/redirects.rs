@@ -86,10 +86,11 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         while let Some(next) = redirect_map.get(&current).cloned() {
             if let Some(cycle_start) = path.iter().position(|r| *r == next) {
                 // Loop detected.
-                let cycle: BTreeSet<String> = path[cycle_start..].iter().cloned().collect();
+                let cycle_slice = path.get(cycle_start..).unwrap_or(&[]);
+                let cycle: BTreeSet<String> = cycle_slice.iter().cloned().collect();
                 if reported_loops.insert(cycle) {
                     let file = file_of.get(start).cloned().unwrap_or_else(|| start.clone());
-                    let mut display = path[cycle_start..].to_vec();
+                    let mut display = cycle_slice.to_vec();
                     display.push(next.clone());
                     findings.push(Finding {
                         level: Level::Error,

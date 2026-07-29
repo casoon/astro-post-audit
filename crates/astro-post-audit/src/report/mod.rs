@@ -1,5 +1,8 @@
 use anyhow::Result;
-use colored::Colorize;
+use runemark::{
+    ColorMode, Confidence as RunemarkConfidence, Console, DetailLevel, Finding as RunemarkFinding,
+    FindingGroup, Location, Metric, Report as RunemarkReport, ScopeNote, Tone, Verdict,
+};
 use serde::Serialize;
 use std::fmt::Write as FmtWrite;
 use std::str::FromStr;
@@ -108,6 +111,7 @@ pub enum Format {
     Json,
     Markdown,
     Sarif,
+    Html,
 }
 
 impl FromStr for Format {
@@ -119,20 +123,40 @@ impl FromStr for Format {
             "json" => Ok(Format::Json),
             "markdown" => Ok(Format::Markdown),
             "sarif" => Ok(Format::Sarif),
+            "html" => Ok(Format::Html),
             _ => Err(format!(
-                "Invalid format '{}'. Use 'text', 'json', 'markdown', or 'sarif'.",
+                "Invalid format '{}'. Use 'text', 'json', 'markdown', 'sarif', or 'html'.",
                 s
             )),
         }
     }
 }
 
-/// When the total finding count exceeds this threshold, prepend a
-/// "Top issues" summary to the text output so users get orientation first.
-const TOP_ISSUES_THRESHOLD: usize = 20;
+fn tone_for(level: &Level) -> Tone {
+    match level {
+        Level::Error => Tone::Error,
+        Level::Warning => Tone::Warning,
+        Level::Info => Tone::Info,
+    }
+}
 
-/// Number of top-frequency rule IDs to show in the Top issues summary.
-const TOP_ISSUES_LIMIT: usize = 5;
+fn verdict_for(summary: &Summary) -> Verdict {
+    if summary.errors > 0 {
+        Verdict::Failed
+    } else if summary.warnings > 0 {
+        Verdict::Warning
+    } else {
+        Verdict::Info
+    }
+}
+
+fn runemark_confidence(confidence: &Option<Confidence>) -> Option<RunemarkConfidence> {
+    match confidence {
+        Some(Confidence::Medium) => Some(RunemarkConfidence::Medium),
+        Some(Confidence::Low) => Some(RunemarkConfidence::Low),
+        None => None,
+    }
+}
 
 pub struct Reporter {
     format: Format,
@@ -166,6 +190,10 @@ impl Reporter {
                 println!("{}", self.render_sarif(findings)?);
                 Ok(())
             }
+            Format::Html => {
+                print!("{}", self.render_html(findings, summary));
+                Ok(())
+            }
         }
     }
 
@@ -193,167 +221,73 @@ impl Reporter {
             }
             Format::Markdown => Ok(self.render_markdown(findings, summary)),
             Format::Sarif => self.render_sarif(findings),
+            Format::Html => Ok(self.render_html(findings, summary)),
             Format::Text => Err(anyhow::anyhow!(
                 "text format cannot be rendered to a string; use print() for stdout output"
             )),
         }
     }
 
-    fn print_top_issues(&self, findings: &[Finding]) {
-        let mut counts: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
-        for f in findings {
-            *counts.entry(f.rule_id.as_str()).or_insert(0) += 1;
-        }
-        let mut sorted: Vec<(&str, usize)> = counts.into_iter().collect();
-        sorted.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
-
-        println!();
-        println!("  {}", "Top issues".bold());
-        for (rule_id, count) in sorted.iter().take(TOP_ISSUES_LIMIT) {
-            println!("    {:>4}×  {}", count, rule_id.dimmed());
-        }
-        if sorted.len() > TOP_ISSUES_LIMIT {
-            println!(
-                "    {} {} more rule{}",
-                "…".dimmed(),
-                sorted.len() - TOP_ISSUES_LIMIT,
-                if sorted.len() - TOP_ISSUES_LIMIT == 1 {
-                    ""
-                } else {
-                    "s"
-                }
-            );
-        }
-    }
-
     fn print_text(&self, findings: &[Finding], summary: &Summary) -> Result<()> {
-        if findings.is_empty() {
-            println!(
-                "\n  {} {}",
-                "✓".green().bold(),
-                "All checks passed!".green().bold()
-            );
-            println!();
-            return Ok(());
+        let console = Console::stdout(ColorMode::Auto);
+        let mut report = if findings.is_empty() {
+            RunemarkReport::new("All checks passed!", Verdict::Passed)
+        } else {
+            RunemarkReport::new("astro-post-audit", verdict_for(summary))
+                .add_metric(
+                    Metric::new("Errors", summary.errors.to_string()).with_tone(Tone::Error),
+                )
+                .add_metric(
+                    Metric::new("Warnings", summary.warnings.to_string()).with_tone(Tone::Warning),
+                )
+                .add_metric(Metric::new("Info", summary.info.to_string()).with_tone(Tone::Info))
+                .add_metric(
+                    Metric::new("Files", summary.files_checked.to_string()).with_tone(Tone::Muted),
+                )
+                .with_detail_level(DetailLevel::Detailed)
+        };
+
+        if summary.truncated {
+            report = report.add_scope_note(ScopeNote::new(
+                "Output",
+                vec!["Truncated due to the max-errors limit".into()],
+            ));
         }
 
-        // When the result set is large, print a Top issues summary first
-        // so users get an at-a-glance orientation before the per-file dump.
-        if findings.len() > TOP_ISSUES_THRESHOLD {
-            self.print_top_issues(findings);
-        }
-
-        // Group findings by file
         let mut by_file: std::collections::BTreeMap<&str, Vec<&Finding>> =
             std::collections::BTreeMap::new();
         for f in findings {
             by_file.entry(&f.file).or_default().push(f);
         }
 
-        for (file, file_findings) in &by_file {
-            // File header with miette-style location marker
-            // Show source hint if present (same hint for all findings in this file)
+        for (file, file_findings) in by_file {
             let source_hint = file_findings.first().and_then(|f| f.source_hint.as_deref());
-            println!();
-            println!("  {} {}", "──▶".dimmed(), file.bold().underline());
-            if let Some(hint) = source_hint {
-                println!(
-                    "       {} {} {}",
-                    "source:".dimmed(),
-                    hint.dimmed(),
-                    "(heuristic)".dimmed()
-                );
-            }
-
-            for f in file_findings {
-                // Severity marker with miette-style symbols
-                let (marker, level_label) = match f.level {
-                    Level::Error => ("×".red().bold(), "error".red().bold()),
-                    Level::Warning => ("⚠".yellow().bold(), "warning".yellow().bold()),
-                    Level::Info => ("ℹ".blue(), "info".blue()),
-                };
-
-                // Rule ID and message
-                let confidence_tag = match &f.confidence {
-                    Some(Confidence::Medium) => " (confidence: medium)".dimmed().to_string(),
-                    Some(Confidence::Low) => " (confidence: low)".dimmed().to_string(),
-                    None => String::new(),
-                };
-                println!(
-                    "  {} {}{} {}{}",
-                    marker,
-                    level_label,
-                    format!("[{}]", f.rule_id).dimmed(),
-                    f.message,
-                    confidence_tag
-                );
-
-                // Selector (location within the HTML)
-                if !f.selector.is_empty() {
-                    println!("    {} {}", "╰─▶".dimmed(), f.selector.dimmed());
-                }
-
-                // Help text with miette-style formatting
-                if !f.help.is_empty() {
-                    println!("    {} {}", "help:".cyan().bold(), f.help);
-                }
-            }
-        }
-
-        // Summary box
-        println!();
-        let mut summary_line = String::new();
-        if summary.errors > 0 {
-            write!(
-                summary_line,
-                "{} error{}",
-                summary.errors,
-                if summary.errors == 1 { "" } else { "s" }
-            )
-            .unwrap();
-        }
-        if summary.warnings > 0 {
-            if !summary_line.is_empty() {
-                summary_line.push_str(", ");
-            }
-            write!(
-                summary_line,
-                "{} warning{}",
-                summary.warnings,
-                if summary.warnings == 1 { "" } else { "s" }
-            )
-            .unwrap();
-        }
-        if summary.info > 0 {
-            if !summary_line.is_empty() {
-                summary_line.push_str(", ");
-            }
-            write!(summary_line, "{} info", summary.info).unwrap();
-        }
-
-        let status_icon = if summary.errors > 0 {
-            "×".red().bold()
-        } else {
-            "⚠".yellow().bold()
-        };
-
-        println!(
-            "  {} {} ({} file{} checked)",
-            status_icon,
-            summary_line.bold(),
-            summary.files_checked,
-            if summary.files_checked == 1 { "" } else { "s" }
-        );
-
-        if summary.truncated {
-            println!(
-                "    {} {}",
-                "note:".cyan().bold(),
-                "output truncated due to max-errors limit".dimmed()
+            let title = source_hint
+                .map(|hint| format!("{file} (source: {hint}, heuristic)"))
+                .unwrap_or_else(|| file.to_string());
+            let mut group = FindingGroup::new(title).with_advisory(
+                file_findings
+                    .iter()
+                    .all(|finding| finding.level == Level::Info),
             );
+            for f in file_findings {
+                let mut finding =
+                    RunemarkFinding::new(tone_for(&f.level), &f.message).with_rule_id(&f.rule_id);
+                if !f.selector.is_empty() {
+                    finding = finding.with_location(Location::Selector(f.selector.clone()));
+                }
+                if !f.help.is_empty() {
+                    finding = finding.with_remedy(&f.help);
+                }
+                if let Some(confidence) = runemark_confidence(&f.confidence) {
+                    finding = finding.with_confidence(confidence);
+                }
+                group = group.add_finding(finding);
+            }
+            report = report.add_group(group);
         }
 
-        println!();
+        print!("\n{}\n", report.render(console));
         Ok(())
     }
 
@@ -428,6 +362,69 @@ impl Reporter {
         out
     }
 
+    fn render_html(&self, findings: &[Finding], summary: &Summary) -> String {
+        let mut out = String::new();
+        out.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n");
+        out.push_str("<title>astro-post-audit Audit Report</title>\n");
+        out.push_str("<style>\n");
+        out.push_str("body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; }\n");
+        out.push_str("h1 { color: #38bdf8; margin-top: 0; }\n");
+        out.push_str(".summary { display: flex; gap: 1.5rem; margin-bottom: 2rem; background: #1e293b; padding: 1rem 1.5rem; border-radius: 8px; font-weight: bold; }\n");
+        out.push_str(
+            ".error { color: #f87171; }\n.warning { color: #fbbf24; }\n.info { color: #38bdf8; }\n",
+        );
+        out.push_str("table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 8px; overflow: hidden; }\n");
+        out.push_str("th, td { text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid #334155; font-size: 0.875rem; }\n");
+        out.push_str("th { background: #334155; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }\n");
+        out.push_str("tr:hover { background: #334155; }\n");
+        out.push_str(".badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase; }\n");
+        out.push_str(".badge-error { background: #7f1d1d; color: #fca5a5; }\n");
+        out.push_str(".badge-warning { background: #78350f; color: #fde68a; }\n");
+        out.push_str(".badge-info { background: #0c4a6e; color: #7dd3fc; }\n");
+        out.push_str("code { background: #0f172a; padding: 0.2rem 0.4rem; border-radius: 4px; font-family: monospace; font-size: 0.85rem; color: #e2e8f0; }\n");
+        out.push_str("</style>\n</head>\n<body>\n");
+        out.push_str("<h1>🚀 astro-post-audit Audit Report</h1>\n");
+        out.push_str("<div class=\"summary\">\n");
+        let _ = writeln!(out, "<div class=\"error\">Errors: {}</div>", summary.errors);
+        let _ = writeln!(
+            out,
+            "<div class=\"warning\">Warnings: {}</div>",
+            summary.warnings
+        );
+        let _ = writeln!(out, "<div class=\"info\">Info: {}</div>", summary.info);
+        let _ = writeln!(out, "<div>Files Checked: {}</div>", summary.files_checked);
+        out.push_str("</div>\n");
+
+        if findings.is_empty() {
+            out.push_str(
+                "<p style=\"color: #4ade80; font-weight: bold;\">✓ No issues found!</p>\n",
+            );
+        } else {
+            out.push_str("<table>\n<thead>\n<tr><th>Level</th><th>Rule ID</th><th>File</th><th>Selector</th><th>Message</th></tr>\n</thead>\n<tbody>\n");
+            for f in findings {
+                let badge_cls = match f.level {
+                    Level::Error => "badge-error",
+                    Level::Warning => "badge-warning",
+                    Level::Info => "badge-info",
+                };
+                let lvl_str = match f.level {
+                    Level::Error => "error",
+                    Level::Warning => "warning",
+                    Level::Info => "info",
+                };
+                let _ = writeln!(
+                    out,
+                    "<tr><td><span class=\"badge {}\">{}</span></td><td><code>{}</code></td><td><code>{}</code></td><td><code>{}</code></td><td>{}</td></tr>",
+                    badge_cls, lvl_str, html_escape(&f.rule_id), html_escape(&f.file), html_escape(&f.selector), html_escape(&f.message)
+                );
+            }
+            out.push_str("</tbody>\n</table>\n");
+        }
+
+        out.push_str("</body>\n</html>\n");
+        out
+    }
+
     fn render_sarif(&self, findings: &[Finding]) -> Result<String> {
         // Collect unique rules (stable order via BTreeMap)
         let mut rule_map: std::collections::BTreeMap<&str, &Finding> =
@@ -494,36 +491,54 @@ impl Reporter {
     }
 
     fn print_benchmark_text(&self, b: &BenchmarkData) -> Result<()> {
+        let console = Console::stdout(ColorMode::Auto);
         println!(
             "  {} {} ({} pages)",
-            "Benchmark".bold().underline(),
-            format!("{}ms total", b.total_ms).dimmed(),
+            console.paint(Tone::Title, "Benchmark"),
+            console.paint(Tone::Muted, format!("{}ms total", b.total_ms)),
             b.pages_checked
         );
-        println!("    {} Discovery: {}ms", "•".dimmed(), b.discovery_ms);
+        println!(
+            "    {} Discovery: {}ms",
+            console.paint(Tone::Muted, "•"),
+            b.discovery_ms
+        );
         for t in &b.check_timings {
-            println!("    {} {}: {}ms", "•".dimmed(), t.name, t.duration_ms);
+            println!(
+                "    {} {}: {}ms",
+                console.paint(Tone::Muted, "•"),
+                t.name,
+                t.duration_ms
+            );
         }
-        println!("    {} {:.1} pages/sec", "•".dimmed(), b.pages_per_second);
+        println!(
+            "    {} {:.1} pages/sec",
+            console.paint(Tone::Muted, "•"),
+            b.pages_per_second
+        );
         println!();
         Ok(())
     }
 
     pub fn print_overview(&self, overview: &PageOverview) -> Result<()> {
         match self.format {
-            Format::Text | Format::Markdown | Format::Sarif => self.print_overview_text(overview),
+            Format::Text | Format::Markdown | Format::Sarif | Format::Html => {
+                self.print_overview_text(overview)
+            }
             Format::Json => self.print_overview_json(overview),
         }
     }
 
     fn print_overview_text(&self, overview: &PageOverview) -> Result<()> {
         let stats = &overview.stats;
+        let console = Console::stdout(ColorMode::Auto);
 
         println!(
             "\n{}",
-            format!("Page Properties Overview ({} pages)", stats.total_pages)
-                .bold()
-                .underline()
+            console.paint(
+                Tone::Title,
+                format!("Page Properties Overview ({} pages)", stats.total_pages)
+            )
         );
         println!();
 
@@ -542,8 +557,11 @@ impl Reporter {
             "File",
             width = max_file_len
         );
-        println!("{}", header.dimmed());
-        println!("  {}", "─".repeat(header.len().saturating_sub(2)).dimmed());
+        println!("{}", console.paint(Tone::Muted, &header));
+        println!(
+            "  {}",
+            console.paint(Tone::Muted, "─".repeat(header.len().saturating_sub(2)))
+        );
 
         // Rows
         for p in &overview.pages {
@@ -555,26 +573,26 @@ impl Reporter {
 
             let check = |b: bool| {
                 if b {
-                    "✓".green().to_string()
+                    console.paint(Tone::Success, "✓")
                 } else {
-                    "✗".red().to_string()
+                    console.paint(Tone::Error, "✗")
                 }
             };
             let og_all = p.has_og_title && p.has_og_description && p.has_og_image;
 
             let h1_str = if p.h1_count == 0 {
-                "✗".red().to_string()
+                console.paint(Tone::Error, "✗")
             } else {
                 p.h1_count.to_string()
             };
 
             let lang_str = match &p.lang_value {
                 Some(v) => v.clone(),
-                None => "✗".red().to_string(),
+                None => console.paint(Tone::Error, "✗"),
             };
 
             let ld_types_str = if p.json_ld_types.is_empty() {
-                "—".dimmed().to_string()
+                console.paint(Tone::Muted, "—")
             } else {
                 p.json_ld_types.join(", ")
             };
@@ -599,19 +617,19 @@ impl Reporter {
         println!();
         let stat = |label: &str, count: usize, total: usize| {
             let ratio = format!("{}/{}", count, total);
-            let colored = if count == total {
-                ratio.green().to_string()
+            let rendered = if count == total {
+                console.paint(Tone::Success, ratio)
             } else if count == 0 {
-                ratio.red().to_string()
+                console.paint(Tone::Error, ratio)
             } else {
-                ratio.yellow().to_string()
+                console.paint(Tone::Warning, ratio)
             };
-            format!("{} {}", label, colored)
+            format!("{} {}", label, rendered)
         };
 
         println!(
             "{}:  {}  ·  {}  ·  {}  ·  {}  ·  {}  ·  {}  ·  {}  ·  {}",
-            "Summary".bold(),
+            console.paint(Tone::Title, "Summary"),
             stat("Title", stats.pages_with_title, stats.total_pages),
             stat("Desc", stats.pages_with_description, stats.total_pages),
             stat("Canonical", stats.pages_with_canonical, stats.total_pages),
@@ -625,8 +643,8 @@ impl Reporter {
         if stats.pages_with_noindex > 0 {
             println!(
                 "  {} {}",
-                "Noindex:".yellow(),
-                format!("{} pages", stats.pages_with_noindex).yellow()
+                console.paint(Tone::Warning, "Noindex:"),
+                console.paint(Tone::Warning, format!("{} pages", stats.pages_with_noindex))
             );
         }
 
@@ -637,7 +655,11 @@ impl Reporter {
                 .iter()
                 .map(|(t, c)| format!("{} ×{}", t, c))
                 .collect();
-            println!("\n{}:  {}", "JSON-LD Types".bold(), types_str.join("  ·  "));
+            println!(
+                "\n{}:  {}",
+                console.paint(Tone::Title, "JSON-LD Types"),
+                types_str.join("  ·  ")
+            );
         }
 
         println!();
@@ -648,4 +670,12 @@ impl Reporter {
         println!("{}", serde_json::to_string_pretty(overview)?);
         Ok(())
     }
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 use rayon::prelude::*;
 use scraper::Selector;
@@ -8,6 +9,10 @@ use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::report::{Finding, Level};
 
+static LD_SEL: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("script[type='application/ld+json']").expect("valid selector")
+});
+
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     if !config.structured_data.check_json_ld
         && !config.structured_data.require_json_ld
@@ -16,8 +21,6 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         return Vec::new();
     }
 
-    let ld_sel = Selector::parse("script[type='application/ld+json']").unwrap();
-
     index
         .pages
         .par_iter()
@@ -25,7 +28,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             let mut findings = Vec::new();
             let html = page.parse_html();
 
-            let scripts: Vec<_> = html.select(&ld_sel).collect();
+            let scripts: Vec<_> = html.select(&LD_SEL).collect();
 
             if scripts.is_empty() {
                 if config.structured_data.require_json_ld {

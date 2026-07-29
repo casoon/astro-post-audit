@@ -1275,12 +1275,12 @@ fn text_output_with_errors() {
     let (stdout, _, code) = run_audit(dir.path(), "{}");
     assert_eq!(code, 1);
     assert!(
-        stdout.contains("error"),
-        "Output should contain error summary"
+        stdout.contains("[FAIL]") && stdout.contains("Errors:"),
+        "Output should contain the Runemark failure verdict and error metric"
     );
     assert!(
-        stdout.contains("file"),
-        "Output should mention files checked"
+        stdout.contains("Files:"),
+        "Output should mention the checked-file metric"
     );
 }
 
@@ -1296,8 +1296,8 @@ fn text_output_includes_top_issues_when_many_findings() {
     }
     let (stdout, _, _) = run_audit(dir.path(), "{}");
     assert!(
-        stdout.contains("Top issues"),
-        "Should include Top issues summary when finding count exceeds threshold"
+        stdout.contains("Top issue rules:"),
+        "Should include Runemark's top-rule summary when finding count exceeds threshold"
     );
 }
 
@@ -1307,8 +1307,8 @@ fn text_output_skips_top_issues_when_few_findings() {
     fs::write(dir.path().join("index.html"), "").unwrap();
     let (stdout, _, _) = run_audit(dir.path(), "{}");
     assert!(
-        !stdout.contains("Top issues"),
-        "Should not include Top issues summary for small result sets"
+        !stdout.contains("Top issue rules:"),
+        "Should not include Runemark's top-rule summary for small result sets"
     );
 }
 
@@ -3943,6 +3943,47 @@ fn content_style_ignores_repeated_link_cards_in_main() {
 }
 
 #[test]
+fn content_style_exclude_skips_only_matching_pages() {
+    let dir = TempDir::new().unwrap();
+    let tags_dir = dir.path().join("tags/kubernetes");
+    fs::create_dir_all(&tags_dir).unwrap();
+    fs::write(
+        tags_dir.join("index.html"),
+        r#"<!DOCTYPE html><html lang="de"><head><title>Tag</title></head><body><main><h1>Kubernetes</h1><p>NEEDLE</p><img src="cover.jpg"></main></body></html>"#,
+    )
+    .unwrap();
+    write_article_page(
+        dir.path(),
+        "post.html",
+        "Dieser Artikel enthält NEEDLE als bewusstes Testwort.",
+    );
+
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true,"exclude":["tags/**"],"rules":[{"id":"test-word","type":"presence","pattern":"NEEDLE","level":"warning"}]}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| {
+            f["file"] == "tags/kubernetes/index.html" && f["rule_id"] == "content-style/test-word"
+        }),
+        "matching paths must skip content style checks: {findings:?}"
+    );
+    assert!(
+        findings
+            .iter()
+            .any(|f| { f["file"] == "post.html" && f["rule_id"] == "content-style/test-word" }),
+        "non-matching pages must still receive content style findings: {findings:?}"
+    );
+    assert!(
+        findings.iter().any(|f| {
+            f["file"] == "tags/kubernetes/index.html" && f["rule_id"] == "a11y/img-alt"
+        }),
+        "excluding content style must not suppress other checks: {findings:?}"
+    );
+}
+
+#[test]
 fn content_style_uses_article_without_its_related_card_hub() {
     let dir = TempDir::new().unwrap();
     let cards = (0..4)
@@ -4246,6 +4287,24 @@ fn content_style_invalid_selector_rejected_by_config_validation() {
 }
 
 #[test]
+fn content_style_invalid_exclude_glob_rejected_by_config_validation() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (_stdout, stderr, code) = run_audit(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true,"exclude":["["]}}"#,
+    );
+    assert_eq!(
+        code, 2,
+        "invalid content style exclude glob must fail validation"
+    );
+    assert!(
+        stderr.contains("content_style.exclude"),
+        "error should name the invalid option: {stderr}"
+    );
+}
+
+#[test]
 fn content_style_editorial_preset_enables_defaults() {
     let dir = TempDir::new().unwrap();
     let mut body = String::new();
@@ -4295,4 +4354,103 @@ fn content_style_extra_rules_append_under_preset() {
             .any(|f| f["rule_id"] == "content-style/custom-word"),
         "extra_rules must append even when content_style.enabled comes from a preset: {findings:?}"
     );
+}
+
+// ==========================================================================
+// New Feature Tests (Fonts, View Transitions, llms.txt, HTML Report)
+// ==========================================================================
+
+#[test]
+fn fonts_missing_font_display() {
+    let dir = TempDir::new().unwrap();
+    let html = r#"<!DOCTYPE html><html lang="en"><head><title>Font Test</title><style>@font-face { font-family: 'MyFont'; src: url('/font.woff2'); }</style></head><body><h1>Hello</h1></body></html>"#;
+    fs::write(dir.path().join("index.html"), html).unwrap();
+
+    let (json, _) = run_audit_json(dir.path(), r#"{"fonts":{"enabled":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "fonts/missing-font-display"));
+}
+
+#[test]
+fn fonts_only_require_preload_for_self_hosted_fonts() {
+    let dir = TempDir::new().unwrap();
+    let html = r#"<!DOCTYPE html><html lang="en"><head><title>Font Test</title><link rel="stylesheet" href="/styles.css"></head><body><h1>Hello</h1></body></html>"#;
+    fs::write(dir.path().join("index.html"), html).unwrap();
+    fs::write(dir.path().join("styles.css"), "body { color: black; }").unwrap();
+
+    let (json, _) = run_audit_json(dir.path(), r#"{"fonts":{"enabled":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(!findings
+        .iter()
+        .any(|f| f["rule_id"] == "fonts/missing-preload"));
+}
+
+#[test]
+fn view_transitions_duplicate_name() {
+    let dir = TempDir::new().unwrap();
+    let html = r#"<!DOCTYPE html><html lang="en"><head><title>VT Test</title></head><body><h1 transition:name="hero">Title 1</h1><h2 transition:name="hero">Title 2</h2></body></html>"#;
+    fs::write(dir.path().join("index.html"), html).unwrap();
+
+    let (json, _) = run_audit_json(dir.path(), r#"{"view_transitions":{"enabled":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "view-transitions/duplicate-name"));
+}
+
+#[test]
+fn view_transitions_do_not_infer_client_router_from_astro_assets() {
+    let dir = TempDir::new().unwrap();
+    let html = r#"<!DOCTYPE html><html lang="en"><head><title>VT Test</title><script src="/_astro/client.js"></script></head><body><h1>Title</h1><a href="https://example.org">External</a></body></html>"#;
+    fs::write(dir.path().join("index.html"), html).unwrap();
+
+    let (json, _) = run_audit_json(dir.path(), r#"{"view_transitions":{"enabled":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(!findings
+        .iter()
+        .any(|f| f["rule_id"] == "view-transitions/missing-reload-hint"));
+}
+
+#[test]
+fn ai_visibility_missing_llms_txt() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"ai_visibility":{"enabled":true,"require_llms_txt":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "ai-visibility/missing-llms-txt"));
+}
+
+#[test]
+fn ai_visibility_reports_broken_llms_txt_links() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    fs::write(
+        dir.path().join("llms.txt"),
+        "# Site\n\n[Missing page](/missing/)",
+    )
+    .unwrap();
+
+    let (json, _) = run_audit_json(dir.path(), r#"{"ai_visibility":{"enabled":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "ai-visibility/llms-txt-broken-link"));
+}
+
+#[test]
+fn html_format_renders_html_to_stdout() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+
+    let (stdout, _, code) = run_audit(dir.path(), r#"{"format":"html"}"#);
+    assert_eq!(code, 0);
+    assert!(stdout.starts_with("<!DOCTYPE html>"));
 }

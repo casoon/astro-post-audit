@@ -1,11 +1,15 @@
 use rayon::prelude::*;
 use scraper::Selector;
+use std::sync::LazyLock;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::report::{Finding, Level};
 
 const LEGACY_IMAGE_EXTENSIONS: &[&str] = &[".jpg", ".jpeg", ".png", ".gif"];
+
+static IMG_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("img").expect("valid selector"));
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     let img = &config.images;
@@ -17,15 +21,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         return Vec::new();
     }
 
-    let img_sel = Selector::parse("img").unwrap();
-
     index
         .pages
         .par_iter()
         .flat_map(|page| {
             let mut findings = Vec::new();
             let html = page.parse_html();
-            let images: Vec<_> = html.select(&img_sel).collect();
+            let images: Vec<_> = html.select(&IMG_SEL).collect();
 
             for (i, el) in images.iter().enumerate() {
                 let attrs = el.value();

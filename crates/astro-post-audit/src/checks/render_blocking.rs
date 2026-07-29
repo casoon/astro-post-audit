@@ -7,31 +7,41 @@ use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::report::{Confidence, Finding, Level};
 
-pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
-    if !config.render_blocking.enabled {
-        return Vec::new();
-    }
+use std::sync::LazyLock;
 
-    let mut findings = Vec::new();
-    let script_sel = Selector::parse("head script[src]").unwrap();
-    let stylesheet_sel = Selector::parse("head link[rel='stylesheet'][href]").unwrap();
-    let preload_style_sel = Selector::parse("head link[rel='preload'][as='style'][href]").unwrap();
-    let preconnect_sel =
-        Selector::parse("head link[rel='preconnect'][href], head link[rel='dns-prefetch'][href]")
-            .unwrap();
-    let critical_resource_sels: Vec<Selector> = [
+static SCRIPT_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("head script[src]").expect("valid selector"));
+static STYLESHEET_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("head link[rel='stylesheet'][href]").expect("valid selector"));
+static PRELOAD_STYLE_SEL: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("head link[rel='preload'][as='style'][href]").expect("valid selector")
+});
+static PRECONNECT_SEL: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("head link[rel='preconnect'][href], head link[rel='dns-prefetch'][href]")
+        .expect("valid selector")
+});
+static CRITICAL_RESOURCE_SELS: LazyLock<Vec<Selector>> = LazyLock::new(|| {
+    [
         "head script[src]",
         "head link[rel='stylesheet'][href]",
         "head link[rel='preload'][href]",
     ]
     .iter()
     .filter_map(|s| Selector::parse(s).ok())
-    .collect();
+    .collect()
+});
+
+pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
+    if !config.render_blocking.enabled {
+        return Vec::new();
+    }
+
+    let mut findings = Vec::new();
 
     for page in &index.pages {
         let html = page.parse_html();
         let mut sync_scripts = 0usize;
-        for script in html.select(&script_sel) {
+        for script in html.select(&SCRIPT_SEL) {
             let attrs = script.value();
             let is_module = attrs
                 .attr("type")
@@ -60,10 +70,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         }
 
         let preload_styles: HashSet<String> = html
-            .select(&preload_style_sel)
+            .select(&PRELOAD_STYLE_SEL)
             .filter_map(|el| el.value().attr("href").map(|s| s.to_string()))
             .collect();
-        for style in html.select(&stylesheet_sel) {
+        for style in html.select(&STYLESHEET_SEL) {
             if let Some(href) = style.value().attr("href") {
                 if !preload_styles.contains(href) {
                     findings.push(Finding {
@@ -84,13 +94,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         }
 
         let known_preconnects: HashSet<String> = html
-            .select(&preconnect_sel)
+            .select(&PRECONNECT_SEL)
             .filter_map(|el| el.value().attr("href"))
             .filter_map(origin_from_href)
             .collect();
 
         let mut critical_third_party_origins: HashSet<String> = HashSet::new();
-        for s in &critical_resource_sels {
+        for s in CRITICAL_RESOURCE_SELS.iter() {
             for el in html.select(s) {
                 let href = el
                     .value()
