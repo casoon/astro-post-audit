@@ -1,6 +1,34 @@
 import type { AstroIntegration } from "astro";
 import { execFileSync } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
+/** A single content-style heuristic rule for the `content_style` check. */
+export interface StyleRule {
+    /** Stable identifier, used as `content-style/{id}` in the finding's rule_id and as the key for `severity`. */
+    id: string;
+    /** Which comparison this rule performs. */
+    type: "density_per_1000_words" | "presence" | "sentence_length_uniformity";
+    /** Regex pattern to match. Required for `density_per_1000_words` and `presence`; ignored for `sentence_length_uniformity`. */
+    pattern?: string;
+    /**
+     * `density_per_1000_words`: max matches per 1000 words before flagging.
+     * `sentence_length_uniformity`: minimum coefficient of variation before flagging.
+     * Ignored for `presence`.
+     */
+    threshold?: number;
+    /**
+     * Minimum sentence count required before `sentence_length_uniformity` evaluates a page
+     * (too few sentences make the statistic meaningless). Ignored for other rule types. @default 8
+     */
+    min_sentences?: number;
+    /** Severity of findings from this rule. `off` disables the rule without removing it. @default "info" */
+    level?: "error" | "warning" | "info" | "off";
+    /** Override the default finding message. Supports `{count}`/`{word_count}`/`{density}`/`{threshold}`/`{cv}`/`{sentences}` placeholders. */
+    message?: string;
+    /** Override the default help text. */
+    help?: string;
+    /** Restrict this rule to primary page languages (for example `de` or `en`). Empty means every page. */
+    languages?: string[];
+}
 /**
  * Inline rules config that mirrors the Rust config structure.
  * All sections and fields are optional — only set what you want to override.
@@ -253,6 +281,44 @@ export interface RulesConfig {
         detect_duplicate_pages?: boolean;
     };
     /**
+     * Configurable heuristic checks for recurring "reads like AI" writing patterns
+     * (em-dash overuse, contrast-formula repetition, uniform sentence rhythm).
+     * Disabled by default — this is a stylistic signal (always `confidence: "low"`), not a correctness check.
+     * New patterns can be added as config entries, no code change or new release needed.
+     * @default false
+     */
+    content_style?: {
+        /** Enable content style checks. @default false */
+        enabled?: boolean;
+        /**
+         * CSS selector scoping which part of the page counts as "content" (keeps nav/footer
+         * boilerplate out of word counts and pattern matches). @default "article, main, .prose"
+         */
+        content_selector?: string;
+        /**
+         * Replaces the built-in default ruleset entirely when set (even to `[]`).
+         * Leave unset to use the built-in defaults ported from the `anti-ai-copy` skill
+         * (em-dash density, "nicht/kein X, sondern Y" contrast-formula density, chatbot leftovers).
+         */
+        rules?: StyleRule[];
+        /**
+         * Always appended to whichever ruleset is in effect (built-in or `rules`).
+         * Use this to add one pattern without redefining the whole list.
+         */
+        extra_rules?: StyleRule[];
+        /** Built-in or custom rule IDs to disable (for example `em-dash-density`). */
+        disabled_rules?: string[];
+        /** Language consistency heuristic for German and English content. */
+        language_detection?: {
+            /** Enable language-signal checks. @default true */
+            enabled?: boolean;
+            /** Minimum other-language signal words before reporting. @default 12 */
+            min_signal_words?: number;
+            /** Other-language signals must exceed expected-language signals by this factor. @default 2 */
+            mismatch_ratio?: number;
+        };
+    };
+    /**
      * Override severity per rule ID.
      * @example `{ "html/title-too-long": "off", "a11y/img-alt": "error" }`
      */
@@ -363,7 +429,7 @@ export interface PostAuditOptions {
     /** Inline rules config — all check settings go here. */
     rules?: RulesConfig;
     /** Preset to apply before user overrides. `"strict"` enables all checks, `"relaxed"` is lenient. */
-    preset?: "strict" | "relaxed" | "seo" | "accessibility" | "performance" | "production" | "standard";
+    preset?: "strict" | "relaxed" | "seo" | "accessibility" | "performance" | "production" | "standard" | "editorial";
     /** Base URL (auto-detected from Astro's `site` config if not set). */
     site?: string;
     /** Treat warnings as errors. */
@@ -449,6 +515,13 @@ export interface PostAuditOptions {
         maxLinksPerPage?: number;
         minCtaPerPage?: number;
     };
+    /**
+     * Enable content style checks — heuristics for recurring "reads like AI" writing
+     * patterns (em-dash overuse, contrast-formula repetition, chatbot leftovers).
+     * Pass `true` to enable with defaults, or use `rules.content_style` for fine-grained control.
+     * @default false
+     */
+    contentStyle?: boolean;
 }
 interface RuntimeDeps {
     execFileSync: typeof execFileSync;

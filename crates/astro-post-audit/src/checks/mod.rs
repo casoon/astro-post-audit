@@ -2,6 +2,7 @@ pub mod a11y;
 pub mod ai_visibility;
 pub mod assets;
 pub mod content_quality;
+pub mod content_style;
 pub mod content_sync;
 pub mod crawl_budget;
 pub mod external_links;

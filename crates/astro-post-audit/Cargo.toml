@@ -31,6 +31,9 @@ rayon = "1"
 # HTML parsing
 scraper = "0.22"
 
+# Regex-based content style rules (content_style check)
+regex = "1"
+
 # Image dimension probing (header-only, no full decode) — used for og:image checks
 imagesize = "0.13"
 
