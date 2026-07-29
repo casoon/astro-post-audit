@@ -1,3 +1,4 @@
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use rayon::prelude::*;
 use regex::Regex;
 use scraper::{ElementRef, Html, Selector};
@@ -20,6 +21,9 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     }
 
     let Ok(content_sel) = Selector::parse(&cs.content_selector) else {
+        return Vec::new();
+    };
+    let Ok(exclude_set) = build_exclude_set(&cs.exclude) else {
         return Vec::new();
     };
 
@@ -45,6 +49,11 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     index
         .pages
         .par_iter()
+        .filter(|page| {
+            !exclude_set
+                .as_ref()
+                .is_some_and(|set| set.is_match(&page.rel_path))
+        })
         .flat_map(|page| {
             let text = content_text(
                 page,
@@ -67,6 +76,18 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             findings
         })
         .collect()
+}
+
+fn build_exclude_set(patterns: &[String]) -> Result<Option<GlobSet>, globset::Error> {
+    if patterns.is_empty() {
+        return Ok(None);
+    }
+
+    let mut builder = GlobSetBuilder::new();
+    for pattern in patterns {
+        builder.add(Glob::new(pattern)?);
+    }
+    Ok(Some(builder.build()?))
 }
 
 fn content_text(

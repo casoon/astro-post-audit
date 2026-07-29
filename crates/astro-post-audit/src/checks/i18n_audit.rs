@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use scraper::Selector;
 
 use crate::config::Config;
@@ -5,12 +7,15 @@ use crate::discovery::SiteIndex;
 use crate::normalize;
 use crate::report::{Confidence, Finding, Level};
 
+static HREFLANG_SEL: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("link[rel='alternate'][hreflang][href]").expect("valid selector")
+});
+
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     if !config.i18n_audit.enabled {
         return Vec::new();
     }
 
-    let hreflang_sel = Selector::parse("link[rel='alternate'][hreflang][href]").unwrap();
     let mut findings = Vec::new();
 
     for page in &index.pages {
@@ -57,7 +62,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         }
 
         let hreflangs: Vec<(String, String)> = html
-            .select(&hreflang_sel)
+            .select(&HREFLANG_SEL)
             .filter_map(|el| {
                 let lang = el.value().attr("hreflang")?.to_string();
                 let href = el.value().attr("href")?.to_string();

@@ -77,6 +77,10 @@
         "ReportsConfig": {
             "additionalProperties": false,
             "properties": {
+                "html": {
+                    "description": "Write a standalone dark-mode HTML report to this file path (relative to project root).",
+                    "type": "string"
+                },
                 "json": {
                     "description": "Write a JSON report to this file path (relative to project root).",
                     "type": "string"
@@ -171,6 +175,11 @@
                         "enabled": {
                             "default": false,
                             "description": "Enable AI visibility checks.",
+                            "type": "boolean"
+                        },
+                        "require_llms_txt": {
+                            "default": true,
+                            "description": "Validate dist/llms.txt existence and internal link integrity.",
                             "type": "boolean"
                         }
                     },
@@ -290,6 +299,13 @@
                             "default": false,
                             "description": "Enable content style checks.",
                             "type": "boolean"
+                        },
+                        "exclude": {
+                            "description": "Dist-relative path globs to skip for content style checks only (for example `tags/**`).",
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
                         },
                         "extra_rules": {
                             "description": "Always appended to whichever ruleset is in effect (built-in or `rules`).\nUse this to add one pattern without redefining the whole list.",
@@ -412,6 +428,28 @@
                                 "type": "string"
                             },
                             "type": "array"
+                        }
+                    },
+                    "type": "object"
+                },
+                "fonts": {
+                    "additionalProperties": false,
+                    "description": "Font loading and preloading optimization checks.",
+                    "properties": {
+                        "check_font_display": {
+                            "default": true,
+                            "description": "Check for missing font-display (e.g. font-display: swap) in",
+                            "type": "boolean"
+                        },
+                        "enabled": {
+                            "default": false,
+                            "description": "Enable font audit checks.",
+                            "type": "boolean"
+                        },
+                        "require_font_preload": {
+                            "default": true,
+                            "description": "Check for missing preload link headers for self-hosted fonts.",
+                            "type": "boolean"
                         }
                     },
                     "type": "object"
@@ -938,6 +976,28 @@
                         }
                     },
                     "type": "object"
+                },
+                "view_transitions": {
+                    "additionalProperties": false,
+                    "description": "View Transitions and Astro Client Router checks.",
+                    "properties": {
+                        "check_duplicate_names": {
+                            "default": true,
+                            "description": "Check for duplicate transition:name attributes.",
+                            "type": "boolean"
+                        },
+                        "check_external_reload": {
+                            "default": true,
+                            "description": "Check for external links missing data-astro-reload when a persisted transition is present.",
+                            "type": "boolean"
+                        },
+                        "enabled": {
+                            "default": false,
+                            "description": "Enable View Transitions audit checks.",
+                            "type": "boolean"
+                        }
+                    },
+                    "type": "object"
                 }
             },
             "type": "object"
@@ -1103,7 +1163,7 @@
         },
         "reports": {
             "$ref": "#/definitions/ReportsConfig",
-            "description": "Write one or more report files. Supports `json`, `markdown`, and `sarif` (SARIF 2.1.0) formats.\nMultiple formats can be active simultaneously. Takes precedence over `output`/`outputMarkdown` when both are set."
+            "description": "Write one or more report files. Supports `json`, `markdown`, `sarif` (SARIF 2.1.0), and `html` formats.\nMultiple formats can be active simultaneously and can be combined with `output`/`outputMarkdown`."
         },
         "rules": {
             "$ref": "#/definitions/RulesConfig",

@@ -14,9 +14,6 @@ use crate::normalize;
 pub struct PageInfo {
     /// Path relative to dist root (e.g., "about/index.html")
     pub rel_path: String,
-    /// Absolute file system path (used by asset checks for file-level operations)
-    #[allow(dead_code)]
-    pub abs_path: PathBuf,
     /// Normalized route URL (e.g., "/about/")
     pub route: String,
     /// Absolute URL if base_url is set (e.g., "https://example.com/about/")
@@ -258,7 +255,6 @@ impl SiteIndex {
 
                 Some(PageInfo {
                     rel_path: rel.clone(),
-                    abs_path: abs.clone(),
                     route,
                     absolute_url,
                     html_content: content,

@@ -151,31 +151,3 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish --manifest-path crates/astro-post-audit/Cargo.toml
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Check npm publication
-        id: npm
-        run: |
-          if npm view "@casoon/astro-post-audit@${{ steps.version.outputs.value }}" version --json \
-            >/dev/null 2>&1; then
-            echo "published=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "published=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Install npm dependencies
-        if: steps.npm.outputs.published != 'true'
-        working-directory: packages/astro-post-audit
-        run: npm ci
-
-      - name: Publish npm package
-        if: steps.npm.outputs.published != 'true'
-        working-directory: packages/astro-post-audit
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public

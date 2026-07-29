@@ -40,7 +40,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 .into_iter()
                 .take(max_per_page)
                 .map(|msg| {
-                    let count = counts[&msg];
+                    let count = counts.get(&msg).copied().unwrap_or(1);
                     let occurrences = if count > 1 {
                         format!(" ({count} occurrences)")
                     } else {

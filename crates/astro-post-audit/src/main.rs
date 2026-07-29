@@ -36,12 +36,11 @@ struct Cli {
 
 fn main() {
     // Install miette's fancy graphical handler for any unhandled errors
-    miette::set_hook(Box::new(|_| {
+    let _ = miette::set_hook(Box::new(|_| {
         Box::new(
             miette::GraphicalReportHandler::new().with_theme(miette::GraphicalTheme::unicode()),
         )
-    }))
-    .ok();
+    }));
 
     match run() {
         Ok(code) => process::exit(code),
@@ -72,7 +71,7 @@ fn render_progress_line(done: usize, total: usize, label: &str, max_cols: usize)
 /// Terminal width of stderr (where the bar is drawn), falling back to 80.
 fn stderr_width() -> usize {
     terminal_size::terminal_size_of(std::io::stderr())
-        .map(|(w, _)| w.0 as usize)
+        .map(|(w, _)| usize::from(w.0))
         .filter(|&w| w > 0)
         .unwrap_or(80)
 }
@@ -83,8 +82,9 @@ fn draw_progress(done: usize, total: usize, label: &str) {
     let line = render_progress_line(done, total, label, stderr_width());
     let mut err = std::io::stderr();
     // \r returns to column 0, \x1b[2K clears the line before redrawing.
-    let _ = write!(err, "\r\x1b[2K{line}");
-    let _ = err.flush();
+    if write!(err, "\r\x1b[2K{line}").is_ok() {
+        let _ = err.flush();
+    }
 }
 
 fn run() -> Result<i32> {
@@ -144,12 +144,12 @@ fn run() -> Result<i32> {
         }
     }
 
-    // Parse format from config
+    // Parse format from config.
     let format = match config.format.as_deref() {
-        Some("json") => report::Format::Json,
-        Some("markdown") => report::Format::Markdown,
-        Some("sarif") => report::Format::Sarif,
-        _ => report::Format::Text,
+        Some(value) => value
+            .parse()
+            .map_err(|e: String| anyhow::anyhow!("format: {e}"))?,
+        None => report::Format::Text,
     };
 
     // Live progress is drawn on stderr so it never corrupts stdout reports
@@ -207,6 +207,8 @@ fn run() -> Result<i32> {
         ("images", checks::images::check_all),
         ("ai_visibility", checks::ai_visibility::check_all),
         ("ux_heuristics", checks::ux_heuristics::check_all),
+        ("fonts", checks::fonts::check_all),
+        ("view_transitions", checks::view_transitions::check_all),
         ("redirects", checks::redirects::check_all),
         ("js_bloat", checks::js_bloat::check_all),
         ("content_sync", checks::content_sync::check_all),

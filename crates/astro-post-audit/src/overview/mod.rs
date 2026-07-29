@@ -2,6 +2,7 @@ use rayon::prelude::*;
 use scraper::Selector;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 use crate::discovery::SiteIndex;
 
@@ -52,6 +53,26 @@ pub struct PageOverview {
     pub stats: OverviewStats,
 }
 
+static TITLE_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("title").expect("valid selector"));
+static DESC_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("meta[name='description']").expect("valid selector"));
+static OG_TITLE_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("meta[property='og:title']").expect("valid selector"));
+static OG_DESC_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("meta[property='og:description']").expect("valid selector"));
+static OG_IMG_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("meta[property='og:image']").expect("valid selector"));
+static H1_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("h1").expect("valid selector"));
+static HTML_LANG_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("html[lang]").expect("valid selector"));
+static LD_SEL: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("script[type='application/ld+json']").expect("valid selector")
+});
+static SKIP_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("a[href^='#']").expect("valid selector"));
+
 /// Collect page properties from all pages in the site index.
 pub fn collect(index: &SiteIndex) -> PageOverview {
     let mut pages: Vec<PageProperties> = index
@@ -61,17 +82,15 @@ pub fn collect(index: &SiteIndex) -> PageOverview {
             let html = page.parse_html();
 
             // Title
-            let title_sel = Selector::parse("title").unwrap();
             let title = html
-                .select(&title_sel)
+                .select(&TITLE_SEL)
                 .next()
                 .map(|el| el.text().collect::<String>().trim().to_string())
                 .filter(|s| !s.is_empty());
 
             // Meta description
-            let desc_sel = Selector::parse("meta[name='description']").unwrap();
             let meta_description = html
-                .select(&desc_sel)
+                .select(&DESC_SEL)
                 .next()
                 .and_then(|el| el.value().attr("content"))
                 .map(|s| s.trim().to_string())
@@ -82,30 +101,26 @@ pub fn collect(index: &SiteIndex) -> PageOverview {
             let canonical_url = page.canonical.clone();
 
             // OG tags
-            let og_title_sel = Selector::parse("meta[property='og:title']").unwrap();
             let has_og_title = html
-                .select(&og_title_sel)
+                .select(&OG_TITLE_SEL)
                 .next()
                 .and_then(|el| el.value().attr("content"))
                 .is_some_and(|v| !v.trim().is_empty());
 
-            let og_desc_sel = Selector::parse("meta[property='og:description']").unwrap();
             let has_og_description = html
-                .select(&og_desc_sel)
+                .select(&OG_DESC_SEL)
                 .next()
                 .and_then(|el| el.value().attr("content"))
                 .is_some_and(|v| !v.trim().is_empty());
 
-            let og_img_sel = Selector::parse("meta[property='og:image']").unwrap();
             let has_og_image = html
-                .select(&og_img_sel)
+                .select(&OG_IMG_SEL)
                 .next()
                 .and_then(|el| el.value().attr("content"))
                 .is_some_and(|v| !v.trim().is_empty());
 
             // H1
-            let h1_sel = Selector::parse("h1").unwrap();
-            let h1s: Vec<_> = html.select(&h1_sel).collect();
+            let h1s: Vec<_> = html.select(&H1_SEL).collect();
             let h1_count = h1s.len();
             let h1_text = h1s
                 .first()
@@ -113,8 +128,7 @@ pub fn collect(index: &SiteIndex) -> PageOverview {
                 .filter(|s| !s.is_empty());
 
             // Lang attr
-            let html_sel = Selector::parse("html[lang]").unwrap();
-            let lang_el = html.select(&html_sel).next();
+            let lang_el = html.select(&HTML_LANG_SEL).next();
             let has_lang_attr = lang_el.is_some();
             let lang_value = lang_el
                 .and_then(|el| el.value().attr("lang"))
@@ -122,8 +136,7 @@ pub fn collect(index: &SiteIndex) -> PageOverview {
                 .filter(|s| !s.is_empty());
 
             // JSON-LD
-            let ld_sel = Selector::parse("script[type='application/ld+json']").unwrap();
-            let ld_scripts: Vec<_> = html.select(&ld_sel).collect();
+            let ld_scripts: Vec<_> = html.select(&LD_SEL).collect();
             let has_json_ld = !ld_scripts.is_empty();
             let mut json_ld_types = Vec::new();
             for script in &ld_scripts {
@@ -134,8 +147,7 @@ pub fn collect(index: &SiteIndex) -> PageOverview {
             }
 
             // Skip link
-            let skip_sel = Selector::parse("a[href^='#']").unwrap();
-            let has_skip_link = html.select(&skip_sel).any(|el| {
+            let has_skip_link = html.select(&SKIP_SEL).any(|el| {
                 let href = el.value().attr("href").unwrap_or("");
                 let target = href.trim_start_matches('#').to_lowercase();
                 matches!(

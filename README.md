@@ -2,6 +2,16 @@
 
 Fast post-build auditor for Astro sites. Checks SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output. No browser, no network — runs in <1s on typical sites.
 
+## What's new in 0.5.2
+
+| Area | What | Rule IDs | How to enable |
+|------|------|----------|---------------|
+| Font loading | Missing `font-display` and missing preloads for self-hosted webfonts | `fonts/missing-font-display`, `fonts/missing-preload` | `rules.fonts.enabled` |
+| View Transitions | Duplicate transition names and external links that need a Client Router reload hint | `view-transitions/*` | `rules.view_transitions.enabled` |
+| AI visibility | `llms.txt` / `llms-full.txt` presence and internal-link integrity | `ai-visibility/missing-llms-txt`, `ai-visibility/llms-txt-broken-link` | Included when `aiVisibility: true` or `rules.ai_visibility.enabled` |
+| HTML report | Standalone human-readable report artifact | — | `reports.html` |
+| Terminal report | Structured, semantic console output powered by [Runemark](https://crates.io/crates/runemark) | — | Enabled for text output by default |
+
 ## What's new in 0.5.0
 
 Content-style checks are now available as an opt-in editorial audit. They look
@@ -636,6 +646,7 @@ rules: {
   // Enable via top-level aiVisibility option or set enabled: true here
   ai_visibility: {
     enabled: false,                     // Enable AI visibility checks
+    require_llms_txt: true,             // Require llms.txt or llms-full.txt and validate internal links
   },
 
   // UX Heuristics — opt-in module
@@ -651,6 +662,7 @@ rules: {
   content_style: {
     enabled: false,                     // Enable content style checks
     content_selector: "article, main, .prose", // Default: prefer article, then main, then .prose
+    exclude: [],                        // Dist-relative globs to skip only this check, e.g. ["tags/**"]
     // rules: [...],                    // Replaces the built-in ruleset entirely when set (even to [])
     // extra_rules: [                   // Always appended to whichever ruleset is in effect
     //   { id: "custom-word", type: "presence", pattern: "unleash", level: "warning" },
@@ -661,6 +673,20 @@ rules: {
       min_signal_words: 12,             // Require this many signals for the other language
       mismatch_ratio: 2,                // Other-language signals must be this many times higher
     },
+  },
+
+  // Font loading checks — opt-in
+  fonts: {
+    enabled: false,
+    check_font_display: true,           // Warn when an @font-face block has no font-display
+    require_font_preload: true,         // Info when self-hosted fonts have no preload hint
+  },
+
+  // Astro View Transitions checks — opt-in
+  view_transitions: {
+    enabled: false,
+    check_duplicate_names: true,        // Error for duplicate transition:name values on one page
+    check_external_reload: true,        // Info for external links missing data-astro-reload
   },
 
   // Innovative dist-only audits
@@ -724,7 +750,7 @@ rules: {
 - **Hreflang** — Multilingual link validation, x-default, self-reference, reciprocal links, target existence
 - **Security** — target="_blank" without noopener, mixed content, inline scripts
 - **Assets** — Broken references, image dimensions, file size limits, cache-busting hashes
-- **Performance** — Client-side JS bloat per route *(opt-in)*
+- **Performance** — Client-side JS bloat per route and font-loading hints *(opt-in)*
 - **Content Quality** — Duplicate titles, descriptions, H1s, near-identical pages
 - **Content Sync** *(opt-in)* — `src/content/` collection items with no corresponding generated page
 - **I18n Audit** — Consistency between localized routes, `html[lang]`, `hreflang`, and canonical
@@ -732,24 +758,29 @@ rules: {
 - **Render Blocking** — Sync `<head>` scripts and missing `preload`/`preconnect` hints for critical resources
 - **Privacy/Security (Static)** — Third-party domain inventory, missing SRI, CSP-readiness, consent signals, GDPR/DSGVO transfers *(opt-in: Google Fonts, YouTube, Maps, public CDNs, external images)*
 - **Structured Data Graph** — Cross-page JSON-LD entity conflicts (`@id`, type/name/url) and missing internal entity URLs
-- **AI Visibility** *(opt-in)* — LLM readability (word count, lang), citability (OG metadata, canonical, author schema), semantic structure, AI bot policy
+- **AI Visibility** *(opt-in)* — LLM readability (word count, lang), citability (OG metadata, canonical, author schema), semantic structure, AI bot policy, and `llms.txt` / `llms-full.txt` link integrity
 - **UX Heuristics** *(opt-in)* — Missing CTAs, generic link text ("click here", "mehr"), missing trust signals (Impressum, Datenschutz, contact), link density, interactive element density
 - **Content Style** *(opt-in)* — Configurable heuristics for recurring "reads like AI" writing patterns: em-dash overuse, contrast-formula repetition ("nicht/kein X, sondern Y"), chatbot leftovers, uniform sentence rhythm
+- **View Transitions** *(opt-in)* — Duplicate `transition:name` values and Client Router external-link reload hints
 
 ## AI visibility
 
 Enable via `aiVisibility: true` (top-level option) or `rules.ai_visibility.enabled: true`.
 
+By default this also looks for `dist/llms.txt` or `dist/llms-full.txt` and validates their internal Markdown links. Set `rules.ai_visibility.require_llms_txt: false` to keep the other AI visibility checks without this file check.
+
 | Rule ID | Level | Description |
 |---------|-------|-------------|
-| `ai-visibility/short-content` | Info | Page word count < 300 — may not be chunked by LLMs |
-| `ai-visibility/missing-lang` | Warning | Missing `<html lang>` — LLMs may not infer language |
+| `ai-visibility/missing-llms-txt` | Info | Neither `llms.txt` nor `llms-full.txt` exists in `dist/` |
+| `ai-visibility/llms-txt-broken-link` | Warning | An internal Markdown link in an LLM context file has no published target |
+| `ai-visibility/low-word-count` | Info | Page word count < 300 — may not be chunked by LLMs |
+| `ai-visibility/lang-missing` | Warning | Missing `<html lang>` — LLMs may not infer language |
 | `ai-visibility/missing-og-title` | Warning | No `og:title` — reduces citation quality |
 | `ai-visibility/missing-og-description` | Info | No `og:description` — reduces citation quality |
 | `ai-visibility/missing-canonical` | Warning | No canonical URL — LLMs may attribute content incorrectly |
 | `ai-visibility/missing-author-schema` | Info | No `author` in JSON-LD — reduces attribution quality |
 | `ai-visibility/no-semantic-sections` | Info | No `<article>` or `<section>` — poor chunk boundaries |
-| `ai-visibility/missing-subheadings` | Warning | Long page with no H2/H3 — poor chunk quality |
+| `ai-visibility/no-subheadings` | Warning | Long page with no H2/H3 — poor chunk quality |
 | `ai-visibility/noindex-page` | Info | Page is noindexed — will not be crawled by AI bots |
 
 ## UX heuristics
@@ -769,6 +800,8 @@ Enable via `uxHeuristics: true` (top-level option) or `rules.ux_heuristics.enabl
 Configurable heuristics for recurring "reads like AI" writing patterns. This is a stylistic signal, not a correctness check — every finding carries `confidence: "low"`. Info-level findings do not affect `--strict`; the built-in chatbot-leftover rule is a warning and therefore does. Regex-based findings include a short excerpt around the first match so they can be reviewed in context.
 
 Enable via `contentStyle: true` (top-level option), `rules.content_style.enabled: true`, or `preset: 'editorial'`. With the default `content_selector` (`article, main, .prose`), the audit prefers a semantic `<article>`, otherwise `<main>`, then `.prose`. It omits header, nav, aside and footer content as well as repeated linked card groups (three or more equal sibling cards with a link and H2/H3), so article teasers and a small related-content hub do not distort one continuous writing sample. A custom `content_selector` uses its outermost matches directly.
+
+For archive or taxonomy pages whose card structure cannot be recognised reliably, use `exclude` with dist-relative globs. It only disables content-style checks for those pages; link, accessibility, SEO and all other checks still run. For example: `exclude: ["tags/**", "serien/**"]`.
 
 The built-in ruleset is kept in sync with the [`anti-ai-copy` skill](https://github.com/casoon/casoon-agent-skills)'s checklist:
 
@@ -797,6 +830,7 @@ rules: {
   content_style: {
     enabled: true,
     disabled_rules: ["em-dash-density"], // Disable a built-in rule by its short ID
+    exclude: ["tags/**", "serien/**"], // Skip only content-style checks on archive hubs
     language_detection: {
       enabled: true,              // Compare German/English signal words with html[lang]
       min_signal_words: 12,
@@ -864,36 +898,33 @@ Use it to confirm which config actually applies, what discovery found/filtered, 
 
 ## Output
 
-Rich diagnostic output with colored severity markers, location pointers, and Astro-specific help text. The help text references Astro idioms (`BaseHead`, `astro:assets`, Content Collections, `Astro.site`) so fixes are actionable in context:
+Text output is rendered by Runemark with semantic severity markers, grouped findings, metrics, and remedies. It uses colors in an interactive terminal and deterministic ASCII output when piped or in CI. The remedies reference Astro idioms (`BaseHead`, `astro:assets`, Content Collections, `Astro.site`) so fixes are actionable in context:
 
 ```
-  ──▶ blog/post/index.html
-  × error[canonical/missing] Missing canonical tag
-    ╰─▶ head
-    help: Set `site` in astro.config.mjs and render
-          <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
-          in your BaseHead component
-  ⚠ warning[a11y/img-alt] <img> missing alt attribute
-    ╰─▶ img[src='/photo.jpg']
-    help: Add an `alt` prop to <Image>/<Picture> or the <img> tag.
-          Use alt="" only for decorative images.
+[FAIL] astro-post-audit
 
-  × 1 error, 1 warning (12 files checked)
+  Errors: 1   Warnings: 1   Info: 0   Files: 12
+
+* blog/post/index.html (2)
+  - Missing canonical tag [canonical/missing] at `head`
+    Remedy: Set `site` in astro.config.mjs and render <link rel="canonical" ... /> in BaseHead.
+  - <img> missing alt attribute [a11y/img-alt] at `img[src='/photo.jpg']`
+    Remedy: Add an `alt` prop to <Image>/<Picture> or the <img> tag.
 ```
 
-When the result set is large (more than 20 findings), the report prepends a Top issues summary so you get an at-a-glance view before the per-file detail:
+When the result set is large (20 or more findings), the report prepends a top-rule summary so you get an at-a-glance view before the per-file detail:
 
 ```
-  Top issues
-       8×  html/meta-description-missing
-       3×  canonical/missing
-       2×  a11y/img-alt
-       1×  links/broken-internal
+  Top issue rules:
+       8x  html/meta-description-missing
+       3x  canonical/missing
+       2x  a11y/img-alt
+       1x  links/broken-internal
 ```
 
 ### Report files
 
-Use `reports` to write one or more report files alongside the terminal output. All three formats can be active at the same time:
+Use `reports` to write one or more report files alongside the terminal output. All four formats can be active at the same time:
 
 ```js
 postAudit({
@@ -901,6 +932,7 @@ postAudit({
     json:     'audit-report.json',   // Machine-readable, one finding per entry
     markdown: 'audit-summary.md',    // Human-readable table, useful as CI artifact or PR comment
     sarif:    'audit.sarif',         // SARIF 2.1.0 — consumed by GitHub Code Scanning
+    html:     'audit-report.html',   // Standalone, human-readable HTML report
   },
 })
 ```

@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use rayon::prelude::*;
 use scraper::Selector;
@@ -7,6 +8,23 @@ use url::Url;
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::report::{Finding, Level};
+
+static OG_TITLE_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("meta[property='og:title']").expect("valid selector"));
+static OG_DESC_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("meta[property='og:description']").expect("valid selector"));
+static OG_IMAGE_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("meta[property='og:image']").expect("valid selector"));
+static OG_TYPE_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("meta[property='og:type']").expect("valid selector"));
+static OG_URL_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("meta[property='og:url']").expect("valid selector"));
+static TWITTER_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("meta[name='twitter:card']").expect("valid selector"));
+static TWITTER_IMAGE_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("meta[name='twitter:image']").expect("valid selector"));
+static TITLE_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("title").expect("valid selector"));
 
 const VALID_TWITTER_CARD_VALUES: &[&str] = &["summary", "summary_large_image", "app", "player"];
 
@@ -33,15 +51,6 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         return Vec::new();
     }
 
-    let og_title_sel = Selector::parse("meta[property='og:title']").unwrap();
-    let og_desc_sel = Selector::parse("meta[property='og:description']").unwrap();
-    let og_image_sel = Selector::parse("meta[property='og:image']").unwrap();
-    let og_type_sel = Selector::parse("meta[property='og:type']").unwrap();
-    let og_url_sel = Selector::parse("meta[property='og:url']").unwrap();
-    let twitter_sel = Selector::parse("meta[name='twitter:card']").unwrap();
-    let twitter_image_sel = Selector::parse("meta[name='twitter:image']").unwrap();
-    let title_sel = Selector::parse("title").unwrap();
-
     index
         .pages
         .par_iter()
@@ -51,7 +60,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             if og.require_og_title {
                 let has = html
-                    .select(&og_title_sel)
+                    .select(&OG_TITLE_SEL)
                     .next()
                     .and_then(|el| el.value().attr("content"))
                     .is_some_and(|v| !v.trim().is_empty());
@@ -72,7 +81,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             if og.require_og_description {
                 let has = html
-                    .select(&og_desc_sel)
+                    .select(&OG_DESC_SEL)
                     .next()
                     .and_then(|el| el.value().attr("content"))
                     .is_some_and(|v| !v.trim().is_empty());
@@ -93,7 +102,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             // og:image — existence check + absolute URL validation
             let og_image_content = html
-                .select(&og_image_sel)
+                .select(&OG_IMAGE_SEL)
                 .next()
                 .and_then(|el| el.value().attr("content"))
                 .map(|v| v.trim().to_string());
@@ -217,7 +226,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             // og:type
             if og.require_og_type {
                 let has = html
-                    .select(&og_type_sel)
+                    .select(&OG_TYPE_SEL)
                     .next()
                     .and_then(|el| el.value().attr("content"))
                     .is_some_and(|v| !v.trim().is_empty());
@@ -239,7 +248,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             // og:url
             if og.require_og_url {
                 let has = html
-                    .select(&og_url_sel)
+                    .select(&OG_URL_SEL)
                     .next()
                     .and_then(|el| el.value().attr("content"))
                     .is_some_and(|v| !v.trim().is_empty());
@@ -260,7 +269,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             // twitter:card — existence + value validation
             let twitter_card_content = html
-                .select(&twitter_sel)
+                .select(&TWITTER_SEL)
                 .next()
                 .and_then(|el| el.value().attr("content"))
                 .map(|v| v.trim().to_string());
@@ -304,7 +313,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             // twitter:image
             if og.require_twitter_image {
                 let has = html
-                    .select(&twitter_image_sel)
+                    .select(&TWITTER_IMAGE_SEL)
                     .next()
                     .and_then(|el| el.value().attr("content"))
                     .is_some_and(|v| !v.trim().is_empty());
@@ -326,17 +335,17 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             // og:title ≈ <title> consistency
             if og.og_title_consistency {
                 let og_title_val = html
-                    .select(&og_title_sel)
+                    .select(&OG_TITLE_SEL)
                     .next()
                     .and_then(|el| el.value().attr("content"))
                     .unwrap_or("")
                     .trim()
                     .to_string();
                 let page_title = html
-                    .select(&title_sel)
+                    .select(&TITLE_SEL)
                     .next()
                     .map(|el| el.text().collect::<String>())
-                    .unwrap_or_default();
+                    .unwrap_or_else(String::new);
                 let page_title = page_title.trim();
 
                 if !og_title_val.is_empty() && !page_title.is_empty() {

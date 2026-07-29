@@ -17,6 +17,26 @@ const TRACKER_DOMAINS: &[&str] = &[
     "hotjar.com",
 ];
 
+use std::sync::LazyLock;
+
+static URL_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("[src], [href]").expect("valid selector"));
+static EXTERNAL_SCRIPT_SEL: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("script[src^='http://'], script[src^='https://']").expect("valid selector")
+});
+static EXTERNAL_STYLE_SEL: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse(
+        "link[rel='stylesheet'][href^='http://'], link[rel='stylesheet'][href^='https://']",
+    )
+    .expect("valid selector")
+});
+static INLINE_SCRIPT_SEL: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse(
+        "script:not([src]):not([type='application/ld+json']):not([type='application/json'])",
+    )
+    .expect("valid selector")
+});
+
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     let enabled = config.privacy_security.enabled;
     let gdpr = config.privacy_security.gdpr;
@@ -25,17 +45,6 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     }
 
     let mut findings = Vec::new();
-    let url_sel = Selector::parse("[src], [href]").unwrap();
-    let external_script_sel =
-        Selector::parse("script[src^='http://'], script[src^='https://']").unwrap();
-    let external_style_sel = Selector::parse(
-        "link[rel='stylesheet'][href^='http://'], link[rel='stylesheet'][href^='https://']",
-    )
-    .unwrap();
-    let inline_script_sel = Selector::parse(
-        "script:not([src]):not([type='application/ld+json']):not([type='application/json'])",
-    )
-    .unwrap();
 
     for page in &index.pages {
         let html = page.parse_html();
@@ -50,7 +59,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
         let mut third_party_domains: HashSet<String> = HashSet::new();
 
-        for el in html.select(&url_sel) {
+        for el in html.select(&URL_SEL) {
             let value = el
                 .value()
                 .attr("src")
@@ -82,7 +91,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             });
         }
 
-        for el in html.select(&external_script_sel) {
+        for el in html.select(&EXTERNAL_SCRIPT_SEL) {
             if el.value().attr("integrity").is_none() {
                 let src = el.value().attr("src").unwrap_or("");
                 findings.push(Finding {
@@ -98,7 +107,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 });
             }
         }
-        for el in html.select(&external_style_sel) {
+        for el in html.select(&EXTERNAL_STYLE_SEL) {
             if el.value().attr("integrity").is_none() {
                 let href = el.value().attr("href").unwrap_or("");
                 findings.push(Finding {
@@ -119,7 +128,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             }
         }
 
-        let inline_script_count = html.select(&inline_script_sel).count();
+        let inline_script_count = html.select(&INLINE_SCRIPT_SEL).count();
         if inline_script_count > 0 {
             findings.push(Finding {
                 level: Level::Warning,

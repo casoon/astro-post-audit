@@ -60,17 +60,23 @@ const TRUST_KEYWORDS: &[&str] = &[
     "contact",
 ];
 
+use std::sync::LazyLock;
+
+static LINK_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("a[href]").expect("valid selector"));
+static BUTTON_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("button, [role='button']").expect("valid selector"));
+static INTERACTIVE_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("button, input, select, textarea").expect("valid selector"));
+static ADDRESS_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("address").expect("valid selector"));
+
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     if !config.ux_heuristics.enabled {
         return Vec::new();
     }
 
     let ux = &config.ux_heuristics;
-
-    let link_sel = Selector::parse("a[href]").unwrap();
-    let button_sel = Selector::parse("button, [role='button']").unwrap();
-    let interactive_sel = Selector::parse("button, input, select, textarea").unwrap();
-    let address_sel = Selector::parse("address").unwrap();
 
     index
         .pages
@@ -79,8 +85,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             let mut findings = Vec::new();
             let html = page.parse_html();
 
-            let links: Vec<_> = html.select(&link_sel).collect();
-            let buttons: Vec<_> = html.select(&button_sel).collect();
+            let links: Vec<_> = html.select(&LINK_SEL).collect();
+            let buttons: Vec<_> = html.select(&BUTTON_SEL).collect();
 
             // === Dimension 1: CTA Clarity ===
 
@@ -137,7 +143,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 TRUST_KEYWORDS.iter().any(|&kw| text.contains(kw) || href.contains(kw))
             });
 
-            let has_address = html.select(&address_sel).next().is_some();
+            let has_address = html.select(&ADDRESS_SEL).next().is_some();
 
             if !has_trust_link && !has_address {
                 findings.push(Finding {
@@ -173,7 +179,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 });
             }
 
-            let interactive_count = html.select(&interactive_sel).count();
+            let interactive_count = html.select(&INTERACTIVE_SEL).count();
             if interactive_count > 20 {
                 findings.push(Finding {
                     level: Level::Info,

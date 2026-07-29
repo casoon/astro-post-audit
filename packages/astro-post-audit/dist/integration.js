@@ -293,7 +293,10 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                 if (options.pageOverview !== undefined)
                     stdinConfig.page_overview = options.pageOverview;
                 if (options.aiVisibility !== undefined) {
-                    stdinConfig.ai_visibility = { enabled: options.aiVisibility === true };
+                    stdinConfig.ai_visibility = {
+                        ...(stdinConfig.ai_visibility ?? {}),
+                        enabled: options.aiVisibility === true,
+                    };
                 }
                 if (options.uxHeuristics !== undefined) {
                     if (options.uxHeuristics === true) {
@@ -344,12 +347,17 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                 const outputSarifPath = options.reports?.sarif
                     ? resolve(root, options.reports.sarif)
                     : undefined;
+                const outputHtmlPath = options.reports?.html
+                    ? resolve(root, options.reports.html)
+                    : undefined;
                 // Pass extra report formats to the binary so a single run produces all outputs
                 const extraReports = [];
                 if (outputMarkdownPath)
                     extraReports.push({ format: "markdown", path: outputMarkdownPath });
                 if (outputSarifPath)
                     extraReports.push({ format: "sarif", path: outputSarifPath });
+                if (outputHtmlPath)
+                    extraReports.push({ format: "html", path: outputHtmlPath });
                 if (extraReports.length > 0)
                     stdinConfig.extra_reports = extraReports;
                 const stdinInput = JSON.stringify(stdinConfig);

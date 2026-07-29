@@ -1,4 +1,5 @@
 use anyhow::Result;
+use globset::Glob;
 use scraper::Selector;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -29,7 +30,7 @@ pub struct Config {
     pub max_warnings: Option<usize>,
     /// Show page properties overview instead of running checks.
     pub page_overview: bool,
-    /// Output format: "text" (default) or "json".
+    /// Output format: "text" (default), "json", "markdown", "sarif", or "html".
     pub format: Option<String>,
     /// Print per-check timing benchmarks.
     pub benchmark: bool,
@@ -70,6 +71,8 @@ pub struct Config {
     pub images: ImagesConfig,
     pub ai_visibility: AiVisibilityConfig,
     pub ux_heuristics: UxHeuristicsConfig,
+    pub fonts: FontsConfig,
+    pub view_transitions: ViewTransitionsConfig,
     pub severity: SeverityConfig,
     pub hints: HintsConfig,
     /// Project root directory, used for source-file hint resolution.
@@ -360,6 +363,9 @@ pub struct ContentStyleConfig {
     /// The default convention prefers an `<article>`, then `<main>`, then `.prose`,
     /// and omits layout chrome and repeated linked card groups.
     pub content_selector: String,
+    /// Dist-relative path globs to skip for content style checks only.
+    /// Other audit checks continue to run on matching pages.
+    pub exclude: Vec<String>,
     /// Replaces the built-in default ruleset entirely when set (even to `[]`).
     /// Leave unset to use the built-in defaults ported from the anti-ai-copy skill.
     pub rules: Option<Vec<StyleRule>>,
@@ -571,7 +577,7 @@ pub struct HintsConfig {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct ExtraReport {
-    /// Output format: "json", "markdown", or "sarif"
+    /// Output format: "json", "markdown", "sarif", or "html"
     pub format: String,
     /// Absolute path to write the report to
     pub path: String,
@@ -590,11 +596,64 @@ pub struct ImagesConfig {
     pub format_hints: bool,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct AiVisibilityConfig {
     /// Enable AI visibility scoring module. @default false
     pub enabled: bool,
+    /// Validate dist/llms.txt existence and internal links. @default true
+    pub require_llms_txt: bool,
+}
+
+impl Default for AiVisibilityConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            require_llms_txt: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct FontsConfig {
+    /// Enable font audit checks. @default false
+    pub enabled: bool,
+    /// Check for missing font-display in @font-face rules. @default true when enabled
+    pub check_font_display: bool,
+    /// Check for missing preload link headers for self-hosted fonts. @default true when enabled
+    pub require_font_preload: bool,
+}
+
+impl Default for FontsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            check_font_display: true,
+            require_font_preload: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct ViewTransitionsConfig {
+    /// Enable View Transitions audit checks. @default false
+    pub enabled: bool,
+    /// Check for duplicate transition:name attributes. @default true when enabled
+    pub check_duplicate_names: bool,
+    /// Check for external links missing data-astro-reload when a persisted transition is present. @default true when enabled
+    pub check_external_reload: bool,
+}
+
+impl Default for ViewTransitionsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            check_duplicate_names: true,
+            check_external_reload: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -785,6 +844,7 @@ impl Default for ContentStyleConfig {
         Self {
             enabled: false,
             content_selector: "article, main, .prose".into(),
+            exclude: Vec::new(),
             rules: None,
             extra_rules: Vec::new(),
             disabled_rules: Vec::new(),
@@ -889,6 +949,13 @@ impl Config {
             }
             if let Err(e) = Selector::parse(&self.content_style.content_selector) {
                 anyhow::bail!("content_style.content_selector is invalid: {e}");
+            }
+            for pattern in &self.content_style.exclude {
+                if let Err(e) = Glob::new(pattern) {
+                    anyhow::bail!(
+                        "content_style.exclude contains an invalid glob '{pattern}': {e}"
+                    );
+                }
             }
             let language_detection = &self.content_style.language_detection;
             if language_detection.enabled && language_detection.min_signal_words == 0 {

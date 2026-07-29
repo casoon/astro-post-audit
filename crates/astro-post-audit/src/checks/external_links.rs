@@ -85,10 +85,9 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     // Use a custom thread pool to limit concurrency
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(config.external_links.max_concurrent)
-        .build()
-        .unwrap_or_else(|_| rayon::ThreadPoolBuilder::new().build().unwrap());
+        .build();
 
-    pool.install(|| {
+    let execute = || {
         urls.par_iter()
             .flat_map(|(url, pages)| {
                 let Some((status, message)) = check_url(&agent, url) else {
@@ -116,7 +115,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     .collect::<Vec<_>>()
             })
             .collect()
-    })
+    };
+
+    if let Ok(p) = pool {
+        p.install(execute)
+    } else {
+        execute()
+    }
 }
 
 /// Check a single URL. Returns Some((status_code, message)) if broken, None if OK.

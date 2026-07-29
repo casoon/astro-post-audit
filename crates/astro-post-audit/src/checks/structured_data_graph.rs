@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
 
 use scraper::Selector;
 use serde_json::Value;
@@ -7,6 +8,10 @@ use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::normalize;
 use crate::report::{Confidence, Finding, Level};
+
+static SCRIPT_SEL: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("script[type='application/ld+json']").expect("valid selector")
+});
 
 #[derive(Debug, Clone)]
 struct EntitySnapshot {
@@ -23,12 +28,11 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     }
 
     let mut findings = Vec::new();
-    let script_sel = Selector::parse("script[type='application/ld+json']").unwrap();
     let mut snapshots: Vec<EntitySnapshot> = Vec::new();
 
     for page in &index.pages {
         let html = page.parse_html();
-        for script in html.select(&script_sel) {
+        for script in html.select(&SCRIPT_SEL) {
             let content = script.text().collect::<String>();
             let trimmed = content.trim();
             if trimmed.is_empty() {
@@ -50,12 +54,16 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         if refs.len() < 2 {
             continue;
         }
+        let Some(first_ref) = refs.first() else {
+            continue;
+        };
+
         let types: HashSet<String> = refs.iter().filter_map(|r| r.type_name.clone()).collect();
         if types.len() > 1 {
             findings.push(Finding {
                 level: Level::Warning,
                 rule_id: "structured-data-graph/type-conflict".into(),
-                file: refs[0].file.clone(),
+                file: first_ref.file.clone(),
                 selector: "script[type='application/ld+json']".into(),
                 message: format!(
                     "Entity '{}' appears with conflicting @type values across pages: {}",
@@ -78,7 +86,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             findings.push(Finding {
                 level: Level::Warning,
                 rule_id: "structured-data-graph/name-conflict".into(),
-                file: refs[0].file.clone(),
+                file: first_ref.file.clone(),
                 selector: "script[type='application/ld+json']".into(),
                 message: format!(
                     "Entity '{}' has inconsistent 'name' values across pages",
@@ -96,7 +104,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             findings.push(Finding {
                 level: Level::Warning,
                 rule_id: "structured-data-graph/url-conflict".into(),
-                file: refs[0].file.clone(),
+                file: first_ref.file.clone(),
                 selector: "script[type='application/ld+json']".into(),
                 message: format!(
                     "Entity '{}' has conflicting 'url' values across pages",

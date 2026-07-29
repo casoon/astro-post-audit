@@ -133,6 +133,8 @@ export interface RulesConfig {
     ai_visibility?: {
         /** Enable AI visibility checks. @default false */
         enabled?: boolean;
+        /** Validate dist/llms.txt existence and internal link integrity. @default true */
+        require_llms_txt?: boolean;
     };
     /** UX heuristic checks — CTA clarity, trust signals, cognitive load. @default false */
     ux_heuristics?: {
@@ -297,6 +299,8 @@ export interface RulesConfig {
          * @default "article, main, .prose"
          */
         content_selector?: string;
+        /** Dist-relative path globs to skip for content style checks only (for example `tags/**`). */
+        exclude?: string[];
         /**
          * Replaces the built-in default ruleset entirely when set (even to `[]`).
          * Leave unset to use the built-in defaults ported from the `anti-ai-copy` skill
@@ -387,6 +391,24 @@ export interface RulesConfig {
         /** Warn about content items with no corresponding build page. @default false */
         enabled?: boolean;
     };
+    /** Font loading and preloading optimization checks. */
+    fonts?: {
+        /** Enable font audit checks. @default false */
+        enabled?: boolean;
+        /** Check for missing font-display (e.g. font-display: swap) in @font-face rules. @default true */
+        check_font_display?: boolean;
+        /** Check for missing preload link headers for self-hosted fonts. @default true */
+        require_font_preload?: boolean;
+    };
+    /** View Transitions and Astro Client Router checks. */
+    view_transitions?: {
+        /** Enable View Transitions audit checks. @default false */
+        enabled?: boolean;
+        /** Check for duplicate transition:name attributes. @default true */
+        check_duplicate_names?: boolean;
+        /** Check for external links missing data-astro-reload when a persisted transition is present. @default true */
+        check_external_reload?: boolean;
+    };
     /** Native HTML5 syntax validation using the html5ever tokenizer (offline). */
     html_validation?: {
         /** Report HTML5 parse/syntax errors. @default false */
@@ -415,6 +437,8 @@ export interface ReportsConfig {
     markdown?: string;
     /** Write a SARIF 2.1.0 report to this file path (relative to project root). For use with GitHub Code Scanning. */
     sarif?: string;
+    /** Write a standalone dark-mode HTML report to this file path (relative to project root). */
+    html?: string;
 }
 export interface GoLiveConfig {
     /** Enable go-live production gate checks. @default false */
@@ -445,8 +469,8 @@ export interface PostAuditOptions {
     /** Write a Markdown summary report to this file path (relative to project root). */
     outputMarkdown?: string;
     /**
-     * Write one or more report files. Supports `json`, `markdown`, and `sarif` (SARIF 2.1.0) formats.
-     * Multiple formats can be active simultaneously. Takes precedence over `output`/`outputMarkdown` when both are set.
+     * Write one or more report files. Supports `json`, `markdown`, `sarif` (SARIF 2.1.0), and `html` formats.
+     * Multiple formats can be active simultaneously and can be combined with `output`/`outputMarkdown`.
      */
     reports?: ReportsConfig;
     /** Heuristic hints for source file locations in Content Collections / MDX projects. */
