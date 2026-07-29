@@ -288,6 +288,10 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                 if (resolvedRules.content_sync?.enabled && rootDir && !stdinConfig.project_root) {
                     stdinConfig.project_root = rootDir;
                 }
+                // Source analysis is opt-in: only then expose the project root to the binary.
+                if (resolvedRules.source_analysis?.enabled && rootDir) {
+                    stdinConfig.project_root = rootDir;
+                }
                 if (options.maxErrors != null)
                     stdinConfig.max_errors = options.maxErrors;
                 if (options.pageOverview !== undefined)

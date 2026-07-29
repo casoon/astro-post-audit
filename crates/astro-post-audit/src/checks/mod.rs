@@ -24,6 +24,7 @@ pub mod robots_txt;
 pub mod security;
 pub mod seo;
 pub mod sitemap;
+pub mod source_analysis;
 pub mod structured_data;
 pub mod structured_data_graph;
 pub mod ux_heuristics;
