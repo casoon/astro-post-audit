@@ -311,6 +311,12 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                         };
                     }
                 }
+                if (options.contentStyle !== undefined) {
+                    stdinConfig.content_style = {
+                        ...(stdinConfig.content_style ?? {}),
+                        enabled: options.contentStyle === true,
+                    };
+                }
                 if (options.goLive) {
                     stdinConfig.go_live = {
                         enabled: options.goLive.enabled ?? false,

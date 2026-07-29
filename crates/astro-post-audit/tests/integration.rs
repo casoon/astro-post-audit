@@ -3822,3 +3822,415 @@ fn debug_mode_writes_diagnostics_to_stderr_only() {
     assert!(stderr.contains("[debug] discovery:"), "discovery stats");
     assert!(stderr.contains("[debug]  1/"), "per-check lines");
 }
+
+// ==========================================================================
+// Content Style module
+// ==========================================================================
+
+fn write_article_page(dir: &std::path::Path, rel_path: &str, article_body: &str) {
+    write_article_page_with_lang(dir, rel_path, article_body, "de");
+}
+
+fn write_article_page_with_lang(
+    dir: &std::path::Path,
+    rel_path: &str,
+    article_body: &str,
+    lang: &str,
+) {
+    let full = dir.join(rel_path);
+    if let Some(parent) = full.parent() {
+        fs::create_dir_all(parent).unwrap();
+    }
+    fs::write(
+        &full,
+        format!(
+            r#"<!DOCTYPE html><html lang="{lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test Article</title><link rel="canonical" href="https://example.com/{rel_path}"></head><body><header><nav><a href="/">Home</a></nav></header><main><article><h1>Test</h1><p>{article_body}</p></article></main><footer><a href="/">Home</a></footer></body></html>"#
+        ),
+    )
+    .unwrap();
+}
+
+#[test]
+fn content_style_disabled_by_default() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"]
+            .as_str()
+            .unwrap_or("")
+            .starts_with("content-style/")),
+        "content_style checks should not run without content_style.enabled:true"
+    );
+}
+
+#[test]
+fn content_style_em_dash_density_triggers() {
+    let dir = TempDir::new().unwrap();
+    let mut body = String::new();
+    for i in 0..30 {
+        body.push_str(&format!(
+            "Dies ist Satz Nummer {i} mit einem Gedankenstrich — und noch mehr Text danach. "
+        ));
+    }
+    write_article_page(dir.path(), "post.html", &body);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "content-style/em-dash-density"),
+        "Dense em-dash usage should trigger the default em-dash-density rule: {findings:?}"
+    );
+}
+
+#[test]
+fn content_style_clean_article_no_findings() {
+    let dir = TempDir::new().unwrap();
+    let mut body = String::new();
+    for i in 0..30 {
+        body.push_str(&format!(
+            "Dies ist Satz Nummer {i}, er beschreibt einen normalen Sachverhalt ohne besondere Muster. "
+        ));
+    }
+    write_article_page(dir.path(), "post.html", &body);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"].as_str().unwrap_or("").starts_with("content-style/")),
+        "Plain prose without AI-writing tells should produce no content-style findings: {findings:?}"
+    );
+}
+
+#[test]
+fn content_style_chatbot_leftover_presence() {
+    let dir = TempDir::new().unwrap();
+    let body = "Hier folgt der erste Teil der Antwort mit ausreichend Kontext drumherum. Ich hoffe, das hilft! Und hier geht der Text danach weiter mit mehr Inhalt.";
+    write_article_page(dir.path(), "post.html", body);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "content-style/chatbot-leftover" && f["level"] == "warning"),
+        "Chatbot leftover phrase should trigger a warning-level finding: {findings:?}"
+    );
+    let finding = findings
+        .iter()
+        .find(|f| f["rule_id"] == "content-style/chatbot-leftover")
+        .unwrap();
+    assert!(
+        finding["message"].as_str().unwrap().contains("(1x)"),
+        "Nested main/article selectors must not count the phrase twice: {finding:?}"
+    );
+    assert!(
+        finding["message"].as_str().unwrap().contains("Example: \"")
+            && finding["message"]
+                .as_str()
+                .unwrap()
+                .contains("Ich hoffe, das hilft"),
+        "Regex findings should include a short text excerpt: {finding:?}"
+    );
+}
+
+#[test]
+fn content_style_english_rule_pack_uses_page_language() {
+    let dir = TempDir::new().unwrap();
+    write_article_page_with_lang(
+        dir.path(),
+        "post.html",
+        "This paragraph has enough surrounding text to resemble a complete article. I hope this helps! The article continues with more useful information for the reader.",
+        "en-US",
+    );
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "content-style/chatbot-leftover-en"),
+        "English pages should use the English built-in rule pack: {findings:?}"
+    );
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "content-style/chatbot-leftover"),
+        "German-only rules must not run on English pages: {findings:?}"
+    );
+}
+
+#[test]
+fn content_style_disabled_rules_disable_built_in_rules() {
+    let dir = TempDir::new().unwrap();
+    let body = (0..30)
+        .map(|_| "Dieser Artikel enthält einen Gedankenstrich — und genug Text. ")
+        .collect::<String>();
+    write_article_page(dir.path(), "post.html", &body);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true,"disabled_rules":["em-dash-density"]}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "content-style/em-dash-density"),
+        "disabled_rules must suppress built-in rules without replacing the whole ruleset: {findings:?}"
+    );
+}
+
+#[test]
+fn content_style_language_mismatch_detects_conflicting_content_language() {
+    let dir = TempDir::new().unwrap();
+    let body = (0..8)
+        .map(|_| {
+            "This is an English article and it is written for the reader with clear examples. "
+        })
+        .collect::<String>();
+    write_article_page(dir.path(), "post.html", &body);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| {
+            f["rule_id"] == "content-style/language-mismatch"
+                && f["level"] == "info"
+                && f["message"].as_str().unwrap_or("").contains("English signal words")
+        }),
+        "English content with html lang=de should produce a low-confidence language mismatch: {findings:?}"
+    );
+}
+
+#[test]
+fn content_style_language_mismatch_can_be_disabled() {
+    let dir = TempDir::new().unwrap();
+    let body = (0..8)
+        .map(|_| {
+            "This is an English article and it is written for the reader with clear examples. "
+        })
+        .collect::<String>();
+    write_article_page(dir.path(), "post.html", &body);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true,"language_detection":{"enabled":false}}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "content-style/language-mismatch"),
+        "language_detection.enabled:false must suppress language mismatch findings: {findings:?}"
+    );
+}
+
+#[test]
+fn content_style_rules_override_replaces_defaults() {
+    let dir = TempDir::new().unwrap();
+    let mut body = String::new();
+    for i in 0..30 {
+        body.push_str(&format!(
+            "Dies ist Satz Nummer {i} mit einem Gedankenstrich — und noch mehr Text danach. "
+        ));
+    }
+    write_article_page(dir.path(), "post.html", &body);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true,"rules":[]}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"]
+            .as_str()
+            .unwrap_or("")
+            .starts_with("content-style/")),
+        "Explicit empty rules array should replace the built-in defaults entirely: {findings:?}"
+    );
+}
+
+#[test]
+fn content_style_extra_rules_append_to_defaults() {
+    let dir = TempDir::new().unwrap();
+    let mut body = String::new();
+    for i in 0..30 {
+        body.push_str(&format!(
+            "Dies ist Satz Nummer {i} mit einem Gedankenstrich — und dann noch das Wort Leuchtturm im Text. "
+        ));
+    }
+    write_article_page(dir.path(), "post.html", &body);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true,"extra_rules":[{"id":"custom-word","type":"presence","pattern":"Leuchtturm","level":"warning"}]}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "content-style/em-dash-density"),
+        "Built-in default rule should still run alongside extra_rules: {findings:?}"
+    );
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "content-style/custom-word"),
+        "Custom extra_rules entry should also fire: {findings:?}"
+    );
+}
+
+#[test]
+fn content_style_severity_off_disables_rule() {
+    let dir = TempDir::new().unwrap();
+    let body = "Hier folgt der Text mit etwas Kontext. Ich hoffe, das hilft! Und hier geht es weiter im Artikel mit mehr Inhalt.";
+    write_article_page(dir.path(), "post.html", body);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true,"extra_rules":[{"id":"chatbot-leftover-off","type":"presence","pattern":"Ich hoffe, das hilft","level":"off"}]}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "content-style/chatbot-leftover-off"),
+        "A rule with level 'off' must never produce findings: {findings:?}"
+    );
+}
+
+#[test]
+fn content_style_sentence_length_uniformity_triggers() {
+    let dir = TempDir::new().unwrap();
+    // 10 sentences, each exactly 6 words -> coefficient of variation == 0
+    let mut body = String::new();
+    for _ in 0..10 {
+        body.push_str("Das ist ein sehr kurzer Satz. ");
+    }
+    write_article_page(dir.path(), "post.html", &body);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true,"rules":[{"id":"uniform-rhythm","type":"sentence_length_uniformity","threshold":0.3,"min_sentences":8,"level":"info"}]}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "content-style/uniform-rhythm"),
+        "Perfectly uniform sentence lengths should trigger sentence_length_uniformity: {findings:?}"
+    );
+}
+
+#[test]
+fn content_style_sentence_length_uniformity_ignores_varied_prose() {
+    let dir = TempDir::new().unwrap();
+    let body = "Kurzer Satz hier. Dies hier ist ein deutlich längerer Satz mit vielen zusätzlichen Wörtern und Nebensatz. Mittel. Und wieder ein anderer Satz mit anderer Länge und Struktur als die vorherigen Beispiele hier. Kurz. Ein ausführlicherer Satz mit Aufzählungen, Kommas und einem Nebensatz, der die Länge deutlich erhöht.";
+    write_article_page(dir.path(), "post.html", body);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true,"rules":[{"id":"uniform-rhythm","type":"sentence_length_uniformity","threshold":0.3,"min_sentences":4,"level":"info"}]}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "content-style/uniform-rhythm"),
+        "Varied sentence lengths should not trigger sentence_length_uniformity: {findings:?}"
+    );
+}
+
+#[test]
+fn content_style_invalid_regex_rejected_by_config_validation() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (_stdout, stderr, code) = run_audit(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true,"extra_rules":[{"id":"broken","type":"presence","pattern":"("}]}}"#,
+    );
+    assert_eq!(code, 2, "invalid regex must fail config validation");
+    assert!(
+        stderr.contains("broken"),
+        "error should mention the offending rule id: {stderr}"
+    );
+}
+
+#[test]
+fn content_style_invalid_selector_rejected_by_config_validation() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (_stdout, stderr, code) = run_audit(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true,"content_selector":"article["}}"#,
+    );
+    assert_eq!(
+        code, 2,
+        "invalid content selector must fail config validation"
+    );
+    assert!(
+        stderr.contains("content_style.content_selector"),
+        "error should name the invalid option: {stderr}"
+    );
+}
+
+#[test]
+fn content_style_editorial_preset_enables_defaults() {
+    let dir = TempDir::new().unwrap();
+    let mut body = String::new();
+    for i in 0..30 {
+        body.push_str(&format!(
+            "Dies ist Satz Nummer {i} mit einem Gedankenstrich — und noch mehr Text danach. "
+        ));
+    }
+    write_article_page(dir.path(), "post.html", &body);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"preset":"editorial"}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "content-style/em-dash-density"),
+        "The editorial preset should enable content_style with its built-in defaults: {findings:?}"
+    );
+}
+
+#[test]
+fn content_style_extra_rules_append_under_preset() {
+    let dir = TempDir::new().unwrap();
+    let mut body = String::new();
+    for i in 0..30 {
+        body.push_str(&format!(
+            "Dies ist Satz Nummer {i} mit einem Gedankenstrich — und dann noch das Wort Leuchtturm im Text. "
+        ));
+    }
+    write_article_page(dir.path(), "post.html", &body);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"preset":"editorial","content_style":{"extra_rules":[{"id":"custom-word","type":"presence","pattern":"Leuchtturm","level":"warning"}]}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "content-style/em-dash-density"),
+        "editorial preset defaults must survive alongside a user-set extra_rules field: {findings:?}"
+    );
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "content-style/custom-word"),
+        "extra_rules must append even when content_style.enabled comes from a preset: {findings:?}"
+    );
+}

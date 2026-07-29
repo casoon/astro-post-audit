@@ -269,6 +269,67 @@
                     },
                     "type": "object"
                 },
+                "content_style": {
+                    "additionalProperties": false,
+                    "default": false,
+                    "description": "Configurable heuristic checks for recurring \"reads like AI\" writing patterns\n(em-dash overuse, contrast-formula repetition, uniform sentence rhythm).\nDisabled by default — this is a stylistic signal (always `confidence: \"low\"`), not a correctness check.\nNew patterns can be added as config entries, no code change or new release needed.",
+                    "properties": {
+                        "content_selector": {
+                            "default": "article, main, .prose",
+                            "description": "CSS selector scoping which part of the page counts as \"content\" (keeps nav/footer\nboilerplate out of word counts and pattern matches).",
+                            "type": "string"
+                        },
+                        "disabled_rules": {
+                            "description": "Built-in or custom rule IDs to disable (for example `em-dash-density`).",
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        "enabled": {
+                            "default": false,
+                            "description": "Enable content style checks.",
+                            "type": "boolean"
+                        },
+                        "extra_rules": {
+                            "description": "Always appended to whichever ruleset is in effect (built-in or `rules`).\nUse this to add one pattern without redefining the whole list.",
+                            "items": {
+                                "$ref": "#/definitions/StyleRule"
+                            },
+                            "type": "array"
+                        },
+                        "language_detection": {
+                            "additionalProperties": false,
+                            "description": "Language consistency heuristic for German and English content.",
+                            "properties": {
+                                "enabled": {
+                                    "default": true,
+                                    "description": "Enable language-signal checks.",
+                                    "type": "boolean"
+                                },
+                                "min_signal_words": {
+                                    "default": 12,
+                                    "description": "Minimum other-language signal words before reporting.",
+                                    "type": "number"
+                                },
+                                "mismatch_ratio": {
+                                    "default": 2,
+                                    "description": "Other-language signals must exceed expected-language signals by this factor.",
+                                    "type": "number"
+                                }
+                            },
+                            "type": "object"
+                        },
+                        "rules": {
+                            "description": "Replaces the built-in default ruleset entirely when set (even to `[]`).\nLeave unset to use the built-in defaults ported from the `anti-ai-copy` skill\n(em-dash density, \"nicht/kein X, sondern Y\" contrast-formula density, chatbot leftovers).",
+                            "items": {
+                                "$ref": "#/definitions/StyleRule"
+                            },
+                            "type": "array"
+                        }
+                    },
+                    "type": "object"
+                },
                 "content_sync": {
                     "additionalProperties": false,
                     "description": "Cross-check `src/content/` collection items against generated pages.\nRequires the project root, which the integration passes automatically.",
@@ -880,6 +941,65 @@
                 }
             },
             "type": "object"
+        },
+        "StyleRule": {
+            "additionalProperties": false,
+            "description": "A single content-style heuristic rule for the `content_style` check.",
+            "properties": {
+                "help": {
+                    "description": "Override the default help text.",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "Stable identifier, used as `content-style/{id}` in the finding's rule_id and as the key for `severity`.",
+                    "type": "string"
+                },
+                "languages": {
+                    "description": "Restrict this rule to primary page languages (for example `de` or `en`). Empty means every page.",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "level": {
+                    "default": "info",
+                    "description": "Severity of findings from this rule. `off` disables the rule without removing it.",
+                    "enum": [
+                        "error",
+                        "info",
+                        "off",
+                        "warning"
+                    ],
+                    "type": "string"
+                },
+                "message": {
+                    "description": "Override the default finding message. Supports `{count}`/`{word_count}`/`{density}`/`{threshold}`/`{cv}`/`{sentences}` placeholders.",
+                    "type": "string"
+                },
+                "min_sentences": {
+                    "default": 8,
+                    "description": "Minimum sentence count required before `sentence_length_uniformity` evaluates a page\n(too few sentences make the statistic meaningless). Ignored for other rule types.",
+                    "type": "number"
+                },
+                "pattern": {
+                    "description": "Regex pattern to match. Required for `density_per_1000_words` and `presence`; ignored for `sentence_length_uniformity`.",
+                    "type": "string"
+                },
+                "threshold": {
+                    "description": "`density_per_1000_words`: max matches per 1000 words before flagging.\n`sentence_length_uniformity`: minimum coefficient of variation before flagging.\nIgnored for `presence`.",
+                    "type": "number"
+                },
+                "type": {
+                    "description": "Which comparison this rule performs.",
+                    "enum": [
+                        "density_per_1000_words",
+                        "presence",
+                        "sentence_length_uniformity"
+                    ],
+                    "type": "string"
+                }
+            },
+            "type": "object"
         }
     },
     "properties": {
@@ -894,6 +1014,11 @@
         },
         "benchmark": {
             "description": "Print per-check timing benchmarks in the output.",
+            "type": "boolean"
+        },
+        "contentStyle": {
+            "default": false,
+            "description": "Enable content style checks — heuristics for recurring \"reads like AI\" writing\npatterns (em-dash overuse, contrast-formula repetition, chatbot leftovers).\nPass `true` to enable with defaults, or use `rules.content_style` for fine-grained control.",
             "type": "boolean"
         },
         "debug": {
@@ -958,6 +1083,7 @@
             "description": "Preset to apply before user overrides. `\"strict\"` enables all checks, `\"relaxed\"` is lenient.",
             "enum": [
                 "accessibility",
+                "editorial",
                 "performance",
                 "production",
                 "relaxed",

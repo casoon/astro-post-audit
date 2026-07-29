@@ -108,6 +108,24 @@
     "detect_duplicate_h1": true,
     "detect_duplicate_pages": true
   },
+  "content_style": {
+    "enabled": true,
+    "content_selector": "main",
+    "disabled_rules": ["em-dash-density"],
+    "language_detection": {
+      "enabled": true,
+      "min_signal_words": 12,
+      "mismatch_ratio": 2
+    },
+    "extra_rules": [
+      {
+        "id": "english-custom",
+        "type": "presence",
+        "pattern": "example",
+        "languages": ["en"]
+      }
+    ]
+  },
   "external_links": {
     "enabled": false,
     "timeout_ms": 5000,

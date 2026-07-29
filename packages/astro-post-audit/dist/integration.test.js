@@ -17,9 +17,9 @@ function makeLogger() {
     };
 }
 function makeExecMock(impl) {
-    return ((file, argsOrOptions) => {
+    return ((file, argsOrOptions, options) => {
         const args = Array.isArray(argsOrOptions) ? argsOrOptions : [];
-        return impl(file, args);
+        return impl(file, args, options);
     });
 }
 // ==========================================================================
@@ -72,6 +72,42 @@ describe("postAudit", () => {
         assert.equal(error.length, 0);
         assert.ok(execCalls.some((c) => c.args[0] === "--help"));
         assert.ok(execCalls.some((c) => c.args.includes("--config-stdin")));
+    });
+    it("merges contentStyle with detailed content-style rules", () => {
+        let auditConfig;
+        const deps = {
+            existsSync: () => true,
+            writeFileSync: () => { },
+            execFileSync: makeExecMock((_file, args, execOptions) => {
+                if (args[0] === "--help")
+                    return "Usage: ... --config-stdin ...";
+                auditConfig = JSON.parse(execOptions.input);
+                return "";
+            }),
+        };
+        const integration = postAudit({
+            contentStyle: true,
+            rules: {
+                content_style: {
+                    content_selector: ".article-copy",
+                    extra_rules: [
+                        { id: "custom", type: "presence", pattern: "Leuchtturm" },
+                    ],
+                },
+            },
+        }, deps);
+        const hook = integration.hooks["astro:build:done"];
+        hook({
+            dir: new URL("file:///tmp/dist/"),
+            logger: { info: () => { }, warn: () => { }, error: () => { } },
+        });
+        assert.deepEqual(auditConfig?.content_style, {
+            content_selector: ".article-copy",
+            extra_rules: [
+                { id: "custom", type: "presence", pattern: "Leuchtturm" },
+            ],
+            enabled: true,
+        });
     });
     it("skips execution when disabled", () => {
         const integration = postAudit({ disable: true });

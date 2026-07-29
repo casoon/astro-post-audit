@@ -37,6 +37,31 @@ pub struct Finding {
     pub confidence: Option<Confidence>,
 }
 
+impl Finding {
+    /// Creates a finding with its common optional fields initialized consistently.
+    pub(crate) fn new(
+        level: Level,
+        rule_id: impl Into<String>,
+        file: impl Into<String>,
+        selector: impl Into<String>,
+        message: impl Into<String>,
+        help: impl Into<String>,
+        confidence: Option<Confidence>,
+    ) -> Self {
+        Self {
+            level,
+            rule_id: rule_id.into(),
+            file: file.into(),
+            selector: selector.into(),
+            message: message.into(),
+            help: help.into(),
+            suggestion: None,
+            source_hint: None,
+            confidence,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Summary {
     pub errors: usize,

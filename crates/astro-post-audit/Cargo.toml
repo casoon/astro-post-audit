@@ -1,6 +1,6 @@
 [package]
 name = "astro-post-audit"
-version = "0.4.6"
+version = "0.5.0"
 edition = "2021"
 description = "Fast post-build auditor for Astro sites: SEO, links, and lightweight WCAG checks"
 license = "MIT"
@@ -31,6 +31,9 @@ rayon = "1"
 # HTML parsing
 scraper = "0.22"
 
+# Regex-based content style rules (content_style check)
+regex = "1"
+
 # Image dimension probing (header-only, no full decode) — used for og:image checks
 imagesize = "0.13"
 
@@ -53,6 +56,7 @@ thiserror = "2"
 
 # Output
 serde_json = "1"
+
 colored = "3"
 miette = { version = "7", features = ["fancy"] }
 
@@ -60,4 +64,3 @@ miette = { version = "7", features = ["fancy"] }
 tempfile = "3"
 pretty_assertions = "1"
 serde_json = "1"
-

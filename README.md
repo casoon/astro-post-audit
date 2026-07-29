@@ -2,6 +2,21 @@
 
 Fast post-build auditor for Astro sites. Checks SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output. No browser, no network — runs in <1s on typical sites.
 
+## What's new in 0.5.0
+
+Content-style checks are now available as an opt-in editorial audit. They look
+for repeatable writing patterns without treating style as a correctness issue:
+
+| Area | What | Rule IDs | How to enable |
+|------|------|----------|---------------|
+| Content style | Built-in German and English checks for em-dash density, repeated contrast formulas, and chatbot leftovers | `content-style/*` | `contentStyle: true`, `rules.content_style.enabled`, or `preset: 'editorial'` |
+| Language consistency | Low-confidence check for a clear German/English text signal that conflicts with `<html lang>` | `content-style/language-mismatch` | Included with content style; tune with `rules.content_style.language_detection` |
+| Custom editorial rules | Add regex, density, or sentence-rhythm checks without changing the auditor | — | `rules.content_style.extra_rules` (append) or `rules.content_style.rules` (replace) |
+
+`contentStyle: true` combines with an existing `rules.content_style` object, so detailed configuration such as `content_selector`, `extra_rules`, and `disabled_rules` is retained.
+
+No migration is required: content-style checks are disabled by default. See [Content style](#content-style) for the complete configuration and its false-positive limits.
+
 ## What's new in 0.4.x
 
 New checks (all opt-in unless noted) and diagnostics:
@@ -122,6 +137,7 @@ postAudit({
 | `accessibility` | WCAG heuristics — lang attr, title, viewport, heading hierarchy (H1 required, single, no gaps), full a11y ruleset (img alt, link/button names, form labels, generic link text, aria-hidden, skip link, landmark structure, duplicate IDs, ARIA roles), fragment validation. |
 | `performance` | Static performance signals — broken asset references, missing image dimensions (CLS), lazy loading, srcset hints, hashed filenames, render blocking scripts. |
 | `relaxed` | Core SEO and link checks only. No heading gaps, no Open Graph, no structured data, no content quality. Broken links are warnings, not errors. Good starting point for existing sites with known issues. |
+| `editorial` | Enables the `content_style` module with its built-in ruleset (em-dash density, contrast-formula repetition, chatbot leftovers). Doesn't touch any other check — combine with `standard`/`seo` via `rules` overrides. See [Content style](#content-style). |
 
 ## Example configurations
 
@@ -365,7 +381,7 @@ postAudit({
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `preset` | `'standard' \| 'strict' \| 'production' \| 'seo' \| 'accessibility' \| 'performance' \| 'relaxed'` | — | Apply a predefined config before your `rules` overrides. See [Presets](#presets). |
+| `preset` | `'standard' \| 'strict' \| 'production' \| 'seo' \| 'accessibility' \| 'performance' \| 'relaxed' \| 'editorial'` | — | Apply a predefined config before your `rules` overrides. See [Presets](#presets). |
 | `strict` | `boolean` | `false` | Treat warnings as errors (exit code 1). |
 | `throwOnError` | `boolean` | `false` | Throw an error (fail the build) when the audit finds issues. |
 | `failOn` | `'errors' \| 'warnings' \| 'never'` | — | Fail the build on errors only (`'errors'`), on any finding (`'warnings'`), or never. Implies `throwOnError`. |
@@ -385,6 +401,7 @@ postAudit({
 | `debug` | `boolean` | `false` | Verbose diagnostics on stderr (resolved config, discovery stats, per-check counts/timings). Never touches the stdout report; replaces the progress bar. See [Diagnostics](#diagnostics). |
 | `aiVisibility` | `boolean` | `false` | Enable AI visibility checks (LLM-readability, citability, chunk quality). See [AI visibility](#ai-visibility). |
 | `uxHeuristics` | `boolean \| { maxLinksPerPage?: number, minCtaPerPage?: number }` | `false` | Enable UX heuristic checks (CTAs, generic link text, trust signals). See [UX heuristics](#ux-heuristics). |
+| `contentStyle` | `boolean` | `false` | Enable content style checks (recurring "reads like AI" writing patterns). See [Content style](#content-style). |
 | `disable` | `boolean` | `false` | Disable the integration entirely. |
 | `rules` | `RulesConfig` | — | Inline check configuration — see full reference below. |
 
@@ -629,6 +646,23 @@ rules: {
     min_cta_per_page: 1,                // Warn when a page has fewer CTAs than this
   },
 
+  // Content Style — opt-in module, heuristics for recurring "reads like AI" writing patterns
+  // Enable via top-level contentStyle option or set enabled: true here
+  content_style: {
+    enabled: false,                     // Enable content style checks
+    content_selector: "article, main, .prose", // Scope word counts/pattern matches to this content area
+    // rules: [...],                    // Replaces the built-in ruleset entirely when set (even to [])
+    // extra_rules: [                   // Always appended to whichever ruleset is in effect
+    //   { id: "custom-word", type: "presence", pattern: "unleash", level: "warning" },
+    // ],
+    disabled_rules: [],                 // Disable built-in/custom rules by short ID
+    language_detection: {
+      enabled: true,                    // Compare German/English text signals with html[lang]
+      min_signal_words: 12,             // Require this many signals for the other language
+      mismatch_ratio: 2,                // Other-language signals must be this many times higher
+    },
+  },
+
   // Innovative dist-only audits
   i18n_audit: {
     enabled: false,                     // lang/hreflang/canonical consistency by locale route
@@ -700,6 +734,7 @@ rules: {
 - **Structured Data Graph** — Cross-page JSON-LD entity conflicts (`@id`, type/name/url) and missing internal entity URLs
 - **AI Visibility** *(opt-in)* — LLM readability (word count, lang), citability (OG metadata, canonical, author schema), semantic structure, AI bot policy
 - **UX Heuristics** *(opt-in)* — Missing CTAs, generic link text ("click here", "mehr"), missing trust signals (Impressum, Datenschutz, contact), link density, interactive element density
+- **Content Style** *(opt-in)* — Configurable heuristics for recurring "reads like AI" writing patterns: em-dash overuse, contrast-formula repetition ("nicht/kein X, sondern Y"), chatbot leftovers, uniform sentence rhythm
 
 ## AI visibility
 
@@ -728,6 +763,58 @@ Enable via `uxHeuristics: true` (top-level option) or `rules.ux_heuristics.enabl
 | `ux/no-trust-signals` | Warning | No links to Impressum, Datenschutz, contact, or about pages |
 | `ux/high-link-density` | Info | Link count exceeds `max_links_per_page` (default 80) |
 | `ux/high-interactive-density` | Info | More than 20 interactive elements on a single page |
+
+## Content style
+
+Configurable heuristics for recurring "reads like AI" writing patterns. This is a stylistic signal, not a correctness check — every finding carries `confidence: "low"`. Info-level findings do not affect `--strict`; the built-in chatbot-leftover rule is a warning and therefore does. Regex-based findings include a short excerpt around the first match so they can be reviewed in context.
+
+Enable via `contentStyle: true` (top-level option), `rules.content_style.enabled: true`, or `preset: 'editorial'`. Checks run against text extracted from `content_selector` (default `article, main, .prose`) so nav/footer boilerplate doesn't skew word counts or pattern matches.
+
+The built-in ruleset is kept in sync with the [`anti-ai-copy` skill](https://github.com/casoon/casoon-agent-skills)'s checklist:
+
+| Rule ID | Level | Description |
+|---------|-------|-------------|
+| `content-style/em-dash-density` | Info | More than 8 em-dashes (`—`) per 1000 words |
+| `content-style/contrast-formula-density` | Info | German: more than 2.5 "nicht/kein X, sondern Y" contrast constructions per 1000 words |
+| `content-style/chatbot-leftover` | Warning | German: unedited chatbot phrases ("Ich hoffe, das hilft", "Gerne!", "Lass uns eintauchen") |
+| `content-style/contrast-formula-density-en` | Info | English: more than 2.5 "not X, but Y" contrast constructions per 1000 words |
+| `content-style/chatbot-leftover-en` | Warning | English: unedited chatbot phrases ("I hope this helps", "Happy to help!", "Let's dive in") |
+| `content-style/language-mismatch` | Info | `<html lang>` conflicts with a strong German/English function-word signal |
+
+New patterns discovered during manual review become a config entry, not a code change — the engine supports three generic rule types:
+
+- **`density_per_1000_words`** — flags when regex matches per 1000 words exceed `threshold`
+- **`presence`** — flags when the regex matches at all, anywhere in the content
+- **`sentence_length_uniformity`** — flags when sentence word-lengths are unusually uniform (coefficient of variation below `threshold`); not in the default ruleset since it needs per-project tuning to avoid false positives on reference-style content
+
+The German and English built-in rule packs are selected from the primary `<html lang>` value (`de-AT` selects German, `en-US` English). Language-neutral rules always run; pages without `lang` run both language-specific packs so a missing language signal does not hide findings. Custom rules can use `languages: ["de"]` or `languages: ["en"]` for the same behavior.
+
+The built-in language-consistency heuristic compares common German and English function words with `<html lang>`. It only reports a clear mismatch (at least 12 signal words and a 2:1 advantage), always with low confidence; it does not attempt to classify other languages or mixed-language pages. Tune or disable it with `language_detection`.
+
+```js
+contentStyle: true, // or, for fine-grained control:
+rules: {
+  content_style: {
+    enabled: true,
+    disabled_rules: ["em-dash-density"], // Disable a built-in rule by its short ID
+    language_detection: {
+      enabled: true,              // Compare German/English signal words with html[lang]
+      min_signal_words: 12,
+      mismatch_ratio: 2,
+    },
+    // Replaces the built-in defaults entirely when set (even to []):
+    rules: [
+      { id: "unleash", type: "presence", pattern: "(?i)entfesseln|unleash", languages: ["de", "en"], level: "warning" },
+    ],
+    // Or keep the defaults and just add one pattern:
+    extra_rules: [
+      { id: "tapestry-metaphor", type: "presence", pattern: "(?i)geflecht aus|mosaik aus", level: "info" },
+    ],
+  },
+},
+```
+
+Each rule supports `message`/`help` overrides with `{count}`/`{word_count}`/`{density}`/`{threshold}`/`{cv}`/`{sentences}` placeholders, `languages` for language-scoping, and `level: "off"` to disable a rule without removing it from the list. Use `disabled_rules` to switch off a built-in rule without copying the default ruleset.
 
 ## GDPR / DSGVO
 
