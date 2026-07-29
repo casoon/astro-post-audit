@@ -138,6 +138,7 @@ jobs:
         id: cratesio
         run: |
           if curl --fail --silent --show-error \
+            --user-agent "astro-post-audit-release/${{ steps.version.outputs.value }} (https://github.com/${{ github.repository }})" \
             "https://crates.io/api/v1/crates/astro-post-audit/${{ steps.version.outputs.value }}" \
             >/dev/null; then
             echo "published=true" >> "$GITHUB_OUTPUT"
