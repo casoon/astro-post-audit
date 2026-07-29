@@ -312,10 +312,8 @@ fn rule_match_len(pattern: &str, path: &str) -> Option<usize> {
             }
             pos += part.len();
         } else {
-            match path[pos..].find(part) {
-                Some(idx) => pos += idx + part.len(),
-                None => return None,
-            }
+            let idx = path[pos..].find(part)?;
+            pos += idx + part.len();
         }
     }
 
