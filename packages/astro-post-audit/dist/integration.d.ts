@@ -291,8 +291,10 @@ export interface RulesConfig {
         /** Enable content style checks. @default false */
         enabled?: boolean;
         /**
-         * CSS selector scoping which part of the page counts as "content" (keeps nav/footer
-         * boilerplate out of word counts and pattern matches). @default "article, main, .prose"
+         * CSS selector scoping which part of the page counts as "content". The default convention
+         * prefers `<article>`, then `<main>`, then `.prose`, and omits layout chrome plus repeated
+         * linked card groups. Set a custom selector to use its outermost matches directly.
+         * @default "article, main, .prose"
          */
         content_selector?: string;
         /**

@@ -1,6 +1,6 @@
 use rayon::prelude::*;
 use regex::Regex;
-use scraper::{ElementRef, Selector};
+use scraper::{ElementRef, Html, Selector};
 
 use crate::config::{self, Config, SeverityLevel, StyleRule, StyleRuleType};
 use crate::discovery::{PageInfo, SiteIndex};
@@ -10,6 +10,8 @@ struct CompiledRule<'a> {
     rule: &'a StyleRule,
     regex: Option<Regex>,
 }
+
+const DEFAULT_CONTENT_SELECTOR: &str = "article, main, .prose";
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     let cs = &config.content_style;
@@ -44,7 +46,11 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         .pages
         .par_iter()
         .flat_map(|page| {
-            let text = content_text(page, &content_sel);
+            let text = content_text(
+                page,
+                &content_sel,
+                cs.content_selector == DEFAULT_CONTENT_SELECTOR,
+            );
             let word_count = text.split_whitespace().count();
             if word_count == 0 {
                 return Vec::new();
@@ -63,20 +69,107 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         .collect()
 }
 
-fn content_text(page: &PageInfo, content_selector: &Selector) -> String {
+fn content_text(
+    page: &PageInfo,
+    content_selector: &Selector,
+    use_default_conventions: bool,
+) -> String {
     let html = page.parse_html();
+    if use_default_conventions {
+        return primary_content_root(&html)
+            .map(|element| content_text_from_element(element, true))
+            .unwrap_or_default();
+    }
+
     html.select(content_selector)
-        // A selector list such as the default `article, main, .prose` may
-        // match nested containers. Only extract outermost matches so their
-        // descendant text is not counted repeatedly.
+        // Custom selectors retain their existing behavior: only extract
+        // outermost matches so nested containers are not counted twice.
         .filter(|el| {
             !el.ancestors()
                 .filter_map(ElementRef::wrap)
                 .any(|ancestor| content_selector.matches(&ancestor))
         })
-        .flat_map(|el| el.text())
+        .map(|element| content_text_from_element(element, false))
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// Choose the semantic content root used by the built-in selector. An article
+/// is more specific than main, so related-card hubs surrounding an article do
+/// not become part of its editorial text. Generic pages fall back to main.
+fn primary_content_root(html: &Html) -> Option<ElementRef<'_>> {
+    let article = Selector::parse("article").expect("valid article selector");
+    let main = Selector::parse("main").expect("valid main selector");
+    let prose = Selector::parse(".prose").expect("valid prose selector");
+
+    html.select(&article)
+        .next()
+        .or_else(|| html.select(&main).next())
+        .or_else(|| html.select(&prose).next())
+}
+
+fn content_text_from_element(element: ElementRef<'_>, exclude_layout: bool) -> String {
+    element
+        .descendants()
+        .filter_map(|node| {
+            if exclude_layout
+                && node
+                    .ancestors()
+                    .filter_map(ElementRef::wrap)
+                    .any(|ancestor| is_non_content_element(&ancestor))
+            {
+                return None;
+            }
+            node.value().as_text().map(|text| {
+                let text: &str = text;
+                text.to_owned()
+            })
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn is_non_content_element(element: &ElementRef<'_>) -> bool {
+    matches!(
+        element.value().name(),
+        "aside" | "footer" | "header" | "nav" | "noscript" | "script" | "style" | "template"
+    ) || is_repeated_link_card(element)
+}
+
+/// Exclude a repeated group of linked cards from the surrounding content root.
+/// A repeated card is identified structurally rather than by route or project
+/// class name: at least three sibling elements share its tag and class and each
+/// contains a link plus an H2/H3 heading.
+fn is_repeated_link_card(element: &ElementRef<'_>) -> bool {
+    let Some(class) = element.attr("class") else {
+        return false;
+    };
+    let Some(parent) = element.parent().and_then(ElementRef::wrap) else {
+        return false;
+    };
+
+    parent
+        .child_elements()
+        .filter(|sibling| {
+            sibling.value().name() == element.value().name()
+                && sibling.attr("class") == Some(class)
+                && is_link_card(sibling)
+        })
+        .take(3)
+        .count()
+        == 3
+}
+
+fn is_link_card(element: &ElementRef<'_>) -> bool {
+    let has_link = (element.value().name() == "a" && element.attr("href").is_some())
+        || element
+            .descendent_elements()
+            .any(|child| child.value().name() == "a" && child.attr("href").is_some());
+    let has_heading = element
+        .descendent_elements()
+        .any(|child| matches!(child.value().name(), "h2" | "h3"));
+
+    has_link && has_heading
 }
 
 const GERMAN_SIGNAL_WORDS: &[&str] = &[

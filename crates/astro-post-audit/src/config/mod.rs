@@ -356,8 +356,9 @@ fn default_min_sentences() -> usize {
 pub struct ContentStyleConfig {
     /// Enable content style checks. @default false
     pub enabled: bool,
-    /// CSS selector scoping which part of the page counts as "content"
-    /// (keeps nav/footer boilerplate out of word counts and pattern matches).
+    /// CSS selector scoping which part of the page counts as "content".
+    /// The default convention prefers an `<article>`, then `<main>`, then `.prose`,
+    /// and omits layout chrome and repeated linked card groups.
     pub content_selector: String,
     /// Replaces the built-in default ruleset entirely when set (even to `[]`).
     /// Leave unset to use the built-in defaults ported from the anti-ai-copy skill.
