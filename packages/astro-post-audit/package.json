@@ -1,6 +1,6 @@
 {
   "name": "@casoon/astro-post-audit",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Astro integration for post-build auditing: SEO, links, and lightweight WCAG checks",
   "license": "MIT",
   "type": "module",
@@ -47,7 +47,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/casoon/astro-post-audit"
+    "url": "git+https://github.com/casoon/astro-post-audit.git"
   },
   "engines": {
     "node": ">=18"

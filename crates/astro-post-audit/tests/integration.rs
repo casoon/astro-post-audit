@@ -3912,6 +3912,68 @@ fn content_style_clean_article_no_findings() {
 }
 
 #[test]
+fn content_style_ignores_repeated_link_cards_in_main() {
+    let dir = TempDir::new().unwrap();
+    let cards = (0..4)
+        .map(|index| {
+            format!(
+                r#"<a class="teaser-card" href="/artikel/{index}/"><h2>Artikel {index}</h2><p>Dieser Teaser ist nicht beliebig, sondern beschreibt einen einzelnen eigenständigen Gedanken mit etwas Kontext.</p></a>"#
+            )
+        })
+        .collect::<String>();
+    fs::write(
+        dir.path().join("tags.html"),
+        format!(
+            r#"<!DOCTYPE html><html lang="de"><head><title>Tag</title></head><body><main><h1>Kubernetes</h1><p>Eine Übersicht der Artikel zum Thema.</p>{cards}</main></body></html>"#
+        ),
+    )
+    .unwrap();
+
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "content-style/contrast-formula-density"),
+        "Repeated teaser cards must not be concatenated into one style sample: {findings:?}"
+    );
+}
+
+#[test]
+fn content_style_uses_article_without_its_related_card_hub() {
+    let dir = TempDir::new().unwrap();
+    let cards = (0..4)
+        .map(|index| {
+            format!(
+                r#"<a class="related-card" href="/artikel/{index}/"><h2>Weiterer Artikel {index}</h2><p>Dieser Teaser ist nicht beliebig, sondern beschreibt einen einzelnen eigenständigen Gedanken mit etwas Kontext.</p></a>"#
+            )
+        })
+        .collect::<String>();
+    fs::write(
+        dir.path().join("post.html"),
+        format!(
+            r#"<!DOCTYPE html><html lang="de"><head><title>Artikel</title></head><body><main><article><h1>Ein Artikel</h1><p>Dieser eigenständige Text erklärt das Thema mit abwechslungsreichen Sätzen und klaren Beispielen.</p><section aria-label="Weitere Artikel">{cards}</section></article></main></body></html>"#
+        ),
+    )
+    .unwrap();
+
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "content-style/contrast-formula-density"),
+        "A related-card hub inside an article must not affect the article's style result: {findings:?}"
+    );
+}
+
+#[test]
 fn content_style_chatbot_leftover_presence() {
     let dir = TempDir::new().unwrap();
     let body = "Hier folgt der erste Teil der Antwort mit ausreichend Kontext drumherum. Ich hoffe, das hilft! Und hier geht der Text danach weiter mit mehr Inhalt.";

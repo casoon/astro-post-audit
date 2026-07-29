@@ -650,7 +650,7 @@ rules: {
   // Enable via top-level contentStyle option or set enabled: true here
   content_style: {
     enabled: false,                     // Enable content style checks
-    content_selector: "article, main, .prose", // Scope word counts/pattern matches to this content area
+    content_selector: "article, main, .prose", // Default: prefer article, then main, then .prose
     // rules: [...],                    // Replaces the built-in ruleset entirely when set (even to [])
     // extra_rules: [                   // Always appended to whichever ruleset is in effect
     //   { id: "custom-word", type: "presence", pattern: "unleash", level: "warning" },
@@ -768,7 +768,7 @@ Enable via `uxHeuristics: true` (top-level option) or `rules.ux_heuristics.enabl
 
 Configurable heuristics for recurring "reads like AI" writing patterns. This is a stylistic signal, not a correctness check — every finding carries `confidence: "low"`. Info-level findings do not affect `--strict`; the built-in chatbot-leftover rule is a warning and therefore does. Regex-based findings include a short excerpt around the first match so they can be reviewed in context.
 
-Enable via `contentStyle: true` (top-level option), `rules.content_style.enabled: true`, or `preset: 'editorial'`. Checks run against text extracted from `content_selector` (default `article, main, .prose`) so nav/footer boilerplate doesn't skew word counts or pattern matches.
+Enable via `contentStyle: true` (top-level option), `rules.content_style.enabled: true`, or `preset: 'editorial'`. With the default `content_selector` (`article, main, .prose`), the audit prefers a semantic `<article>`, otherwise `<main>`, then `.prose`. It omits header, nav, aside and footer content as well as repeated linked card groups (three or more equal sibling cards with a link and H2/H3), so article teasers and a small related-content hub do not distort one continuous writing sample. A custom `content_selector` uses its outermost matches directly.
 
 The built-in ruleset is kept in sync with the [`anti-ai-copy` skill](https://github.com/casoon/casoon-agent-skills)'s checklist:
 

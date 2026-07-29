@@ -276,7 +276,7 @@
                     "properties": {
                         "content_selector": {
                             "default": "article, main, .prose",
-                            "description": "CSS selector scoping which part of the page counts as \"content\" (keeps nav/footer\nboilerplate out of word counts and pattern matches).",
+                            "description": "CSS selector scoping which part of the page counts as \"content\". The default convention\nprefers `<article>`, then `<main>`, then `.prose`, and omits layout chrome plus repeated\nlinked card groups. Set a custom selector to use its outermost matches directly.",
                             "type": "string"
                         },
                         "disabled_rules": {
