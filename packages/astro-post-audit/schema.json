@@ -219,6 +219,26 @@
                     },
                     "type": "object"
                 },
+                "c2pa": {
+                    "additionalProperties": false,
+                    "default": false,
+                    "description": "C2PA Content Credentials validation for local JPEG, PNG, and WebP assets.",
+                    "properties": {
+                        "enabled": {
+                            "default": false,
+                            "description": "Validate embedded Content Credentials without fetching remote manifests.",
+                            "type": "boolean"
+                        },
+                        "require_for": {
+                            "description": "Dist-relative image globs for which embedded credentials are expected. Missing credentials otherwise remain silent.",
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        }
+                    },
+                    "type": "object"
+                },
                 "canonical": {
                     "additionalProperties": false,
                     "description": "Canonical `<link rel=\"canonical\">` tag checks.",

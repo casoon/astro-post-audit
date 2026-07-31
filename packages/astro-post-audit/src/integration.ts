@@ -215,6 +215,13 @@ export interface RulesConfig {
     /** Warn if asset filenames lack a cache-busting hash. @default false */
     require_hashed_filenames?: boolean;
   };
+  /** C2PA Content Credentials validation for local JPEG, PNG, and WebP assets. @default false */
+  c2pa?: {
+    /** Validate embedded Content Credentials without fetching remote manifests. @default false */
+    enabled?: boolean;
+    /** Dist-relative image globs for which embedded credentials are expected. Missing credentials otherwise remain silent. */
+    require_for?: string[];
+  };
   /** Open Graph and Twitter Card meta tag checks. */
   opengraph?: {
     /** Require `og:title` meta tag. @default false */

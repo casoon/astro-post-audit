@@ -2,6 +2,14 @@
 
 Fast post-build auditor for Astro sites. Checks SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output. No browser, no network — runs in <1s on typical sites.
 
+## What's new in 0.5.4
+
+| Area | What | Rule IDs | How to enable |
+|------|------|----------|---------------|
+| C2PA provenance | Local, opt-in validation of embedded C2PA Content Credentials in JPEG, PNG, and WebP assets | `c2pa/invalid`, `c2pa/missing-required` | `rules.c2pa.enabled` |
+
+See [C2PA provenance](#c2pa-provenance) for the full configuration.
+
 ## What's new in 0.5.3
 
 | Area | What | Rule IDs | How to enable |
@@ -30,6 +38,7 @@ for repeatable writing patterns without treating style as a correctness issue:
 | Language consistency | Low-confidence check for a clear German/English text signal that conflicts with `<html lang>` | `content-style/language-mismatch` | Included with content style; tune with `rules.content_style.language_detection` |
 | Custom editorial rules | Add regex, density, or sentence-rhythm checks without changing the auditor | — | `rules.content_style.extra_rules` (append) or `rules.content_style.rules` (replace) |
 | Source analysis | Opt-in inventory, exact utility duplicates, safe same-variant conflicts, and Astro complexity signals | `source-analysis/*` | `rules.source_analysis.enabled` |
+| C2PA provenance | Validates embedded Content Credentials in local JPEG, PNG, and WebP assets | `c2pa/invalid`, `c2pa/missing-required` | `rules.c2pa.enabled` |
 
 `contentStyle: true` combines with an existing `rules.content_style` object, so detailed configuration such as `content_selector`, `extra_rules`, and `disabled_rules` is retained.
 
@@ -667,6 +676,12 @@ rules: {
     format_hints: false,                // Info hint when JPEG/PNG/GIF could use a modern format
   },
 
+  // C2PA Content Credentials — opt-in module
+  c2pa: {
+    enabled: false,                     // Validate embedded Content Credentials in local JPEG/PNG/WebP assets
+    require_for: [],                    // Dist-relative image globs for which credentials are expected, e.g. ["blog/**/*.jpg"]
+  },
+
   // AI Visibility — opt-in module
   // Enable via top-level aiVisibility option or set enabled: true here
   ai_visibility: {
@@ -787,6 +802,7 @@ rules: {
 - **UX Heuristics** *(opt-in)* — Missing CTAs, generic link text ("click here", "mehr"), missing trust signals (Impressum, Datenschutz, contact), link density, interactive element density
 - **Content Style** *(opt-in)* — Configurable heuristics for recurring "reads like AI" writing patterns: em-dash overuse, contrast-formula repetition ("nicht/kein X, sondern Y"), chatbot leftovers, uniform sentence rhythm
 - **View Transitions** *(opt-in)* — Duplicate `transition:name` values and Client Router external-link reload hints
+- **C2PA Provenance** *(opt-in)* — Local validation of embedded C2PA Content Credentials in JPEG, PNG, and WebP assets
 
 ## AI visibility
 
@@ -889,6 +905,28 @@ rules: {
 ```
 
 Each rule supports `message`/`help` overrides with `{count}`/`{word_count}`/`{density}`/`{threshold}`/`{cv}`/`{sentences}` placeholders, `languages` for language-scoping, and `level: "off"` to disable a rule without removing it from the list. Use `disabled_rules` to switch off a built-in rule without copying the default ruleset.
+
+## C2PA provenance
+
+Enable via `rules.c2pa.enabled: true`. Validates embedded [C2PA Content Credentials](https://c2pa.org) in local JPEG, PNG, and WebP assets found in `dist/` — entirely offline, no remote manifest fetching.
+
+By default, a missing manifest is silent: most images simply don't carry Content Credentials, and that's not a signal of anything. Set `require_for` to a list of dist-relative globs to require credentials on specific assets (e.g. AI-generated illustrations you want to keep provenance metadata on):
+
+```js
+rules: {
+  c2pa: {
+    enabled: true,
+    require_for: ["blog/**/*.jpg", "og/*.png"],
+  },
+}
+```
+
+| Rule ID | Level | Description |
+|---------|-------|--------------|
+| `c2pa/invalid` | Warning | An embedded manifest exists but failed validation |
+| `c2pa/missing-required` | Warning | No readable manifest found on an asset matched by `require_for` |
+
+Missing credentials never imply that an image is AI-generated or otherwise non-compliant — they only mean no Content Credentials were embedded or none could be read.
 
 ## GDPR / DSGVO
 

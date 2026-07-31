@@ -1,6 +1,7 @@
 pub mod a11y;
 pub mod ai_visibility;
 pub mod assets;
+pub mod c2pa;
 pub mod content_quality;
 pub mod content_style;
 pub mod content_sync;

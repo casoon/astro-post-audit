@@ -69,6 +69,7 @@ pub struct Config {
     pub content_sync: ContentSyncConfig,
     pub html_validation: HtmlValidationConfig,
     pub images: ImagesConfig,
+    pub c2pa: C2paConfig,
     pub ai_visibility: AiVisibilityConfig,
     pub ux_heuristics: UxHeuristicsConfig,
     pub fonts: FontsConfig,
@@ -230,6 +231,15 @@ pub struct AssetsConfig {
     pub max_js_size_kb: Option<u64>,
     pub max_css_size_kb: Option<u64>,
     pub require_hashed_filenames: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct C2paConfig {
+    /// Validate embedded C2PA Content Credentials in local image assets. @default false
+    pub enabled: bool,
+    /// Dist-relative image globs for which an embedded manifest is expected.
+    pub require_for: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
