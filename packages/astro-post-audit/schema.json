@@ -235,6 +235,11 @@
                                 "type": "string"
                             },
                             "type": "array"
+                        },
+                        "require_trusted": {
+                            "default": false,
+                            "description": "Also flag manifests that are cryptographically valid but not signed by a certificate chaining to a trusted root.",
+                            "type": "boolean"
                         }
                     },
                     "type": "object"

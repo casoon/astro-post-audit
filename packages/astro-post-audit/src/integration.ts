@@ -221,6 +221,8 @@ export interface RulesConfig {
     enabled?: boolean;
     /** Dist-relative image globs for which embedded credentials are expected. Missing credentials otherwise remain silent. */
     require_for?: string[];
+    /** Also flag manifests that are cryptographically valid but not signed by a certificate chaining to a trusted root. @default false */
+    require_trusted?: boolean;
   };
   /** Open Graph and Twitter Card meta tag checks. */
   opengraph?: {

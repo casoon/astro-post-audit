@@ -680,6 +680,7 @@ rules: {
   c2pa: {
     enabled: false,                     // Validate embedded Content Credentials in local JPEG/PNG/WebP assets
     require_for: [],                    // Dist-relative image globs for which credentials are expected, e.g. ["blog/**/*.jpg"]
+    require_trusted: false,             // Also flag Valid-but-not-Trusted manifests (e.g. self-signed certs)
   },
 
   // AI Visibility — opt-in module
@@ -917,6 +918,7 @@ rules: {
   c2pa: {
     enabled: true,
     require_for: ["blog/**/*.jpg", "og/*.png"],
+    require_trusted: true,
   },
 }
 ```
@@ -925,8 +927,11 @@ rules: {
 |---------|-------|--------------|
 | `c2pa/invalid` | Warning | An embedded manifest exists but failed validation |
 | `c2pa/missing-required` | Warning | No readable manifest found on an asset matched by `require_for` |
+| `c2pa/untrusted` | Warning | Manifest is cryptographically valid but its signing certificate does not chain to a trusted root (only reported when `require_trusted: true`) |
 
 Missing credentials never imply that an image is AI-generated or otherwise non-compliant — they only mean no Content Credentials were embedded or none could be read.
+
+By default, a `Valid` manifest passes even if it wasn't signed by a certificate chaining to a trusted root — a self-signed certificate produces `Valid`, never `Trusted`. That's fine for local testing but not sufficient as a compliance signal, since no real-world C2PA verifier (browser viewer, Adobe Content Credentials) would display it as trustworthy. Set `require_trusted: true` to flag `Valid`-but-not-`Trusted` manifests too. Keep it off if you intentionally sign with an in-house or test CA that isn't in the C2PA default trust list — you'd otherwise start failing your own legitimate manifests.
 
 ## GDPR / DSGVO
 

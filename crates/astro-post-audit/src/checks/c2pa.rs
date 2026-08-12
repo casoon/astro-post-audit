@@ -30,7 +30,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 .to_string_lossy()
                 .replace('\\', "/");
             let required = required.as_ref().is_some_and(|set| set.is_match(&rel));
-            validate(path, &rel, format, required)
+            validate(path, &rel, format, required, config.c2pa.require_trusted)
         })
         .collect()
 }
@@ -54,7 +54,13 @@ fn glob_set(patterns: &[String]) -> Option<GlobSet> {
         .flatten()
 }
 
-fn validate(path: &std::path::Path, rel: &str, format: &str, required: bool) -> Option<Finding> {
+fn validate(
+    path: &std::path::Path,
+    rel: &str,
+    format: &str,
+    required: bool,
+    require_trusted: bool,
+) -> Option<Finding> {
     let Ok(file) = File::open(path) else {
         return required.then(|| {
             finding(
@@ -72,11 +78,21 @@ fn validate(path: &std::path::Path, rel: &str, format: &str, required: bool) -> 
     if reader.active_manifest().is_none() {
         return required.then(|| finding("c2pa/missing-required", rel, "No embedded C2PA Content Credentials found for an asset configured as requiring them.", Level::Warning));
     }
-    match reader.validation_state() {
+    finding_for_state(reader.validation_state(), rel, require_trusted)
+}
+
+fn finding_for_state(state: ValidationState, rel: &str, require_trusted: bool) -> Option<Finding> {
+    match state {
         ValidationState::Invalid => Some(finding(
             "c2pa/invalid",
             rel,
             "Embedded C2PA Content Credentials could not be validated.",
+            Level::Warning,
+        )),
+        ValidationState::Valid if require_trusted => Some(finding(
+            "c2pa/untrusted",
+            rel,
+            "Embedded C2PA Content Credentials are cryptographically valid but signed by a certificate that does not chain to a trusted root.",
             Level::Warning,
         )),
         ValidationState::Valid | ValidationState::Trusted => None,
@@ -102,8 +118,22 @@ mod tests {
     #[test]
     fn missing_credentials_are_only_reported_when_required() {
         let missing = std::path::Path::new("does-not-exist.png");
-        assert!(validate(missing, "ai/example.png", "image/png", false).is_none());
-        let finding = validate(missing, "ai/example.png", "image/png", true).unwrap();
+        assert!(validate(missing, "ai/example.png", "image/png", false, false).is_none());
+        let finding = validate(missing, "ai/example.png", "image/png", true, false).unwrap();
         assert_eq!(finding.rule_id, "c2pa/missing-required");
+    }
+
+    #[test]
+    fn valid_but_untrusted_is_silent_unless_require_trusted() {
+        assert!(finding_for_state(ValidationState::Valid, "ai/example.png", false).is_none());
+        let finding =
+            finding_for_state(ValidationState::Valid, "ai/example.png", true).unwrap();
+        assert_eq!(finding.rule_id, "c2pa/untrusted");
+    }
+
+    #[test]
+    fn trusted_is_always_silent() {
+        assert!(finding_for_state(ValidationState::Trusted, "ai/example.png", false).is_none());
+        assert!(finding_for_state(ValidationState::Trusted, "ai/example.png", true).is_none());
     }
 }

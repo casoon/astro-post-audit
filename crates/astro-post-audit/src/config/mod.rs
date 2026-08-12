@@ -240,6 +240,9 @@ pub struct C2paConfig {
     pub enabled: bool,
     /// Dist-relative image globs for which an embedded manifest is expected.
     pub require_for: Vec<String>,
+    /// Also flag manifests that are cryptographically valid but not signed by a certificate
+    /// chaining to a trusted root (i.e. `Valid` but not `Trusted`). @default false
+    pub require_trusted: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
