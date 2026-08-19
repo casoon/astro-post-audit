@@ -546,6 +546,8 @@ rules: {
     detect_orphan_pages: false,         // Warn about pages with no incoming links
     check_mixed_content: true,          // Warn on http:// in internal links
     max_url_depth: undefined,           // Warn when URL nesting depth exceeds this (e.g. 3)
+    known_routes: [],                   // Glob patterns for known SSR/dynamic routes (e.g. ['/dashboard/'])
+                                         // excluded from links/broken and sitemap/entry-not-in-dist
   },
 
   // Sitemap cross-reference

@@ -1,3 +1,4 @@
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use percent_encoding::percent_decode_str;
 use rayon::prelude::*;
 use std::collections::HashSet;
@@ -6,6 +7,20 @@ use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::normalize;
 use crate::report::{Finding, Level};
+
+/// Build a `GlobSet` matching routes declared as known dynamic/SSR routes.
+/// Returns `None` if no patterns are configured (or none compile, which
+/// `Config::validate` already rejects before this runs).
+pub(crate) fn build_known_routes_set(patterns: &[String]) -> Option<GlobSet> {
+    if patterns.is_empty() {
+        return None;
+    }
+    let mut builder = GlobSetBuilder::new();
+    for pattern in patterns {
+        builder.add(Glob::new(pattern).ok()?);
+    }
+    builder.build().ok()
+}
 
 /// Decode percent-encoded fragment (e.g. `n%C3%A4chste` -> `nächste`).
 fn decode_fragment(fragment: &str) -> String {
@@ -64,6 +79,8 @@ fn check_url_depth(index: &SiteIndex, max_depth: usize) -> Vec<Finding> {
 }
 
 fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
+    let known_routes = build_known_routes_set(&config.links.known_routes);
+
     index
         .pages
         .par_iter()
@@ -164,7 +181,10 @@ fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     if !index.route_exists(&normalized) {
                         // Also check raw path as file
                         let file_check = resolved.trim_start_matches('/');
-                        if !index.file_exists(file_check) {
+                        let is_known_route = known_routes
+                            .as_ref()
+                            .is_some_and(|set| set.is_match(&normalized));
+                        if !is_known_route && !index.file_exists(file_check) {
                             let level = if config.links.fail_on_broken {
                                 Level::Error
                             } else {

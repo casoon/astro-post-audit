@@ -1,5 +1,6 @@
 use url::Url;
 
+use crate::checks::links::build_known_routes_set;
 use crate::config::{Config, UrlNormalizationConfig};
 use crate::discovery::SiteIndex;
 use crate::normalize;
@@ -102,10 +103,14 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
     // Check: sitemap entries should exist in dist
     if config.sitemap.entries_must_exist_in_dist {
+        let known_routes = build_known_routes_set(&config.links.known_routes);
         for url_str in &index.sitemap_urls {
             if let Ok(parsed) = Url::parse(url_str) {
                 let route = normalize::normalize_path(parsed.path(), norm);
-                if !index.route_exists(&route) {
+                let is_known_route = known_routes
+                    .as_ref()
+                    .is_some_and(|set| set.is_match(&route));
+                if !is_known_route && !index.route_exists(&route) {
                     findings.push(Finding {
                         level: Level::Warning,
                         rule_id: "sitemap/entry-not-in-dist".into(),

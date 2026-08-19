@@ -450,6 +450,27 @@ fn links_broken_internal() {
 }
 
 #[test]
+fn links_broken_internal_suppressed_by_known_routes() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    // Link to an SSR route that never produces a static file in dist/
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Home</h1><a href="/dashboard/">Dashboard</a></main><footer></footer></body></html>"#,
+    ).unwrap();
+    let (json, code) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"links":{"known_routes":["/dashboard/"]}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"] == "links/broken"),
+        "Known dynamic route should not be reported as broken"
+    );
+    assert_eq!(code, 0);
+}
+
+#[test]
 fn links_query_params() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
@@ -1036,6 +1057,28 @@ fn sitemap_stale_entry() {
     assert!(findings
         .iter()
         .any(|f| f["rule_id"] == "sitemap/entry-not-in-dist"));
+}
+
+#[test]
+fn sitemap_entry_suppressed_by_known_routes() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    // Sitemap references an SSR route that never produces a static file in dist/
+    fs::write(
+        dir.path().join("sitemap.xml"),
+        r#"<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://example.com/</loc></url><url><loc>https://example.com/dashboard/</loc></url></urlset>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"links":{"known_routes":["/dashboard/"]}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "sitemap/entry-not-in-dist"),
+        "Known dynamic route in sitemap should not be reported as a stale entry"
+    );
 }
 
 #[test]

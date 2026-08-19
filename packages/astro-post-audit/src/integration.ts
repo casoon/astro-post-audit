@@ -93,6 +93,12 @@ export interface RulesConfig {
     check_mixed_content?: boolean;
     /** Warn when a page's URL nesting depth (path segments) exceeds this value. Disabled when unset. */
     max_url_depth?: number;
+    /**
+     * Glob patterns for routes known to be dynamic/SSR (e.g. `prerender = false`) that
+     * never produce a static file in `dist/`. Matching routes are excluded from the
+     * `links/broken` and `sitemap/entry-not-in-dist` checks. @default []
+     */
+    known_routes?: string[];
   };
   /** Sitemap cross-reference checks. */
   sitemap?: {

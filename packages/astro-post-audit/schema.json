@@ -693,6 +693,14 @@
                             "description": "Warn on query parameters (`?foo=bar`) in internal links.",
                             "type": "boolean"
                         },
+                        "known_routes": {
+                            "default": [],
+                            "description": "Glob patterns for routes known to be dynamic/SSR (e.g. `prerender = false`) that\nnever produce a static file in `dist/`. Matching routes are excluded from the\n`links/broken` and `sitemap/entry-not-in-dist` checks.",
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
                         "max_url_depth": {
                             "description": "Warn when a page's URL nesting depth (path segments) exceeds this value. Disabled when unset.",
                             "type": "number"

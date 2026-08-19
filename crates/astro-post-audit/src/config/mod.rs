@@ -171,6 +171,10 @@ pub struct LinksConfig {
     pub check_mixed_content: bool,
     /// Warn when a page's URL depth (path segments) exceeds this value. None = disabled.
     pub max_url_depth: Option<usize>,
+    /// Glob patterns for routes that are known to be dynamic/SSR (e.g. `prerender = false`)
+    /// and therefore never produce a static file in `dist/`. Matching routes are excluded
+    /// from the `links/broken` and `sitemap/entry-not-in-dist` checks.
+    pub known_routes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -787,6 +791,7 @@ impl Default for LinksConfig {
             detect_orphan_pages: false,
             check_mixed_content: true,
             max_url_depth: None,
+            known_routes: Vec::new(),
         }
     }
 }
@@ -1005,6 +1010,11 @@ impl Config {
             anyhow::bail!(
                 "html_basics.meta_description_max_length must be greater than 0 when set"
             );
+        }
+        for pattern in &self.links.known_routes {
+            if let Err(e) = Glob::new(pattern) {
+                anyhow::bail!("links.known_routes contains an invalid glob '{pattern}': {e}");
+            }
         }
         if self.external_links.enabled {
             if self.external_links.timeout_ms == 0 {
