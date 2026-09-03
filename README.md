@@ -2,6 +2,14 @@
 
 Fast post-build auditor for Astro sites. Checks SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output. No browser, and no network unless opt-in external-link checking is enabled — runs in <1s on typical sites.
 
+## What's new in 0.5.5
+
+| Area | What | Rule IDs | How to enable |
+|------|------|----------|---------------|
+| Content-style config | `density_per_1000_words` now matches the documented TypeScript/schema value; invalid JavaScript rule types fail early | `content-style/*` | Automatic |
+| Astro islands | Framework-generated client-island runtime styles no longer produce HTML conformance findings | `html/schema.html5` | Automatic when `rules.html_validation.enabled` |
+| HTML validation docs | Clarifies body-level `<style>` handling and the intentional `role="list"` accessibility workaround | `html/assertion.roles.unnecessary-list` | See [HTML5 conformance validation](#html5-conformance-validation) |
+
 ## What's new in 0.5.4
 
 | Area | What | Rule IDs | How to enable |
@@ -808,6 +816,21 @@ rules: {
 - **View Transitions** *(opt-in)* — Duplicate `transition:name` values and Client Router external-link reload hints
 - **C2PA Provenance** *(opt-in)* — Local validation of embedded C2PA Content Credentials in JPEG, PNG, and WebP assets
 
+### HTML5 conformance validation
+
+Enable `rules.html_validation.enabled` for offline content-model, parser, ARIA, attribute, and table validation. Astro's generated client-island runtime style (`astro-island,astro-slot,astro-static-slot{display:contents}`) is ignored automatically; other `<style>` elements in body content remain findings. Under the [current HTML standard](https://html.spec.whatwg.org/multipage/semantics.html#the-style-element), `<style>` is metadata content and belongs in `<head>` (or a `<noscript>` in `<head>`), even when it is the first child of a body-level container. In Astro and MDX, use Astro's normal component-scoped `<style>` handling instead of emitting a raw body-level `<style>` tag.
+
+`html/assertion.roles.unnecessary-list` reports an explicit `role="list"` on `<ul>`/`<ol>` as redundant according to ARIA-in-HTML. If the role is intentional to retain VoiceOver/Safari list semantics when CSS removes list markers, keep the workaround and tune only that finding:
+
+```js
+rules: {
+  html_validation: { enabled: true },
+  severity: {
+    "html/assertion.roles.unnecessary-list": "off",
+  },
+}
+```
+
 ## AI visibility
 
 Enable via `aiVisibility: true` (top-level option) or `rules.ai_visibility.enabled: true`.
@@ -879,6 +902,8 @@ New patterns discovered during manual review become a config entry, not a code c
 - **`density_per_1000_words`** — flags when regex matches per 1000 words exceed `threshold`
 - **`presence`** — flags when the regex matches at all, anywhere in the content
 - **`sentence_length_uniformity`** — flags when sentence word-lengths are unusually uniform (coefficient of variation below `threshold`); not in the default ruleset since it needs per-project tuning to avoid false positives on reference-style content
+
+Rule types are validated at runtime as well as by TypeScript. This catches misspellings in plain `astro.config.mjs` files and stops the build instead of silently disabling the affected rule.
 
 The German and English built-in rule packs are selected from the primary `<html lang>` value (`de-AT` selects German, `en-US` English). Language-neutral rules always run; pages without `lang` run both language-specific packs so a missing language signal does not hide findings. Custom rules can use `languages: ["de"]` or `languages: ["en"]` for the same behavior.
 

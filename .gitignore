@@ -23,3 +23,5 @@ Thumbs.db
 # Build artifacts
 *.tar.gz
 *.zip
+
+/plan

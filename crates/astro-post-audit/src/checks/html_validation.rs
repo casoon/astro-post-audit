@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use html_conform::Severity;
@@ -6,6 +7,23 @@ use rayon::prelude::*;
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::report::{Confidence, Finding, Level};
+
+const ASTRO_ISLAND_RUNTIME_STYLE: &str =
+    "<style>astro-island,astro-slot,astro-static-slot{display:contents}</style>";
+
+fn html_for_validation(html: &str) -> Cow<'_, str> {
+    if !html.contains(ASTRO_ISLAND_RUNTIME_STYLE) {
+        return Cow::Borrowed(html);
+    }
+
+    // Astro injects this exact style next to its first hydrated island. It is
+    // framework runtime output, not author markup. Blanking it at equal byte
+    // length keeps all source locations from html-conform stable.
+    Cow::Owned(html.replace(
+        ASTRO_ISLAND_RUNTIME_STYLE,
+        &" ".repeat(ASTRO_ISLAND_RUNTIME_STYLE.len()),
+    ))
+}
 
 /// Native HTML5 conformance validation via `html-conform` (vnu-comparable,
 /// pure Rust, no JVM/subprocess/network). Covers tree-construction errors,
@@ -23,7 +41,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         .pages
         .par_iter()
         .flat_map(|page| {
-            let report = match html_conform::check(&page.html_content) {
+            let validation_html = html_for_validation(&page.html_content);
+            let report = match html_conform::check(&validation_html) {
                 Ok(report) => report,
                 Err(error) => {
                     return vec![Finding::new(

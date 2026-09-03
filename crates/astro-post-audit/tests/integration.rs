@@ -3854,6 +3854,54 @@ fn html_validation_disabled_by_default() {
     );
 }
 
+#[test]
+fn html_validation_ignores_astro_island_runtime_style() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><main><h1>Test</h1><astro-island><p>Hydrated content</p></astro-island><style>astro-island,astro-slot,astro-static-slot{display:contents}</style><script>customElements.define('astro-island',class extends HTMLElement{})</script></main></body></html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"html_validation":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|finding| {
+            finding["rule_id"] == "html/schema.html5"
+                && finding["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("style"))
+        }),
+        "Astro's generated island runtime style should not produce a finding: {findings:?}"
+    );
+}
+
+#[test]
+fn html_validation_still_reports_author_style_as_first_body_child() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><main><style>.diagram{display:grid}</style><h1>Test</h1></main></body></html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"html_validation":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|finding| {
+            finding["rule_id"] == "html/schema.html5"
+                && finding["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("style"))
+        }),
+        "An author-provided style in body flow content must remain a conformance finding: {findings:?}"
+    );
+}
+
 // ==========================================================================
 // Debug mode
 // ==========================================================================
@@ -4346,6 +4394,42 @@ fn content_style_invalid_regex_rejected_by_config_validation() {
     assert!(
         stderr.contains("broken"),
         "error should mention the offending rule id: {stderr}"
+    );
+}
+
+#[test]
+fn content_style_density_rule_uses_documented_type_name() {
+    let dir = TempDir::new().unwrap();
+    write_article_page(
+        dir.path(),
+        "post.html",
+        "This short article contains one em dash — and enough surrounding words for the rule.",
+    );
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true,"rules":[{"id":"custom-density","type":"density_per_1000_words","pattern":"—","threshold":1}]}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|finding| finding["rule_id"] == "content-style/custom-density"),
+        "the documented density rule type should deserialize and run: {findings:?}"
+    );
+}
+
+#[test]
+fn content_style_invalid_rule_type_rejected_during_deserialization() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (_stdout, stderr, code) = run_audit(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"content_style":{"enabled":true,"rules":[{"id":"typoed-density","type":"density_per1000_words","pattern":"—","threshold":12}]}}"#,
+    );
+    assert_eq!(code, 2, "invalid rule types must fail config parsing");
+    assert!(
+        stderr.contains("density_per1000_words") && stderr.contains("density_per_1000_words"),
+        "error should show the invalid value and a valid alternative: {stderr}"
     );
 }
 

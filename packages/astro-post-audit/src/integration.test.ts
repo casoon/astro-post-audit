@@ -132,6 +132,30 @@ describe("postAudit", () => {
     });
   });
 
+  it("rejects invalid content-style rule types from JavaScript config", () => {
+    const integration = postAudit({
+      rules: {
+        content_style: {
+          rules: [
+            {
+              id: "typoed-density",
+              type: "density_per1000_words",
+              pattern: "—",
+              threshold: 12,
+            },
+          ],
+        },
+      } as unknown as PostAuditOptions["rules"],
+    });
+    const hook = integration.hooks["astro:build:done"] as Function;
+    const { logger } = makeLogger();
+
+    assert.throws(
+      () => hook({ dir: new URL("file:///tmp/dist/"), logger }),
+      /content_style\.rules\[0\]\.type.*density_per_1000_words.*density_per1000_words/,
+    );
+  });
+
   it("skips execution when disabled", () => {
     const integration = postAudit({ disable: true });
     const hook = integration.hooks["astro:build:done"] as Function;

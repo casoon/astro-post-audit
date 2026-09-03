@@ -317,6 +317,7 @@ pub struct ContentQualityConfig {
 #[serde(rename_all = "snake_case")]
 pub enum StyleRuleType {
     /// Flag when regex matches per 1000 words of content exceed `threshold`.
+    #[serde(rename = "density_per_1000_words")]
     DensityPer1000Words,
     /// Flag when the regex matches at all, anywhere in the content.
     Presence,

@@ -808,6 +808,30 @@ function expandGroups(
   return merged;
 }
 
+const STYLE_RULE_TYPES = [
+  "density_per_1000_words",
+  "presence",
+  "sentence_length_uniformity",
+] as const;
+
+function validateStyleRuleTypes(rules: RulesConfig): void {
+  const contentStyle = rules.content_style;
+  if (!contentStyle) return;
+
+  for (const key of ["rules", "extra_rules"] as const) {
+    const configuredRules = contentStyle[key];
+    if (!configuredRules) continue;
+
+    configuredRules.forEach((rule, index) => {
+      if (!(STYLE_RULE_TYPES as readonly string[]).includes(rule.type)) {
+        throw new Error(
+          `astro-post-audit: rules.content_style.${key}[${index}].type must be one of ${STYLE_RULE_TYPES.map((type) => `"${type}"`).join(", ")}; received "${String(rule.type)}".`,
+        );
+      }
+    });
+  }
+}
+
 export default function postAudit(
   options: PostAuditOptions = {},
   deps: RuntimeDeps = defaultDeps,
@@ -852,6 +876,10 @@ export default function postAudit(
         const resolvedRules: RulesConfig = options.groups
           ? expandGroups(options.groups, options.rules ?? {})
           : (options.rules ?? {});
+
+        // Plain astro.config.mjs files do not get TypeScript enum checking.
+        // Reject typoed rule types before they can turn a configured check into a no-op.
+        validateStyleRuleTypes(resolvedRules);
 
         // Validate that rules is a non-empty object if provided
         if (
