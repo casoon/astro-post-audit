@@ -184,8 +184,9 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                     }
                     return;
                 }
-                const shouldFail = options.throwOnError === true ||
-                    (options.failOn !== undefined && options.failOn !== "never");
+                const shouldFail = options.failOn !== undefined
+                    ? options.failOn !== "never"
+                    : options.throwOnError === true || options.maxWarnings != null;
                 const resolvedRules = options.groups
                     ? expandGroups(options.groups, options.rules ?? {})
                     : (options.rules ?? {});
@@ -258,7 +259,7 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                         trailing_slash: astroTrailingSlash,
                     };
                 }
-                if (options.failOn === "warnings" && options.strict !== false) {
+                if (options.failOn === "warnings") {
                     stdinConfig.strict = true;
                 }
                 else if (options.strict !== undefined) {

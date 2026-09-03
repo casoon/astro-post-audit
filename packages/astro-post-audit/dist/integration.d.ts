@@ -541,7 +541,7 @@ export interface PostAuditOptions {
     debug?: boolean;
     /** Disable the integration (useful for dev mode). */
     disable?: boolean;
-    /** Throw an error when the audit finds issues (fails the build). Default: false */
+    /** Throw an error when the audit finds issues (fails the build). Ignored when `failOn` is set. Default: false */
     throwOnError?: boolean;
     /**
      * Path to a baseline file (relative to project root). When set, only findings that are
@@ -555,11 +555,12 @@ export interface PostAuditOptions {
      */
     writeBaseline?: boolean;
     /**
-     * Build fail strategy. `'errors'`: fail on errors only (default when `throwOnError` is true).
-     * `'warnings'`: fail on any finding (implies `strict`). `'never'`: never fail the build.
+     * Build fail strategy. Takes precedence over `throwOnError`. `'errors'`: fail on errors only
+     * (default when `throwOnError` is true). `'warnings'`: fail on any warning or error
+     * (always implies `strict`). `'never'`: never fail the build.
      */
     failOn?: "never" | "errors" | "warnings";
-    /** Fail the build if the warning count exceeds this number. */
+    /** Fail the build if the warning count exceeds this number. Activates build gating unless `failOn` is `"never"`. */
     maxWarnings?: number;
     /** Shorthand rule groups. `true` enables the group, `"warn"` enables but downgrades all findings to warnings. */
     groups?: GroupsConfig;

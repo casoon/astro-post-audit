@@ -558,7 +558,7 @@ export interface PostAuditOptions {
   debug?: boolean;
   /** Disable the integration (useful for dev mode). */
   disable?: boolean;
-  /** Throw an error when the audit finds issues (fails the build). Default: false */
+  /** Throw an error when the audit finds issues (fails the build). Ignored when `failOn` is set. Default: false */
   throwOnError?: boolean;
   /**
    * Path to a baseline file (relative to project root). When set, only findings that are
@@ -572,11 +572,12 @@ export interface PostAuditOptions {
    */
   writeBaseline?: boolean;
   /**
-   * Build fail strategy. `'errors'`: fail on errors only (default when `throwOnError` is true).
-   * `'warnings'`: fail on any finding (implies `strict`). `'never'`: never fail the build.
+   * Build fail strategy. Takes precedence over `throwOnError`. `'errors'`: fail on errors only
+   * (default when `throwOnError` is true). `'warnings'`: fail on any warning or error
+   * (always implies `strict`). `'never'`: never fail the build.
    */
   failOn?: "never" | "errors" | "warnings";
-  /** Fail the build if the warning count exceeds this number. */
+  /** Fail the build if the warning count exceeds this number. Activates build gating unless `failOn` is `"never"`. */
   maxWarnings?: number;
   /** Shorthand rule groups. `true` enables the group, `"warn"` enables but downgrades all findings to warnings. */
   groups?: GroupsConfig;
@@ -844,8 +845,9 @@ export default function postAudit(
         }
 
         const shouldFail =
-          options.throwOnError === true ||
-          (options.failOn !== undefined && options.failOn !== "never");
+          options.failOn !== undefined
+            ? options.failOn !== "never"
+            : options.throwOnError === true || options.maxWarnings != null;
 
         const resolvedRules: RulesConfig = options.groups
           ? expandGroups(options.groups, options.rules ?? {})
@@ -942,7 +944,7 @@ export default function postAudit(
             trailing_slash: astroTrailingSlash,
           };
         }
-        if (options.failOn === "warnings" && options.strict !== false) {
+        if (options.failOn === "warnings") {
           stdinConfig.strict = true;
         } else if (options.strict !== undefined) {
           stdinConfig.strict = options.strict;

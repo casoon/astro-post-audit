@@ -177,4 +177,70 @@ describe("postAudit", () => {
         assert.doesNotThrow(() => hook({ dir: new URL("file:///tmp/dist/"), logger }));
         assert.deepEqual(error, ["Audit failed with exit code 2"]);
     });
+    it("lets failOn never override throwOnError", () => {
+        const deps = {
+            existsSync: () => true,
+            writeFileSync: () => { },
+            execFileSync: makeExecMock((_file, args) => {
+                if (args[0] === "--help")
+                    return "Usage: ... --config-stdin ...";
+                throw Object.assign(new Error("findings"), { status: 1 });
+            }),
+        };
+        const integration = postAudit({
+            site: "https://example.com",
+            failOn: "never",
+            throwOnError: true,
+        }, deps);
+        const hook = integration.hooks["astro:build:done"];
+        const { logger, warn } = makeLogger();
+        assert.doesNotThrow(() => hook({ dir: new URL("file:///tmp/dist/"), logger }));
+        assert.deepEqual(warn, ["Audit found issues. See output above."]);
+    });
+    it("makes failOn warnings imply strict even when strict is false", () => {
+        let auditConfig;
+        const deps = {
+            existsSync: () => true,
+            writeFileSync: () => { },
+            execFileSync: makeExecMock((_file, args, execOptions) => {
+                if (args[0] === "--help")
+                    return "Usage: ... --config-stdin ...";
+                auditConfig = JSON.parse(execOptions.input);
+                throw Object.assign(new Error("warnings"), { status: 1 });
+            }),
+        };
+        const integration = postAudit({
+            site: "https://example.com",
+            failOn: "warnings",
+            strict: false,
+        }, deps);
+        const hook = integration.hooks["astro:build:done"];
+        const { logger } = makeLogger();
+        assert.throws(() => hook({ dir: new URL("file:///tmp/dist/"), logger }), /found issues/i);
+        assert.equal(auditConfig?.strict, true);
+    });
+    it("makes maxWarnings enable build failure unless failOn is never", () => {
+        const deps = {
+            existsSync: () => true,
+            writeFileSync: () => { },
+            execFileSync: makeExecMock((_file, args) => {
+                if (args[0] === "--help")
+                    return "Usage: ... --config-stdin ...";
+                throw Object.assign(new Error("warning threshold exceeded"), {
+                    status: 1,
+                });
+            }),
+        };
+        const integration = postAudit({ site: "https://example.com", maxWarnings: 0 }, deps);
+        const hook = integration.hooks["astro:build:done"];
+        const { logger } = makeLogger();
+        assert.throws(() => hook({ dir: new URL("file:///tmp/dist/"), logger }), /found issues/i);
+        const neverIntegration = postAudit({
+            site: "https://example.com",
+            maxWarnings: 0,
+            failOn: "never",
+        }, deps);
+        const neverHook = neverIntegration.hooks["astro:build:done"];
+        assert.doesNotThrow(() => neverHook({ dir: new URL("file:///tmp/dist/"), logger }));
+    });
 });

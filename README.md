@@ -428,10 +428,10 @@ postAudit({
 |--------|------|---------|-------------|
 | `preset` | `'standard' \| 'strict' \| 'production' \| 'seo' \| 'accessibility' \| 'performance' \| 'relaxed' \| 'editorial'` | — | Apply a predefined config before your `rules` overrides. See [Presets](#presets). |
 | `strict` | `boolean` | `false` | Treat warnings as errors (exit code 1). |
-| `throwOnError` | `boolean` | `false` | Throw an error (fail the build) when the audit finds issues. |
-| `failOn` | `'errors' \| 'warnings' \| 'never'` | — | Fail the build on errors only (`'errors'`), on any finding (`'warnings'`), or never. Implies `throwOnError`. |
+| `throwOnError` | `boolean` | `false` | Throw an error (fail the build) when the audit finds issues. Ignored when `failOn` is set. |
+| `failOn` | `'errors' \| 'warnings' \| 'never'` | — | Fail on errors only, on warnings and errors, or never. Takes precedence over `throwOnError`; `'warnings'` always implies strict mode. |
 | `maxErrors` | `number` | — | Truncate output after this many errors. |
-| `maxWarnings` | `number` | — | Fail the build if the warning count exceeds this number. |
+| `maxWarnings` | `number` | — | Fail the build if the warning count exceeds this number. Activates build gating unless `failOn: 'never'` is set. |
 | `site` | `string` | auto | Base URL — auto-detected from Astro's `site` config. |
 | `reports` | `ReportsConfig` | — | Write report files. See [Report files](#report-files). |
 | `output` | `string` | — | Write a JSON report to this path. Legacy alias for `reports.json`. |

@@ -1198,7 +1198,7 @@
             "type": "boolean"
         },
         "failOn": {
-            "description": "Build fail strategy. `'errors'`: fail on errors only (default when `throwOnError` is true).\n`'warnings'`: fail on any finding (implies `strict`). `'never'`: never fail the build.",
+            "description": "Build fail strategy. Takes precedence over `throwOnError`. `'errors'`: fail on errors only\n(default when `throwOnError` is true). `'warnings'`: fail on any warning or error\n(always implies `strict`). `'never'`: never fail the build.",
             "enum": [
                 "errors",
                 "never",
@@ -1231,7 +1231,7 @@
             "type": "number"
         },
         "maxWarnings": {
-            "description": "Fail the build if the warning count exceeds this number.",
+            "description": "Fail the build if the warning count exceeds this number. Activates build gating unless `failOn` is `\"never\"`.",
             "type": "number"
         },
         "output": {
@@ -1285,7 +1285,7 @@
             "type": "boolean"
         },
         "throwOnError": {
-            "description": "Throw an error when the audit finds issues (fails the build). Default: false",
+            "description": "Throw an error when the audit finds issues (fails the build). Ignored when `failOn` is set. Default: false",
             "type": "boolean"
         },
         "uxHeuristics": {
