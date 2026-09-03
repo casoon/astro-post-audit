@@ -66,8 +66,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.1",
-    "astro": "^7.0.0",
+    "astro": "^7.2.10",
     "typescript": "^5.9.3",
-    "typescript-json-schema": "^0.67.1"
+    "typescript-json-schema": "^0.68.0"
   }
 }
