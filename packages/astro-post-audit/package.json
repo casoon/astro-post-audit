@@ -24,7 +24,6 @@
   },
   "files": [
     "bin/install.cjs",
-    "bin/run.cjs",
     "dist/",
     "schema.json",
     "README.md"
