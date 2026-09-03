@@ -3807,13 +3807,13 @@ fn content_sync_missing_page() {
 }
 
 // ==========================================================================
-// HTML5 syntax validation (#42)
+// HTML5 conformance validation (#42)
 // ==========================================================================
 
 #[test]
-fn html_validation_reports_syntax_error() {
+fn html_validation_reports_conformance_error_with_location() {
     let dir = TempDir::new().unwrap();
-    // Duplicate attribute reliably triggers an html5ever parse error.
+    // Duplicate attribute reliably triggers an HTML5 parser finding.
     fs::write(
         dir.path().join("index.html"),
         r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><main><h1 id="a" id="b">Test</h1></main></body></html>"#,
@@ -3824,8 +3824,18 @@ fn html_validation_reports_syntax_error() {
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "html/syntax-error"),
-        "Malformed HTML should produce a syntax-error finding"
+        findings.iter().any(|f| f["rule_id"] == "html/parser.html5"),
+        "Malformed HTML should produce a conformance finding"
+    );
+    let finding = findings
+        .iter()
+        .find(|f| f["rule_id"] == "html/parser.html5")
+        .expect("parser finding");
+    assert!(
+        finding["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("at line ")),
+        "Conformance finding should include its source location: {finding:?}"
     );
 }
 
@@ -3839,7 +3849,7 @@ fn html_validation_disabled_by_default() {
     let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        !findings.iter().any(|f| f["rule_id"] == "html/syntax-error"),
+        !findings.iter().any(|f| f["rule_id"] == "html/parser.html5"),
         "HTML validation should be off unless explicitly enabled"
     );
 }

@@ -588,16 +588,16 @@
                 },
                 "html_validation": {
                     "additionalProperties": false,
-                    "description": "Native HTML5 syntax validation using the html5ever tokenizer (offline).",
+                    "description": "Native HTML5 conformance validation via html-conform (vnu-comparable, offline).",
                     "properties": {
                         "enabled": {
                             "default": false,
-                            "description": "Report HTML5 parse/syntax errors.",
+                            "description": "Report HTML5 conformance findings (tree construction, content-model schema, ARIA, attribute microsyntaxes, table integrity).",
                             "type": "boolean"
                         },
                         "max_per_page": {
                             "default": 20,
-                            "description": "Maximum distinct syntax errors reported per page.",
+                            "description": "Maximum distinct findings reported per page.",
                             "type": "number"
                         }
                     },

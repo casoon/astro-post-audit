@@ -1,12 +1,15 @@
 # astro-post-audit
 
-Fast post-build auditor for Astro sites. Checks SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output. No browser, no network — runs in <1s on typical sites.
+Fast post-build auditor for Astro sites. Checks SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output. No browser, and no network unless opt-in external-link checking is enabled — runs in <1s on typical sites.
 
 ## What's new in 0.5.4
 
 | Area | What | Rule IDs | How to enable |
 |------|------|----------|---------------|
 | C2PA provenance | Local, opt-in validation of embedded C2PA Content Credentials in JPEG, PNG, and WebP assets | `c2pa/invalid`, `c2pa/missing-required` | `rules.c2pa.enabled` |
+| HTML5 validation | Expanded offline conformance validation with source locations and explicit validator failures | `html/parser.html5`, `html/schema.html5`, `html/validator-error`, ... | `rules.html_validation.enabled` |
+| Build reliability | Internal binary failures now fail the Astro build when `throwOnError` or `failOn` enables build gating | — | Automatic |
+| Binary installation | Release checksums are mandatory and archive extraction no longer uses interpolated shell commands | — | Automatic |
 
 See [C2PA provenance](#c2pa-provenance) for the full configuration.
 
@@ -16,6 +19,23 @@ See [C2PA provenance](#c2pa-provenance) for the full configuration.
 |------|------|----------|---------------|
 | Source analysis | Static Astro/Tailwind inventory, exact duplicate signatures, safe utility conflicts, and component-complexity signals | `source-analysis/*` | `rules.source_analysis.enabled` |
 | Terminal report | Updated [Runemark](https://crates.io/crates/runemark) presentation dependency | — | Enabled for text output by default |
+
+### Source analysis (Astro + Tailwind)
+
+Source analysis is deliberately opt-in and only evaluates quoted static `class` and `class:list` entries. It never executes JavaScript or guesses dynamic classes. It adds advisory `info` findings for utility-family inventory, repeated exact signatures, duplicate or mutually exclusive utilities within the same variant scope, and oversized Astro components.
+
+```ts
+postAudit({
+  rules: {
+    source_analysis: {
+      enabled: true,
+      exclude: ["src/components/generated/**"],
+      min_duplicate_occurrences: 3,
+      max_component_lines: 300,
+    },
+  },
+});
+```
 
 ## What's new in 0.5.2
 
@@ -37,27 +57,8 @@ for repeatable writing patterns without treating style as a correctness issue:
 | Content style | Built-in German and English checks for em-dash density, repeated contrast formulas, and chatbot leftovers | `content-style/*` | `contentStyle: true`, `rules.content_style.enabled`, or `preset: 'editorial'` |
 | Language consistency | Low-confidence check for a clear German/English text signal that conflicts with `<html lang>` | `content-style/language-mismatch` | Included with content style; tune with `rules.content_style.language_detection` |
 | Custom editorial rules | Add regex, density, or sentence-rhythm checks without changing the auditor | — | `rules.content_style.extra_rules` (append) or `rules.content_style.rules` (replace) |
-| Source analysis | Opt-in inventory, exact utility duplicates, safe same-variant conflicts, and Astro complexity signals | `source-analysis/*` | `rules.source_analysis.enabled` |
-| C2PA provenance | Validates embedded Content Credentials in local JPEG, PNG, and WebP assets | `c2pa/invalid`, `c2pa/missing-required` | `rules.c2pa.enabled` |
 
 `contentStyle: true` combines with an existing `rules.content_style` object, so detailed configuration such as `content_selector`, `extra_rules`, and `disabled_rules` is retained.
-
-### Source analysis (Astro + Tailwind)
-
-Source analysis is deliberately opt-in and only evaluates quoted static `class` and `class:list` entries. It never executes JavaScript or guesses dynamic classes. It adds advisory `info` findings for utility-family inventory, repeated exact signatures, duplicate or mutually exclusive utilities within the same variant scope, and oversized Astro components.
-
-```ts
-postAudit({
-  rules: {
-    source_analysis: {
-      enabled: true,
-      exclude: ["src/components/generated/**"],
-      min_duplicate_occurrences: 3,
-      max_component_lines: 300,
-    },
-  },
-});
-```
 
 No migration is required: content-style checks are disabled by default. See [Content style](#content-style) for the complete configuration and its false-positive limits.
 
@@ -76,7 +77,7 @@ New checks (all opt-in unless noted) and diagnostics:
 | GDPR / DSGVO | Google Fonts, YouTube, Maps, public CDNs, external images | `privacy-security/google-fonts-external`, `youtube-direct-embed`, `google-maps-embed`, `cdn-resources`, `external-images` | `rules.privacy_security.gdpr` |
 | JS bloat | Heavy client-side JS per route | `performance/js-bloat` | `rules.js_bloat.enabled` (+ `max_kb`) |
 | Content sync | `src/content/` items with no generated page | `content/missing-page` | `rules.content_sync.enabled` |
-| HTML5 validation | Native html5ever syntax errors (offline) | `html/syntax-error` | `rules.html_validation.enabled` |
+| HTML5 validation | Native html-conform conformance findings (offline, vnu-comparable) | `html/parser.html5`, `html/schema.html5`, ... | `rules.html_validation.enabled` |
 | Progress bar | Live activity on stderr during the run | — | `progress` (auto in a TTY) |
 | Debug mode | Resolved config, discovery stats, per-check counts on stderr | — | `debug: true` |
 
@@ -763,10 +764,10 @@ rules: {
   content_sync: {
     enabled: false,                     // Warn about src/content items with no build page
   },
-  // Native HTML5 syntax validation (offline, via html5ever)
+  // Native HTML5 conformance validation (offline, via html-conform, vnu-comparable)
   html_validation: {
-    enabled: false,                     // Report HTML5 parse/syntax errors
-    max_per_page: 20,                   // Cap distinct errors reported per page
+    enabled: false,                     // Report HTML5 conformance findings
+    max_per_page: 20,                   // Cap distinct findings reported per page
   },
 
   // Override severity per rule ID
@@ -785,7 +786,7 @@ rules: {
 - **Sitemap** — Cross-reference with canonical URLs, stale entries, missing pages
 - **robots.txt** — Existence check, sitemap link, disallow-all detection, crawl-delay threshold, AI bot policy (GPTBot, ClaudeBot, CCBot …), noindex/Disallow contradiction, sitemap entries blocked by robots
 - **Redirects** — Static meta-refresh redirect chains, loops, and internal links that point at redirect pages
-- **HTML** — `<html lang>`, `<title>`, viewport, meta description, heading hierarchy, native HTML5 syntax validation *(opt-in)*
+- **HTML** — `<html lang>`, `<title>`, viewport, meta description, heading hierarchy, native HTML5 conformance validation *(opt-in)*
 - **Accessibility** — img alt + alt-text quality heuristics, link/button names, form labels (including wrapping labels), generic link text, skip link, aria-hidden on focusable elements, landmark structure (`<main>`, `<nav>`, `<header>`, `<footer>`), duplicate IDs, WAI-ARIA role validation
 - **Open Graph** — og:title, og:description, og:image (absolute URL + existence/dimensions/size), og:type, og:url, twitter:card (valid values), twitter:image, title consistency
 - **Structured Data** — JSON-LD syntax, semantics, duplicate type detection, property completeness (author, datePublished, image, publisher, breadcrumb positions …)
@@ -957,7 +958,7 @@ A live single-line progress bar over the check phases. Auto-enabled when stderr 
 
 ```
   Auditing 770 pages…
-  [████████████░░░░░░░░░░] 14/27  crawl_budget
+  [███████████░░░░░░░░░░░] 17/32  crawl_budget
 ```
 
 ### Debug mode
@@ -973,10 +974,10 @@ postAudit({ debug: true })
 Config { preset: None, strict: false, ... }            ← resolved config after preset merge
 [debug] discovery: 770 HTML file(s) found, 2 excluded by filters, 768 parsed into pages (180 ms)
 [debug] sitemap.xml: 768 URL(s)
-[debug]  1/27 seo                        12 finding(s)  40 ms
-[debug]  2/27 links                       3 finding(s)  95 ms
+[debug]  1/32 seo                        12 finding(s)  40 ms
+[debug]  2/32 links                       3 finding(s)  95 ms
 ...
-[debug] 27/27 html_validation             0 finding(s)   2 ms
+[debug] 32/32 source_analysis             0 finding(s)   2 ms
 ```
 
 Use it to confirm which config actually applies, what discovery found/filtered, and which check produces (or misses) findings and how long it takes.
@@ -1040,6 +1041,22 @@ Upload the SARIF file with the `github/codeql-action/upload-sarif` action to get
 ```
 
 Set `benchmark: true` to see a per-check timing breakdown — useful for identifying slow checks on large sites.
+
+## Maintainer release process
+
+GitHub release assets and the crates.io package are published by the tag workflow. The npm package is intentionally always published manually and must never be added to CI or the release workflow.
+
+After the GitHub release assets for the matching version are available:
+
+```bash
+cd packages/astro-post-audit
+npm ci
+npm run verify:binary
+npm test
+npm publish --access public
+```
+
+The Cargo package, npm package, lockfiles, README release heading, and `vX.Y.Z` tag must use the same version. The release workflow rejects mismatches before building artifacts.
 
 ## License
 

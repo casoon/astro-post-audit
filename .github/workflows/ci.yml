@@ -54,21 +54,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
 
       - name: Install dependencies
         working-directory: packages/astro-post-audit
-        run: npm install
+        run: npm ci --ignore-scripts
+
+      - name: Build current audit binary
+        run: |
+          cargo build --manifest-path crates/astro-post-audit/Cargo.toml
+          install -m 755 target/debug/astro-post-audit packages/astro-post-audit/bin/astro-post-audit
 
       - name: Verify binary compatibility
         working-directory: packages/astro-post-audit
         run: npm run verify:binary
 
-      - name: Run TypeScript unit tests
+      - name: Run TypeScript and Astro integration tests
         working-directory: packages/astro-post-audit
-        run: npm run test:unit
+        run: npm test
 
       - name: Type check
         working-directory: packages/astro-post-audit

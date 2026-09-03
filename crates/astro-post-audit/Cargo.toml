@@ -1,6 +1,6 @@
 [package]
 name = "astro-post-audit"
-version = "0.5.3"
+version = "0.5.4"
 edition = "2021"
 description = "Fast post-build auditor for Astro sites: SEO, links, and lightweight WCAG checks"
 license = "MIT"
@@ -30,6 +30,9 @@ rayon = "1"
 
 # HTML parsing
 scraper = "0.22"
+
+# HTML5 conformance validation (html_validation check) — vnu-comparable, no JVM
+html-conform = "0.2"
 
 # Regex-based content style rules (content_style check)
 regex = "1"

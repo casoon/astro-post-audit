@@ -1,14 +1,17 @@
 use std::collections::HashMap;
 
+use html_conform::Severity;
 use rayon::prelude::*;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::report::{Confidence, Finding, Level};
 
-/// Native HTML5 syntax validation. Reuses the parse errors that the html5ever
-/// tokenizer/tree-builder (via `scraper`) collects through its `parse_error`
-/// callbacks — fully local and offline, no external validator required.
+/// Native HTML5 conformance validation via `html-conform` (vnu-comparable,
+/// pure Rust, no JVM/subprocess/network). Covers tree-construction errors,
+/// RELAX NG content-model schema, ARIA co-constraints, attribute
+/// microsyntaxes (srcset, datetime, CSP, lang, ...), import-map/speculation
+/// JSON, CSP `meta` enforcement, and table cell-grid integrity.
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     if !config.html_validation.enabled {
         return Vec::new();
@@ -20,39 +23,71 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         .pages
         .par_iter()
         .flat_map(|page| {
-            let html = page.parse_html();
-            if html.errors.is_empty() {
+            let report = match html_conform::check(&page.html_content) {
+                Ok(report) => report,
+                Err(error) => {
+                    return vec![Finding::new(
+                        Level::Error,
+                        "html/validator-error",
+                        page.rel_path.clone(),
+                        "",
+                        format!("HTML conformance validation failed: {error}"),
+                        "The HTML validator could not initialize. Reinstall or update astro-post-audit before trusting this audit result.",
+                        Some(Confidence::Medium),
+                    )];
+                }
+            };
+            if report.findings.is_empty() {
                 return Vec::new();
             }
 
-            // Deduplicate identical messages while preserving first-seen order.
-            let mut order: Vec<String> = Vec::new();
-            let mut counts: HashMap<String, usize> = HashMap::new();
-            for err in &html.errors {
-                let msg = err.to_string();
-                if !counts.contains_key(&msg) {
-                    order.push(msg.clone());
+            // Deduplicate identical (rule, message) pairs while preserving
+            // first-seen order.
+            let mut order: Vec<(String, String, Level, Option<html_conform::SourceLocation>)> =
+                Vec::new();
+            let mut counts: HashMap<(String, String), usize> = HashMap::new();
+            for finding in &report.findings {
+                let key = (finding.rule_id.clone(), finding.message.clone());
+                if !counts.contains_key(&key) {
+                    order.push((
+                        finding.rule_id.clone(),
+                        finding.message.clone(),
+                        match finding.severity {
+                            Severity::Error => Level::Error,
+                            Severity::Warning => Level::Warning,
+                            Severity::Info => Level::Info,
+                        },
+                        finding.location,
+                    ));
                 }
-                *counts.entry(msg).or_insert(0) += 1;
+                *counts.entry(key).or_insert(0) += 1;
             }
 
             order
                 .into_iter()
                 .take(max_per_page)
-                .map(|msg| {
-                    let count = counts.get(&msg).copied().unwrap_or(1);
+                .map(|(rule_id, message, level, location)| {
+                    let count = counts
+                        .get(&(rule_id.clone(), message.clone()))
+                        .copied()
+                        .unwrap_or(1);
                     let occurrences = if count > 1 {
                         format!(" ({count} occurrences)")
                     } else {
                         String::new()
                     };
+                    let location = location
+                        .map(|location| format!(" at line {location}"))
+                        .unwrap_or_default();
                     Finding {
-                        level: Level::Warning,
-                        rule_id: "html/syntax-error".into(),
+                        level,
+                        rule_id: format!("html/{rule_id}"),
                         file: page.rel_path.clone(),
                         selector: String::new(),
-                        message: format!("HTML5 syntax error: {msg}{occurrences}"),
-                        help: "Fix the malformed markup (unclosed tags, invalid nesting, or stray characters). Browsers recover silently, but it can break hydration and accessibility.".into(),
+                        message: format!(
+                            "HTML conformance{location}: {message}{occurrences}"
+                        ),
+                        help: "Fix the markup issue reported by conformance validation (tree construction, content-model schema, ARIA constraints, or attribute microsyntax). Browsers often recover silently, but it can break hydration, accessibility, or interoperability.".into(),
                         suggestion: None,
                         source_hint: None,
                         confidence: Some(Confidence::Medium),

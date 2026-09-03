@@ -14,7 +14,47 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verify release versions
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          CARGO_VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' crates/astro-post-audit/Cargo.toml | head -n 1)"
+          NPM_VERSION="$(node -p "require('./packages/astro-post-audit/package.json').version")"
+          test "$TAG_VERSION" = "$CARGO_VERSION"
+          test "$TAG_VERSION" = "$NPM_VERSION"
+
+      - name: Check and test Rust
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo test --workspace
+
+      - name: Install npm dependencies without downloading a released binary
+        working-directory: packages/astro-post-audit
+        run: npm ci --ignore-scripts
+
+      - name: Use current audit binary for integration tests
+        run: install -m 755 target/debug/astro-post-audit packages/astro-post-audit/bin/astro-post-audit
+
+      - name: Test npm package
+        working-directory: packages/astro-post-audit
+        run: |
+          npm run verify:binary
+          npm test
+
   build:
+    needs: verify
     strategy:
       matrix:
         include:
@@ -151,3 +191,6 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish --manifest-path crates/astro-post-audit/Cargo.toml
+
+  # Intentionally no npm publish job. Publishing @casoon/astro-post-audit is
+  # always performed manually by a maintainer after the release assets exist.

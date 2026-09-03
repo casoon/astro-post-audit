@@ -454,11 +454,11 @@ export interface RulesConfig {
         /** Check for external links missing data-astro-reload when a persisted transition is present. @default true */
         check_external_reload?: boolean;
     };
-    /** Native HTML5 syntax validation using the html5ever tokenizer (offline). */
+    /** Native HTML5 conformance validation via html-conform (vnu-comparable, offline). */
     html_validation?: {
-        /** Report HTML5 parse/syntax errors. @default false */
+        /** Report HTML5 conformance findings (tree construction, content-model schema, ARIA, attribute microsyntaxes, table integrity). @default false */
         enabled?: boolean;
-        /** Maximum distinct syntax errors reported per page. @default 20 */
+        /** Maximum distinct findings reported per page. @default 20 */
         max_per_page?: number;
     };
 }

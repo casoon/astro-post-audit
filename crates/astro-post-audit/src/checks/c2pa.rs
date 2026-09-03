@@ -126,8 +126,7 @@ mod tests {
     #[test]
     fn valid_but_untrusted_is_silent_unless_require_trusted() {
         assert!(finding_for_state(ValidationState::Valid, "ai/example.png", false).is_none());
-        let finding =
-            finding_for_state(ValidationState::Valid, "ai/example.png", true).unwrap();
+        let finding = finding_for_state(ValidationState::Valid, "ai/example.png", true).unwrap();
         assert_eq!(finding.rule_id, "c2pa/untrusted");
     }
 

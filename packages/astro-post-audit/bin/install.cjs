@@ -5,7 +5,7 @@
  * for the current platform from GitHub Releases.
  */
 
-const { execSync } = require("child_process");
+const { execFileSync } = require("child_process");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
@@ -141,7 +141,7 @@ function verifySha256(filePath, checksumContent, archiveFilename) {
     }
   }
 
-  console.warn(`  Warning: SHA256 checksum not found for ${archiveFilename} — skipping verification.`);
+  throw new Error(`SHA256 checksum not found for ${archiveFilename}`);
 }
 
 async function main() {
@@ -153,7 +153,10 @@ async function main() {
   // Skip if binary already exists AND matches the expected version
   if (fs.existsSync(binaryPath)) {
     try {
-      const out = execSync(`"${binaryPath}" --version`, { encoding: "utf-8", timeout: 5000 }).trim();
+      const out = execFileSync(binaryPath, ["--version"], {
+        encoding: "utf-8",
+        timeout: 5000,
+      }).trim();
       // Output format: "astro-post-audit 0.2.2"
       const installedVersion = out.split(/\s+/).pop();
       if (installedVersion === VERSION) {
@@ -177,31 +180,34 @@ async function main() {
   try {
     await download(url, archivePath);
 
-    // Verify SHA256 checksum
+    // Every supported release contains a checksum. Missing or invalid
+    // checksum data is fatal because this archive becomes an executable.
     const checksumUrl = `${url}.sha256`;
-    try {
-      const checksumData = await downloadToBuffer(checksumUrl);
-      verifySha256(archivePath, checksumData, archiveFilename);
-    } catch (checksumErr) {
-      if (checksumErr.message.includes("SHA256 mismatch")) {
-        // Hash mismatch is fatal — abort immediately
-        fs.unlinkSync(archivePath);
-        throw checksumErr;
-      }
-      // Checksum file not available (older release) — warn and continue
-      console.warn(`  Warning: Could not download checksum file: ${checksumErr.message}`);
-      console.warn("  Skipping SHA256 verification.");
-    }
+    const checksumData = await downloadToBuffer(checksumUrl);
+    verifySha256(archivePath, checksumData, archiveFilename);
 
     // Extract
     if (process.platform === "win32") {
       // Use PowerShell to extract zip on Windows
-      execSync(
-        `powershell -Command "Expand-Archive -Path '${archivePath}' -DestinationPath '${binDir}' -Force"`,
-        { stdio: "inherit" }
+      execFileSync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "Expand-Archive -LiteralPath $env:ASTRO_POST_AUDIT_ARCHIVE -DestinationPath $env:ASTRO_POST_AUDIT_BIN_DIR -Force",
+        ],
+        {
+          stdio: "inherit",
+          env: {
+            ...process.env,
+            ASTRO_POST_AUDIT_ARCHIVE: archivePath,
+            ASTRO_POST_AUDIT_BIN_DIR: binDir,
+          },
+        },
       );
     } else {
-      execSync(`tar -xzf "${archivePath}" -C "${binDir}"`, {
+      execFileSync("tar", ["-xzf", archivePath, "-C", binDir], {
         stdio: "inherit",
       });
     }
@@ -216,6 +222,9 @@ async function main() {
 
     console.log(`${PACKAGE} v${VERSION} installed successfully.`);
   } catch (err) {
+    if (fs.existsSync(archivePath)) {
+      fs.unlinkSync(archivePath);
+    }
     console.warn(`Failed to download ${PACKAGE}: ${err.message}`);
     console.warn(
       "You can install it manually from: " +

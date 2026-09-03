@@ -146,4 +146,35 @@ describe("postAudit", () => {
         assert.equal(error.length, 1);
         assert.match(error[0], /outdated/i);
     });
+    it("throws on binary failures when build failure is enabled", () => {
+        const deps = {
+            existsSync: () => true,
+            writeFileSync: () => { },
+            execFileSync: makeExecMock((_file, args) => {
+                if (args[0] === "--help")
+                    return "Usage: ... --config-stdin ...";
+                throw Object.assign(new Error("binary failed"), { status: 2 });
+            }),
+        };
+        const integration = postAudit({ throwOnError: true }, deps);
+        const hook = integration.hooks["astro:build:done"];
+        const { logger } = makeLogger();
+        assert.throws(() => hook({ dir: new URL("file:///tmp/dist/"), logger }), /exit code 2/i);
+    });
+    it("only logs binary failures when build failure is disabled", () => {
+        const deps = {
+            existsSync: () => true,
+            writeFileSync: () => { },
+            execFileSync: makeExecMock((_file, args) => {
+                if (args[0] === "--help")
+                    return "Usage: ... --config-stdin ...";
+                throw Object.assign(new Error("binary failed"), { status: 2 });
+            }),
+        };
+        const integration = postAudit({ failOn: "never" }, deps);
+        const hook = integration.hooks["astro:build:done"];
+        const { logger, error } = makeLogger();
+        assert.doesNotThrow(() => hook({ dir: new URL("file:///tmp/dist/"), logger }));
+        assert.deepEqual(error, ["Audit failed with exit code 2"]);
+    });
 });

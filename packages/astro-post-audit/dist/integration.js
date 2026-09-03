@@ -414,7 +414,11 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                         logger.warn("Audit found issues. See output above.");
                     }
                     else {
-                        logger.error(`Audit failed with exit code ${exitCode ?? "unknown"}`);
+                        const message = `Audit failed with exit code ${exitCode ?? "unknown"}`;
+                        if (shouldFail) {
+                            throw new Error(message, { cause: err });
+                        }
+                        logger.error(message);
                     }
                 }
             },

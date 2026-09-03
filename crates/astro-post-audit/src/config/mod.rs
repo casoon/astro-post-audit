@@ -590,9 +590,9 @@ pub struct ContentSyncConfig {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct HtmlValidationConfig {
-    /// Report HTML5 parse/syntax errors collected by the html5ever tokenizer. @default false
+    /// Report HTML5 conformance findings from `html-conform` (vnu-comparable: tree construction, content-model schema, ARIA, attribute microsyntaxes, table integrity). @default false
     pub enabled: bool,
-    /// Maximum distinct syntax errors reported per page. @default 20
+    /// Maximum distinct findings reported per page. @default 20
     pub max_per_page: Option<usize>,
 }
 
