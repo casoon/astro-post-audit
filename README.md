@@ -1,6 +1,6 @@
 # astro-post-audit
 
-Fast post-build auditor for Astro sites. Checks SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output. No browser, and no network unless opt-in external-link checking is enabled — runs in <1s on typical sites.
+Fast, offline post-build auditor for Astro sites — SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output, with 32 check modules covering structured data, performance, privacy, and more. Static analysis only: no browser, and no network calls unless opt-in external-link checking is enabled — runs in <1s on typical sites. Recent releases added static Astro/Tailwind source analysis, offline HTML5 conformance validation, and C2PA Content Credentials verification — all without leaving the `dist/`-only, no-browser model.
 
 ## What's new in 0.5.5
 
@@ -21,103 +21,7 @@ Fast post-build auditor for Astro sites. Checks SEO signals, internal link consi
 
 See [C2PA provenance](#c2pa-provenance) for the full configuration.
 
-## What's new in 0.5.3
-
-| Area | What | Rule IDs | How to enable |
-|------|------|----------|---------------|
-| Source analysis | Static Astro/Tailwind inventory, exact duplicate signatures, safe utility conflicts, and component-complexity signals | `source-analysis/*` | `rules.source_analysis.enabled` |
-| Terminal report | Updated [Runemark](https://crates.io/crates/runemark) presentation dependency | — | Enabled for text output by default |
-
-### Source analysis (Astro + Tailwind)
-
-Source analysis is deliberately opt-in and only evaluates quoted static `class` and `class:list` entries. It never executes JavaScript or guesses dynamic classes. It adds advisory `info` findings for utility-family inventory, repeated exact signatures, duplicate or mutually exclusive utilities within the same variant scope, and oversized Astro components.
-
-```ts
-postAudit({
-  rules: {
-    source_analysis: {
-      enabled: true,
-      exclude: ["src/components/generated/**"],
-      min_duplicate_occurrences: 3,
-      max_component_lines: 300,
-    },
-  },
-});
-```
-
-## What's new in 0.5.2
-
-| Area | What | Rule IDs | How to enable |
-|------|------|----------|---------------|
-| Font loading | Missing `font-display` and missing preloads for self-hosted webfonts | `fonts/missing-font-display`, `fonts/missing-preload` | `rules.fonts.enabled` |
-| View Transitions | Duplicate transition names and external links that need a Client Router reload hint | `view-transitions/*` | `rules.view_transitions.enabled` |
-| AI visibility | `llms.txt` / `llms-full.txt` presence and internal-link integrity | `ai-visibility/missing-llms-txt`, `ai-visibility/llms-txt-broken-link` | Included when `aiVisibility: true` or `rules.ai_visibility.enabled` |
-| HTML report | Standalone human-readable report artifact | — | `reports.html` |
-| Terminal report | Structured, semantic console output powered by [Runemark](https://crates.io/crates/runemark) | — | Enabled for text output by default |
-
-## What's new in 0.5.0
-
-Content-style checks are now available as an opt-in editorial audit. They look
-for repeatable writing patterns without treating style as a correctness issue:
-
-| Area | What | Rule IDs | How to enable |
-|------|------|----------|---------------|
-| Content style | Built-in German and English checks for em-dash density, repeated contrast formulas, and chatbot leftovers | `content-style/*` | `contentStyle: true`, `rules.content_style.enabled`, or `preset: 'editorial'` |
-| Language consistency | Low-confidence check for a clear German/English text signal that conflicts with `<html lang>` | `content-style/language-mismatch` | Included with content style; tune with `rules.content_style.language_detection` |
-| Custom editorial rules | Add regex, density, or sentence-rhythm checks without changing the auditor | — | `rules.content_style.extra_rules` (append) or `rules.content_style.rules` (replace) |
-
-`contentStyle: true` combines with an existing `rules.content_style` object, so detailed configuration such as `content_selector`, `extra_rules`, and `disabled_rules` is retained.
-
-No migration is required: content-style checks are disabled by default. See [Content style](#content-style) for the complete configuration and its false-positive limits.
-
-## What's new in 0.4.x
-
-New checks (all opt-in unless noted) and diagnostics:
-
-| Area | What | Rule IDs | How to enable |
-|------|------|----------|---------------|
-| Redirects | Static meta-refresh analysis: links to redirect pages, chains, loops | `links/redirect-target`, `redirects/chain`, `redirects/loop` | `rules.redirects.enabled` |
-| Open Graph image | og:image existence, dimensions (1200×630), file size | `opengraph/image-broken`, `opengraph/image-invalid-dimensions`, `opengraph/image-too-large` | `rules.opengraph.check_image_exists` / `check_image_dimensions` / `og_image_max_size_kb` |
-| URL depth | Warn on deeply nested URLs | `links/url-depth` | `rules.links.max_url_depth` |
-| robots.txt contradictions | `noindex` on a `Disallow`'d page; sitemap URL blocked by robots | `robots/blocked-noindex-contradiction`, `sitemap/entry-blocked-by-robots` | `rules.robots_txt.check_noindex_contradiction` / `check_sitemap_blocked` |
-| Hreflang targets | Internal hreflang target missing from build | `hreflang/target-missing` | `rules.hreflang.require_target_exists` |
-| Alt-text quality | Filename/placeholder/too-short alt text — **on by default (Warning)** | `a11y/invalid-img-alt` | `rules.a11y.check_alt_quality` (default `true`) |
-| GDPR / DSGVO | Google Fonts, YouTube, Maps, public CDNs, external images | `privacy-security/google-fonts-external`, `youtube-direct-embed`, `google-maps-embed`, `cdn-resources`, `external-images` | `rules.privacy_security.gdpr` |
-| JS bloat | Heavy client-side JS per route | `performance/js-bloat` | `rules.js_bloat.enabled` (+ `max_kb`) |
-| Content sync | `src/content/` items with no generated page | `content/missing-page` | `rules.content_sync.enabled` |
-| HTML5 validation | Native html-conform conformance findings (offline, vnu-comparable) | `html/parser.html5`, `html/schema.html5`, ... | `rules.html_validation.enabled` |
-| Progress bar | Live activity on stderr during the run | — | `progress` (auto in a TTY) |
-| Debug mode | Resolved config, discovery stats, per-check counts on stderr | — | `debug: true` |
-
-**One new default:** `a11y.check_alt_quality` is enabled by default and emits `a11y/invalid-img-alt` **warnings** for alt text that matches the file name, is a placeholder word (`image`, `logo`, `photo`, …), or is shorter than 3 characters. To silence it: `rules: { a11y: { check_alt_quality: false } }`.
-
-## Migrating to 0.3.0
-
-Version 0.3.0 enables several new checks **by default** that were previously opt-in or did not exist:
-
-| New default check | Rule ID | Effect |
-|-------------------|---------|--------|
-| Landmark structure | `a11y/missing-main` | **Error** if page has no `<main>` |
-| Duplicate IDs | `a11y/duplicate-id` | **Error** on duplicate `id` attributes |
-| ARIA roles | `a11y/invalid-role` | **Error** on invalid `role=` values |
-| Image dimensions | `images/missing-dimensions` | **Error** on `<img>` without `width`/`height` |
-| Lazy loading | `images/missing-lazy` | **Warning** on images below the fold without `loading="lazy"` |
-| Absolute OG image | `opengraph/image-not-absolute` | **Error** when `og:image` is not an absolute URL |
-| Twitter card values | `opengraph/twitter-card-invalid` | **Error** on invalid `twitter:card` values |
-
-**Recommended upgrade path:** run the audit once with `failOn: 'never'` to see what fires, fix findings incrementally, then tighten `failOn` again. Or use `writeBaseline: true` to adopt all current findings as a baseline before upgrading.
-
-To silence a new default check on existing sites, set it explicitly in `rules`:
-
-```js
-postAudit({
-  rules: {
-    a11y: { check_landmarks: false },
-    images: { check_missing_dimensions: false, warn_missing_lazy: false },
-    opengraph: { og_image_absolute_url: false, twitter_card_valid_values: false },
-  },
-})
-```
+Earlier releases (0.3.0–0.5.3) added, among other things: static Astro/Tailwind source analysis (`rules.source_analysis`, see [Source analysis](#source-analysis-astro--tailwind)), font-loading and View Transitions checks, AI visibility and UX heuristics, opt-in content-style heuristics for "reads like AI" writing, redirect/robots.txt/hreflang/GDPR checks, and the default-on accessibility and image checks described in [Configuration](#configuration) below. Full history: [GitHub Releases](https://github.com/casoon/astro-post-audit/releases).
 
 ## Installation
 
@@ -741,6 +645,21 @@ rules: {
     check_external_reload: true,        // Info for external links missing data-astro-reload
   },
 
+  // Static Astro/Tailwind source analysis — opt-in (needs project root, passed automatically)
+  source_analysis: {
+    enabled: false,
+    extensions: [],                     // Additional source file extensions to inspect (without leading dot)
+    exclude: [],                        // Glob patterns relative to project root to exclude
+    tailwind_inventory: true,           // Emit a compact Tailwind utility inventory
+    duplicate_signatures: true,         // Report exact repeated static class signatures
+    utility_conflicts: true,            // Report duplicate/mutually exclusive utility tokens
+    component_complexity: true,         // Report components crossing complexity thresholds
+    min_duplicate_occurrences: 3,       // Minimum occurrences before a repeated signature is reported
+    max_component_lines: 300,           // Advisory source-line threshold
+    max_component_props: 12,            // Advisory declared Props member threshold
+    max_component_slots: 6,             // Advisory named-slot threshold
+  },
+
   // Innovative dist-only audits
   i18n_audit: {
     enabled: false,                     // lang/hreflang/canonical consistency by locale route
@@ -805,6 +724,7 @@ rules: {
 - **Performance** — Client-side JS bloat per route and font-loading hints *(opt-in)*
 - **Content Quality** — Duplicate titles, descriptions, H1s, near-identical pages
 - **Content Sync** *(opt-in)* — `src/content/` collection items with no corresponding generated page
+- **Source Analysis** *(opt-in)* — Static Astro/Tailwind source inventory: utility-family usage, exact duplicate class signatures, mutually exclusive utilities, and oversized components. Never executes JavaScript or guesses dynamic classes.
 - **I18n Audit** — Consistency between localized routes, `html[lang]`, `hreflang`, and canonical
 - **Crawl Budget** — Query/variant URL dilution, duplicate canonical clusters, and indexability mismatches
 - **Render Blocking** — Sync `<head>` scripts and missing `preload`/`preconnect` hints for critical resources
@@ -862,6 +782,28 @@ Enable via `uxHeuristics: true` (top-level option) or `rules.ux_heuristics.enabl
 | `ux/no-trust-signals` | Warning | No links to Impressum, Datenschutz, contact, or about pages |
 | `ux/high-link-density` | Info | Link count exceeds `max_links_per_page` (default 80) |
 | `ux/high-interactive-density` | Info | More than 20 interactive elements on a single page |
+
+## Source analysis (Astro + Tailwind)
+
+Enable via `rules.source_analysis.enabled: true`. Runs entirely offline against your Astro/Tailwind source files (needs the project root, which the integration passes automatically) and only evaluates quoted static `class` and `class:list` entries — it never executes JavaScript or guesses dynamic classes. All findings are advisory `info`.
+
+```js
+rules: {
+  source_analysis: {
+    enabled: true,
+    exclude: ["src/components/generated/**"],
+    min_duplicate_occurrences: 3,
+    max_component_lines: 300,
+  },
+}
+```
+
+| Rule ID | Description |
+|---------|--------------|
+| `source-analysis/tailwind-inventory` | Utility-family inventory across quoted static class lists |
+| `source-analysis/duplicate-signature` | An exact class signature repeats at least `min_duplicate_occurrences` times (default 3) |
+| `source-analysis/utility-conflict` | Duplicate or mutually exclusive utilities within the same variant scope (e.g. `p-2 p-4`, `block hidden`) |
+| `source-analysis/component-complexity` | An Astro component exceeds `max_component_lines` (default 300), `max_component_props` (default 12), or `max_component_slots` (default 6) |
 
 ## Content style
 
@@ -1069,11 +1011,13 @@ Set `benchmark: true` to see a per-check timing breakdown — useful for identif
 
 ## Maintainer release process
 
-GitHub release assets and the crates.io package are published by the tag workflow. The npm package is intentionally always published manually and must never be added to CI or the release workflow.
+GitHub release assets are published by the tag workflow. The crates.io package and the npm package are intentionally always published manually and must never be added to CI or the release workflow.
 
 After the GitHub release assets for the matching version are available:
 
 ```bash
+cargo publish --manifest-path crates/astro-post-audit/Cargo.toml
+
 cd packages/astro-post-audit
 npm ci
 npm run verify:binary
