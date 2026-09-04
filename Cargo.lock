@@ -166,7 +166,7 @@ dependencies = [
 
 [[package]]
 name = "astro-post-audit"
-version = "0.5.5"
+version = "0.5.6"
 dependencies = [
  "anyhow",
  "c2pa",
@@ -1344,9 +1344,9 @@ dependencies = [
 
 [[package]]
 name = "html-conform"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd1ae18aabec3d49f2a04b812224199a601f4badb4892997503f1e00c486eb27"
+checksum = "8755f1547ad4959342195d330f9d986272e8fa8a8909fa5894e6a2860e71906a"
 dependencies = [
  "csp-parse",
  "encoding_rs",
