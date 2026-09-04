@@ -471,6 +471,66 @@ fn links_broken_internal_suppressed_by_known_routes() {
 }
 
 #[test]
+fn links_broken_fragment_suppressed_by_known_routes() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Home</h1><a href="/dashboard/#stats">Dashboard stats</a></main><footer></footer></body></html>"#,
+    ).unwrap();
+    // Target page exists in dist/ but never has the "stats" id — mirrors an
+    // SSR/dynamic route whose real markup can't be verified from dist/.
+    write_valid_page(
+        dir.path(),
+        "dashboard/index.html",
+        "Dashboard",
+        "Dashboard",
+        "/dashboard/",
+    );
+    let (json, code) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"links":{"check_fragments":true,"known_routes":["/dashboard/"]}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "links/broken-fragment"),
+        "Known dynamic route should not be reported as broken-fragment, findings: {:?}",
+        findings
+    );
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn links_broken_fragment_reported_without_known_routes() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Home</h1><a href="/dashboard/#stats">Dashboard stats</a></main><footer></footer></body></html>"#,
+    ).unwrap();
+    write_valid_page(
+        dir.path(),
+        "dashboard/index.html",
+        "Dashboard",
+        "Dashboard",
+        "/dashboard/",
+    );
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"links":{"check_fragments":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "links/broken-fragment"),
+        "Missing fragment on an indexed target without known_routes should still be reported"
+    );
+}
+
+#[test]
 fn links_query_params() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");

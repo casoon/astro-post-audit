@@ -176,14 +176,14 @@ fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 {
                     let normalized =
                         normalize::normalize_path(&resolved, &config.url_normalization);
+                    let is_known_route = known_routes
+                        .as_ref()
+                        .is_some_and(|set| set.is_match(&normalized));
 
                     // Check if route exists or if it's a file asset
                     if !index.route_exists(&normalized) {
                         // Also check raw path as file
                         let file_check = resolved.trim_start_matches('/');
-                        let is_known_route = known_routes
-                            .as_ref()
-                            .is_some_and(|set| set.is_match(&normalized));
                         if !is_known_route && !index.file_exists(file_check) {
                             let level = if config.links.fail_on_broken {
                                 Level::Error
@@ -208,7 +208,7 @@ fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     }
 
                     // Check fragment on cross-page links
-                    if config.links.check_fragments {
+                    if config.links.check_fragments && !is_known_route {
                         if let Some(fragment) = href.split('#').nth(1) {
                             if !fragment.is_empty() {
                                 // Find the target page and check for the ID
