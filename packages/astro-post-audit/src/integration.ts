@@ -535,6 +535,13 @@ export interface PostAuditOptions {
     | "production"
     | "standard"
     | "editorial";
+  /**
+   * Speed mode, orthogonal to `preset`. `"fast"` forcibly disables checks known to be
+   * expensive on large sites (currently `rules.html_validation`) no matter how they're
+   * configured — useful for local/dev builds. `"full"` runs everything as configured.
+   * @default "full"
+   */
+  mode?: "fast" | "full";
   /** Base URL (auto-detected from Astro's `site` config if not set). */
   site?: string;
   /** Treat warnings as errors. @default false */
@@ -979,6 +986,7 @@ export default function postAudit(
         };
         if (site) stdinConfig.site = { base_url: site };
         if (options.preset) stdinConfig.preset = options.preset;
+        if (options.mode) stdinConfig.mode = options.mode;
         // Auto-bridge trailingSlash from Astro config if not explicitly set in rules
         if (
           astroTrailingSlash &&

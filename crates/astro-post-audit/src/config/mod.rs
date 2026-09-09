@@ -17,11 +17,25 @@ pub enum Preset {
     Editorial,
 }
 
+/// Speed mode, orthogonal to `preset`. `fast` forcibly disables checks known
+/// to be expensive on large sites (currently `html_validation`), regardless
+/// of their own `enabled` setting. `full` runs everything as configured.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    Fast,
+    Full,
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct Config {
     /// Preset to apply before user overrides.
     pub preset: Option<Preset>,
+    /// Speed mode: "fast" skips checks known to be expensive on large sites
+    /// (currently html_validation) no matter how they're configured; "full"
+    /// runs everything as configured. Unset behaves like "full".
+    pub mode: Option<Mode>,
     /// Treat warnings as errors (exit code 1).
     pub strict: bool,
     /// Maximum number of errors before truncating output.
@@ -1030,7 +1044,14 @@ impl Config {
             }
         }
 
-        let config: Config = serde_json::from_value(raw)?;
+        let mut config: Config = serde_json::from_value(raw)?;
+
+        // `mode: "fast"` is an unconditional override: it disables known-expensive
+        // checks regardless of preset defaults or explicit user config.
+        if matches!(config.mode, Some(Mode::Fast)) {
+            config.html_validation.enabled = false;
+        }
+
         Ok(config)
     }
 

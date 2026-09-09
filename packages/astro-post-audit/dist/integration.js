@@ -273,6 +273,8 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                     stdinConfig.site = { base_url: site };
                 if (options.preset)
                     stdinConfig.preset = options.preset;
+                if (options.mode)
+                    stdinConfig.mode = options.mode;
                 // Auto-bridge trailingSlash from Astro config if not explicitly set in rules
                 if (astroTrailingSlash &&
                     !options.rules?.url_normalization?.trailing_slash) {

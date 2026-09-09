@@ -2,6 +2,12 @@
 
 Fast, offline post-build auditor for Astro sites — SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output, with 33 check modules covering structured data, performance, privacy, and more. Static analysis only: no browser, and no network calls unless opt-in external-link checking is enabled — runs in <1s on typical sites. Recent releases added per-route CSS payload analysis, static Astro/Tailwind source analysis, offline HTML5 conformance validation, and C2PA Content Credentials verification.
 
+## What's new in 0.5.8
+
+| Area | What | Rule IDs | How to enable |
+|------|------|----------|---------------|
+| Speed mode | New `mode: 'fast' \| 'full'` top-level option, orthogonal to `preset`. `'fast'` forcibly disables `rules.html_validation` regardless of how it's configured, for quick local/dev builds on large sites. `'full'` (default) is unchanged behavior | — | `mode: 'fast'`. See [Speed mode](#speed-mode) |
+
 ## What's new in 0.5.7
 
 | Area | What | Rule IDs | How to enable |
@@ -19,18 +25,9 @@ Fast, offline post-build auditor for Astro sites — SEO signals, internal link 
 | Astro islands | Framework-generated client-island runtime styles no longer produce HTML conformance findings | `html/schema.html5` | Automatic when `rules.html_validation.enabled` |
 | HTML validation docs | Clarifies body-level `<style>` handling and the intentional `role="list"` accessibility workaround | `html/assertion.roles.unnecessary-list` | See [HTML5 conformance validation](#html5-conformance-validation) |
 
-## What's new in 0.5.4
-
-| Area | What | Rule IDs | How to enable |
-|------|------|----------|---------------|
-| C2PA provenance | Local, opt-in validation of embedded C2PA Content Credentials in JPEG, PNG, and WebP assets | `c2pa/invalid`, `c2pa/missing-required` | `rules.c2pa.enabled` |
-| HTML5 validation | Expanded offline conformance validation with source locations and explicit validator failures | `html/parser.html5`, `html/schema.html5`, `html/validator-error`, ... | `rules.html_validation.enabled` |
-| Build reliability | Internal binary failures now fail the Astro build when `throwOnError` or `failOn` enables build gating | — | Automatic |
-| Binary installation | Release checksums are mandatory and archive extraction no longer uses interpolated shell commands | — | Automatic |
-
 See [C2PA provenance](#c2pa-provenance) for the full configuration.
 
-Earlier releases (0.3.0–0.5.3) added, among other things: static Astro/Tailwind source analysis (`rules.source_analysis`, see [Source analysis](#source-analysis-astro--tailwind)), font-loading and View Transitions checks, AI visibility and UX heuristics, opt-in content-style heuristics for "reads like AI" writing, redirect/robots.txt/hreflang/GDPR checks, and the default-on accessibility and image checks described in [Configuration](#configuration) below. Full history: [GitHub Releases](https://github.com/casoon/astro-post-audit/releases).
+Earlier releases (0.3.0–0.5.4) added, among other things: C2PA Content Credentials verification (`rules.c2pa`), expanded offline HTML5 conformance validation (`rules.html_validation`), static Astro/Tailwind source analysis (`rules.source_analysis`, see [Source analysis](#source-analysis-astro--tailwind)), font-loading and View Transitions checks, AI visibility and UX heuristics, opt-in content-style heuristics for "reads like AI" writing, redirect/robots.txt/hreflang/GDPR checks, and the default-on accessibility and image checks described in [Configuration](#configuration) below. Full history: [GitHub Releases](https://github.com/casoon/astro-post-audit/releases).
 
 ## Installation
 
@@ -104,6 +101,26 @@ postAudit({
 | `performance` | Static performance signals — broken asset references, missing image dimensions (CLS), lazy loading, srcset hints, hashed filenames, render blocking scripts. |
 | `relaxed` | Core SEO and link checks only. No heading gaps, no Open Graph, no structured data, no content quality. Broken links are warnings, not errors. Good starting point for existing sites with known issues. |
 | `editorial` | Enables the `content_style` module with its built-in ruleset (em-dash density, contrast-formula repetition, chatbot leftovers). Doesn't touch any other check — combine with `standard`/`seo` via `rules` overrides. See [Content style](#content-style). |
+
+## Speed mode
+
+`mode` is orthogonal to `preset`: it's a speed switch, not a rule-set choice. On large sites, `rules.html_validation` (full HTML5 conformance validation, opt-in) can dominate build time — it runs a RELAX NG content-model check per page and scales with page count. `mode: 'fast'` disables it unconditionally, even if `rules.html_validation.enabled: true` is set elsewhere (e.g. inherited from a preset or a shared config), which makes it a safe one-line override for local/dev builds without touching the rest of the config. `mode: 'full'` (the default) leaves your config untouched.
+
+```js
+// astro.config.mjs
+postAudit({
+  preset: 'seo',
+  mode: process.env.POST_AUDIT_FAST === '1' ? 'fast' : 'full',
+  rules: {
+    html_validation: { enabled: true }, // still off when mode: 'fast'
+  },
+})
+```
+
+```bash
+POST_AUDIT_FAST=1 pnpm build   # fast: skips html_validation
+pnpm build                     # full: runs everything as configured
+```
 
 ## Example configurations
 
@@ -347,6 +364,7 @@ postAudit({
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `preset` | `'standard' \| 'strict' \| 'production' \| 'seo' \| 'accessibility' \| 'performance' \| 'relaxed' \| 'editorial'` | — | Apply a predefined config before your `rules` overrides. See [Presets](#presets). |
+| `mode` | `'fast' \| 'full'` | `'full'` | Orthogonal to `preset`. `'fast'` forcibly disables checks known to be expensive on large sites (currently `rules.html_validation`), regardless of how they're configured. See [Speed mode](#speed-mode). |
 | `strict` | `boolean` | `false` | Treat warnings as errors (exit code 1). |
 | `throwOnError` | `boolean` | `false` | Throw an error (fail the build) when the audit finds issues. Ignored when `failOn` is set. |
 | `failOn` | `'errors' \| 'warnings' \| 'never'` | — | Fail on errors only, on warnings and errors, or never. Takes precedence over `throwOnError`; `'warnings'` always implies strict mode. |

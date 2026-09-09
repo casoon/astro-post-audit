@@ -1283,6 +1283,15 @@
             "description": "Fail the build if the warning count exceeds this number. Activates build gating unless `failOn` is `\"never\"`.",
             "type": "number"
         },
+        "mode": {
+            "default": "full",
+            "description": "Speed mode, orthogonal to `preset`. `\"fast\"` forcibly disables checks known to be\nexpensive on large sites (currently `rules.html_validation`) no matter how they're\nconfigured — useful for local/dev builds. `\"full\"` runs everything as configured.",
+            "enum": [
+                "fast",
+                "full"
+            ],
+            "type": "string"
+        },
         "output": {
             "description": "Write the JSON report to this file path (relative to project root).",
             "type": "string"

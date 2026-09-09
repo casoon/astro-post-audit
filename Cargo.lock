@@ -166,7 +166,7 @@ dependencies = [
 
 [[package]]
 name = "astro-post-audit"
-version = "0.5.7"
+version = "0.5.8"
 dependencies = [
  "anyhow",
  "c2pa",

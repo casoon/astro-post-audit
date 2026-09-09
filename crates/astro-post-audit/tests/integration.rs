@@ -3932,6 +3932,43 @@ fn html_validation_reports_conformance_error_with_location() {
 }
 
 #[test]
+fn mode_fast_overrides_explicit_html_validation_enabled() {
+    let dir = TempDir::new().unwrap();
+    // Same malformed page as html_validation_reports_conformance_error_with_location.
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><main><h1 id="a" id="b">Test</h1></main></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"mode":"fast","html_validation":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings.iter().any(|f| f["rule_id"] == "html/parser.html5"),
+        "mode: fast should disable html_validation even when explicitly enabled"
+    );
+}
+
+#[test]
+fn mode_full_keeps_explicit_html_validation_enabled() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><main><h1 id="a" id="b">Test</h1></main></body></html>"#,
+    ).unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"mode":"full","html_validation":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        findings.iter().any(|f| f["rule_id"] == "html/parser.html5"),
+        "mode: full should leave explicit html_validation config untouched"
+    );
+}
+
+#[test]
 fn html_validation_disabled_by_default() {
     let dir = TempDir::new().unwrap();
     fs::write(
