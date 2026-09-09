@@ -1,6 +1,15 @@
 # astro-post-audit
 
-Fast, offline post-build auditor for Astro sites — SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output, with 32 check modules covering structured data, performance, privacy, and more. Static analysis only: no browser, and no network calls unless opt-in external-link checking is enabled — runs in <1s on typical sites. Recent releases added static Astro/Tailwind source analysis, offline HTML5 conformance validation, and C2PA Content Credentials verification — all without leaving the `dist/`-only, no-browser model.
+Fast, offline post-build auditor for Astro sites — SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output, with 33 check modules covering structured data, performance, privacy, and more. Static analysis only: no browser, and no network calls unless opt-in external-link checking is enabled — runs in <1s on typical sites. Recent releases added per-route CSS payload analysis, static Astro/Tailwind source analysis, offline HTML5 conformance validation, and C2PA Content Credentials verification.
+
+## What's new in 0.5.7
+
+| Area | What | Rule IDs | How to enable |
+|------|------|----------|---------------|
+| CSS architecture | Measures directly referenced local stylesheets and inline CSS per route, with configurable payload limits and median-based outlier detection | `css-architecture/route-payload`, `css-architecture/route-outlier` | `rules.css_architecture.enabled` |
+| Tailwind source analysis | Handles normal Astro `class:list` expressions, ignores build/dependency directories, distinguishes `justify-*` properties, and detects same-axis spacing conflicts | `source-analysis/utility-conflict`, inventory and complexity rules | `rules.source_analysis.enabled` |
+| Defaults and schema | Runtime, TypeScript and JSON Schema defaults are aligned and covered by regression tests | — | Automatic |
+| Render blocking | Removes the blanket recommendation to preload every stylesheet; sync scripts and missing third-party preconnects remain checked | `render-blocking/sync-head-scripts`, `render-blocking/missing-preconnect` | `rules.render_blocking.enabled` |
 
 ## What's new in 0.5.5
 
@@ -269,7 +278,6 @@ postAudit({
     privacy_security: { enabled: true },
     structured_data_graph: { enabled: true },
     severity: {
-      'render-blocking/missing-style-preload': 'info',
       'privacy-security/third-party-domains': 'info',
       'crawl-budget/noindex-with-internal-demand': 'info',
     },
@@ -301,7 +309,7 @@ postAudit({
 
 ## Configuration
 
-All options are optional. Your editor provides autocomplete with descriptions and defaults for every field.
+All options are optional. Your editor provides autocomplete with descriptions and concrete defaults where a field has one.
 
 ```js
 postAudit({
@@ -649,7 +657,7 @@ rules: {
   source_analysis: {
     enabled: false,
     extensions: [],                     // Additional source file extensions to inspect (without leading dot)
-    exclude: [],                        // Glob patterns relative to project root to exclude
+    exclude: [],                        // Additional globs; build/dependency directories are always excluded
     tailwind_inventory: true,           // Emit a compact Tailwind utility inventory
     duplicate_signatures: true,         // Report exact repeated static class signatures
     utility_conflicts: true,            // Report duplicate/mutually exclusive utility tokens
@@ -668,7 +676,14 @@ rules: {
     enabled: false,                     // URL variants, duplicate clusters, indexability mismatches
   },
   render_blocking: {
-    enabled: false,                     // Sync head scripts, missing preload/preconnect hints
+    enabled: false,                     // Sync head scripts and missing preconnect hints
+  },
+  css_architecture: {
+    enabled: false,                     // Per-route local and inline CSS payload
+    max_route_kb: 50,                   // Warning threshold per route
+    detect_route_outliers: true,        // Compare route payloads with the site median
+    outlier_factor: 2,                  // Required multiple of the median
+    min_outlier_kb: 20,                 // Ignore small absolute differences
   },
   privacy_security: {
     enabled: false,                     // Third-party domains, SRI/CSP readiness, consent indicators
@@ -721,13 +736,13 @@ rules: {
 - **Hreflang** — Multilingual link validation, x-default, self-reference, reciprocal links, target existence
 - **Security** — target="_blank" without noopener, mixed content, inline scripts
 - **Assets** — Broken references, image dimensions, file size limits, cache-busting hashes
-- **Performance** — Client-side JS bloat per route and font-loading hints *(opt-in)*
+- **Performance** — Client-side JS and CSS payloads per route and font-loading hints *(opt-in)*
 - **Content Quality** — Duplicate titles, descriptions, H1s, near-identical pages
 - **Content Sync** *(opt-in)* — `src/content/` collection items with no corresponding generated page
 - **Source Analysis** *(opt-in)* — Static Astro/Tailwind source inventory: utility-family usage, exact duplicate class signatures, mutually exclusive utilities, and oversized components. Never executes JavaScript or guesses dynamic classes.
 - **I18n Audit** — Consistency between localized routes, `html[lang]`, `hreflang`, and canonical
 - **Crawl Budget** — Query/variant URL dilution, duplicate canonical clusters, and indexability mismatches
-- **Render Blocking** — Sync `<head>` scripts and missing `preload`/`preconnect` hints for critical resources
+- **Render Blocking** — Sync `<head>` scripts and missing `preconnect` hints for critical third-party resources
 - **Privacy/Security (Static)** — Third-party domain inventory, missing SRI, CSP-readiness, consent signals, GDPR/DSGVO transfers *(opt-in: Google Fonts, YouTube, Maps, public CDNs, external images)*
 - **Structured Data Graph** — Cross-page JSON-LD entity conflicts (`@id`, type/name/url) and missing internal entity URLs
 - **AI Visibility** *(opt-in)* — LLM readability (word count, lang), citability (OG metadata, canonical, author schema), semantic structure, AI bot policy, and `llms.txt` / `llms-full.txt` link integrity
@@ -785,7 +800,7 @@ Enable via `uxHeuristics: true` (top-level option) or `rules.ux_heuristics.enabl
 
 ## Source analysis (Astro + Tailwind)
 
-Enable via `rules.source_analysis.enabled: true`. Runs entirely offline against your Astro/Tailwind source files (needs the project root, which the integration passes automatically) and only evaluates quoted static `class` and `class:list` entries — it never executes JavaScript or guesses dynamic classes. All findings are advisory `info`.
+Enable via `rules.source_analysis.enabled: true`. Runs entirely offline against your Astro/Tailwind source files (needs the project root, which the integration passes automatically) and only evaluates quoted static `class` and `class:list` entries — it never executes JavaScript or guesses dynamic classes. `.git`, `.astro`, `dist`, `node_modules`, and `target` are always excluded; `exclude` adds project-specific globs. All findings are advisory `info`.
 
 ```js
 rules: {
@@ -804,6 +819,27 @@ rules: {
 | `source-analysis/duplicate-signature` | An exact class signature repeats at least `min_duplicate_occurrences` times (default 3) |
 | `source-analysis/utility-conflict` | Duplicate or mutually exclusive utilities within the same variant scope (e.g. `p-2 p-4`, `block hidden`) |
 | `source-analysis/component-complexity` | An Astro component exceeds `max_component_lines` (default 300), `max_component_props` (default 12), or `max_component_slots` (default 6) |
+
+## CSS architecture
+
+Enable via `rules.css_architecture.enabled: true`. The check measures every route's directly referenced local stylesheets and inline `<style>` blocks. Repeated references to the same file on one page count once. External stylesheets and CSS loaded later by JavaScript are excluded because their size cannot be established reliably from `dist/` alone.
+
+```js
+rules: {
+  css_architecture: {
+    enabled: true,
+    max_route_kb: 50,
+    detect_route_outliers: true,
+    outlier_factor: 2,
+    min_outlier_kb: 20,
+  },
+}
+```
+
+| Rule ID | Level | Description |
+|---------|-------|-------------|
+| `css-architecture/route-payload` | Warning | Direct local and inline CSS exceeds `max_route_kb` |
+| `css-architecture/route-outlier` | Info | A route above `min_outlier_kb` exceeds the site median by `outlier_factor` |
 
 ## Content style
 
@@ -941,10 +977,10 @@ postAudit({ debug: true })
 Config { preset: None, strict: false, ... }            ← resolved config after preset merge
 [debug] discovery: 770 HTML file(s) found, 2 excluded by filters, 768 parsed into pages (180 ms)
 [debug] sitemap.xml: 768 URL(s)
-[debug]  1/32 seo                        12 finding(s)  40 ms
-[debug]  2/32 links                       3 finding(s)  95 ms
+[debug]  1/33 seo                        12 finding(s)  40 ms
+[debug]  2/33 links                       3 finding(s)  95 ms
 ...
-[debug] 32/32 source_analysis             0 finding(s)   2 ms
+[debug] 33/33 source_analysis             0 finding(s)   2 ms
 ```
 
 Use it to confirm which config actually applies, what discovery found/filtered, and which check produces (or misses) findings and how long it takes.

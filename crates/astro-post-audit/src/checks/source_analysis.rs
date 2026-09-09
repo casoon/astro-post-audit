@@ -4,7 +4,7 @@
 //! evaluates JavaScript nor attempts to replicate Tailwind's content scanner.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::path::Path;
+use std::path::{Component, Path};
 
 use globset::{Glob, GlobSetBuilder};
 use regex::Regex;
@@ -69,10 +69,17 @@ fn discover(root: &Path, config: &Config) -> Vec<ClassUse> {
     let excluded = builder.build().ok();
     let class_re = Regex::new(r#"(?:class|className)\s*=\s*[\"']([^\"']+)[\"']"#).unwrap();
     let list_re = Regex::new(r#"[\"']([^\"']+)[\"']"#).unwrap();
-    let class_list_re = Regex::new(r"class:list\s*=\s*\{\{([^}]*)\}\}").unwrap();
+    let class_list_re = Regex::new(r"class:list\s*=\s*\{([^}]*)\}").unwrap();
     let mut uses = Vec::new();
     for entry in WalkDir::new(root)
         .into_iter()
+        .filter_entry(|entry| {
+            entry.path() == root
+                || entry
+                    .path()
+                    .strip_prefix(root)
+                    .is_ok_and(|path| !is_excluded(path, excluded.as_ref()))
+        })
         .filter_map(Result::ok)
         .filter(|e| e.file_type().is_file())
     {
@@ -87,7 +94,7 @@ fn discover(root: &Path, config: &Config) -> Vec<ClassUse> {
         let Ok(relative) = path.strip_prefix(root) else {
             continue;
         };
-        if excluded.as_ref().is_some_and(|set| set.is_match(relative)) {
+        if is_excluded(relative, excluded.as_ref()) {
             continue;
         }
         let Ok(source) = std::fs::read_to_string(path) else {
@@ -131,6 +138,13 @@ fn discover(root: &Path, config: &Config) -> Vec<ClassUse> {
         }
     }
     uses
+}
+
+fn is_excluded(relative: &Path, configured: Option<&globset::GlobSet>) -> bool {
+    const DEFAULT_EXCLUDED_DIRS: &[&str] = &[".git", ".astro", "dist", "node_modules", "target"];
+    relative.components().any(|component| {
+        matches!(component, Component::Normal(name) if DEFAULT_EXCLUDED_DIRS.iter().any(|dir| name == *dir))
+    }) || configured.is_some_and(|set| set.is_match(relative))
 }
 
 fn line_at(source: &str, byte: usize) -> usize {
@@ -206,7 +220,23 @@ fn conflicts(uses: &[ClassUse]) -> Vec<Finding> {
         let mut groups: HashMap<String, Vec<&str>> = HashMap::new();
         for token in &item.tokens {
             let (variant, base) = token.rsplit_once(':').unwrap_or(("", token));
-            let key = if display.contains(&base) { format!("{variant}:display") } else if base.starts_with("justify-") { format!("{variant}:justify") } else { continue };
+            let property = if display.contains(&base) {
+                Some("display")
+            } else if base.starts_with("justify-items-") {
+                Some("justify-items")
+            } else if base.starts_with("justify-self-") {
+                Some("justify-self")
+            } else if base.starts_with("justify-") {
+                Some("justify-content")
+            } else if utility_axis(base, "p").is_some() {
+                utility_axis(base, "p")
+            } else if utility_axis(base, "m").is_some() {
+                utility_axis(base, "m")
+            } else {
+                None
+            };
+            let Some(property) = property else { continue };
+            let key = format!("{variant}:{property}");
             groups.entry(key).or_default().push(token);
         }
         let mut seen = BTreeSet::new();
@@ -214,9 +244,44 @@ fn conflicts(uses: &[ClassUse]) -> Vec<Finding> {
     }).collect()
 }
 
+fn utility_axis<'a>(base: &'a str, family: &str) -> Option<&'a str> {
+    let (prefix, _) = base.split_once('-')?;
+    match (family, prefix) {
+        ("p", "p") => Some("padding"),
+        ("p", "px") => Some("padding-inline"),
+        ("p", "py") => Some("padding-block"),
+        ("p", "pt") => Some("padding-top"),
+        ("p", "pr") => Some("padding-right"),
+        ("p", "pb") => Some("padding-bottom"),
+        ("p", "pl") => Some("padding-left"),
+        ("m", "m") => Some("margin"),
+        ("m", "mx") => Some("margin-inline"),
+        ("m", "my") => Some("margin-block"),
+        ("m", "mt") => Some("margin-top"),
+        ("m", "mr") => Some("margin-right"),
+        ("m", "mb") => Some("margin-bottom"),
+        ("m", "ml") => Some("margin-left"),
+        _ => None,
+    }
+}
+
 fn complexity(root: &Path, config: &Config) -> Vec<Finding> {
+    let mut builder = GlobSetBuilder::new();
+    for pattern in &config.source_analysis.exclude {
+        if let Ok(glob) = Glob::new(pattern) {
+            builder.add(glob);
+        }
+    }
+    let excluded = builder.build().ok();
     let astro_files = WalkDir::new(root)
         .into_iter()
+        .filter_entry(|entry| {
+            entry.path() == root
+                || entry
+                    .path()
+                    .strip_prefix(root)
+                    .is_ok_and(|path| !is_excluded(path, excluded.as_ref()))
+        })
         .filter_map(Result::ok)
         .filter(|entry| entry.file_type().is_file())
         .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "astro"))
@@ -225,6 +290,7 @@ fn complexity(root: &Path, config: &Config) -> Vec<Finding> {
                 .path()
                 .strip_prefix(root)
                 .ok()
+                .filter(|path| !is_excluded(path, excluded.as_ref()))
                 .map(|path| path.to_string_lossy().replace('\\', "/"))
         })
         .collect::<BTreeSet<_>>();
@@ -281,12 +347,18 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         std::fs::write(
             temp.path().join("Card.astro"),
-            r#"<div class="flex items-center"></div><div class={dynamic}></div><div class:list={{ ["grid gap-4", dynamic] }}></div>"#,
+            r#"<div class="flex items-center"></div><div class={dynamic}></div><div class:list={["grid gap-4", dynamic]}></div>"#,
         )
         .unwrap();
         std::fs::write(
             temp.path().join("Ignored.astro"),
             r#"<div class="hidden"></div>"#,
+        )
+        .unwrap();
+        std::fs::create_dir(temp.path().join("node_modules")).unwrap();
+        std::fs::write(
+            temp.path().join("node_modules/Dependency.astro"),
+            r#"<div class="block"></div>"#,
         )
         .unwrap();
         let mut config = Config::default();
@@ -296,6 +368,23 @@ mod tests {
         assert!(uses.iter().all(|use_| use_.file == "Card.astro"));
         assert_eq!(uses[0].tokens, ["flex", "items-center"]);
         assert_eq!(uses[1].tokens, ["grid", "gap-4"]);
+    }
+
+    #[test]
+    fn distinguishes_justify_properties_and_detects_spacing_conflicts() {
+        let uses = vec![ClassUse {
+            file: "Card.astro".into(),
+            line: 1,
+            tokens: vec![
+                "justify-between".into(),
+                "justify-items-center".into(),
+                "px-2".into(),
+                "px-4".into(),
+            ],
+        }];
+        let findings = conflicts(&uses);
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].message.contains("`px-2`, `px-4`"));
     }
 
     #[test]

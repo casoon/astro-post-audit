@@ -197,6 +197,7 @@ fn run() -> Result<i32> {
         ("c2pa", checks::c2pa::check_all),
         ("i18n_audit", checks::i18n_audit::check_all),
         ("crawl_budget", checks::crawl_budget::check_all),
+        ("css_architecture", checks::css_architecture::check_all),
         ("render_blocking", checks::render_blocking::check_all),
         ("privacy_security", checks::privacy_security::check_all),
         (

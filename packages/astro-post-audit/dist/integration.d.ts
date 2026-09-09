@@ -41,9 +41,9 @@ export interface RulesConfig {
     };
     /** File filters — glob patterns to include or exclude pages from all checks. */
     filters?: {
-        /** Only check files matching these glob patterns. */
+        /** Only check files matching these glob patterns. @default [] */
         include?: string[];
-        /** Skip files matching these glob patterns (e.g. `["404.html", "drafts/**"]`). */
+        /** Skip files matching these glob patterns (e.g. `["404.html", "drafts/**"]`). @default [] */
         exclude?: string[];
     };
     /** URL normalization rules for internal link and canonical consistency. */
@@ -135,14 +135,14 @@ export interface RulesConfig {
         /** Info if `<img>` uses a legacy format (`.jpg`, `.png`, `.gif`) — suggests WebP/AVIF. @default false */
         format_hints?: boolean;
     };
-    /** AI visibility scoring — checks static signals that influence AI search citation probability. @default false */
+    /** AI visibility scoring — checks static signals that influence AI search citation probability. */
     ai_visibility?: {
         /** Enable AI visibility checks. @default false */
         enabled?: boolean;
         /** Validate dist/llms.txt existence and internal link integrity. @default true */
         require_llms_txt?: boolean;
     };
-    /** UX heuristic checks — CTA clarity, trust signals, cognitive load. @default false */
+    /** UX heuristic checks — CTA clarity, trust signals, cognitive load. */
     ux_heuristics?: {
         /** Enable UX heuristics module. @default false */
         enabled?: boolean;
@@ -217,11 +217,11 @@ export interface RulesConfig {
         /** Warn if asset filenames lack a cache-busting hash. @default false */
         require_hashed_filenames?: boolean;
     };
-    /** C2PA Content Credentials validation for local JPEG, PNG, and WebP assets. @default false */
+    /** C2PA Content Credentials validation for local JPEG, PNG, and WebP assets. */
     c2pa?: {
         /** Validate embedded Content Credentials without fetching remote manifests. @default false */
         enabled?: boolean;
-        /** Dist-relative image globs for which embedded credentials are expected. Missing credentials otherwise remain silent. */
+        /** Dist-relative image globs for which embedded credentials are expected. Missing credentials otherwise remain silent. @default [] */
         require_for?: string[];
         /** Also flag manifests that are cryptographically valid but not signed by a certificate chaining to a trusted root. @default false */
         require_trusted?: boolean;
@@ -302,7 +302,6 @@ export interface RulesConfig {
      * (em-dash overuse, contrast-formula repetition, uniform sentence rhythm).
      * Disabled by default — this is a stylistic signal (always `confidence: "low"`), not a correctness check.
      * New patterns can be added as config entries, no code change or new release needed.
-     * @default false
      */
     content_style?: {
         /** Enable content style checks. @default false */
@@ -314,7 +313,7 @@ export interface RulesConfig {
          * @default "article, main, .prose"
          */
         content_selector?: string;
-        /** Dist-relative path globs to skip for content style checks only (for example `tags/**`). */
+        /** Dist-relative path globs to skip for content style checks only (for example `tags/**`). @default [] */
         exclude?: string[];
         /**
          * Replaces the built-in default ruleset entirely when set (even to `[]`).
@@ -325,6 +324,7 @@ export interface RulesConfig {
         /**
          * Always appended to whichever ruleset is in effect (built-in or `rules`).
          * Use this to add one pattern without redefining the whole list.
+         * @default []
          */
         extra_rules?: StyleRule[];
         /** Override built-in density thresholds without replacing the default ruleset. */
@@ -333,7 +333,7 @@ export interface RulesConfig {
             contrast_formula_density?: number;
             contrast_formula_density_en?: number;
         };
-        /** Built-in or custom rule IDs to disable (for example `em-dash-density`). */
+        /** Built-in or custom rule IDs to disable (for example `em-dash-density`). @default [] */
         disabled_rules?: string[];
         /** Language consistency heuristic for German and English content. */
         language_detection?: {
@@ -352,9 +352,9 @@ export interface RulesConfig {
     source_analysis?: {
         /** Enable source analysis and pass Astro's project root to the binary. @default false */
         enabled?: boolean;
-        /** Additional source file extensions to inspect (without `.`). */
+        /** Additional source file extensions to inspect (without `.`). @default [] */
         extensions?: string[];
-        /** Project-root-relative source glob patterns to exclude. */
+        /** Additional project-root-relative globs. Build and dependency directories are always excluded. @default [] */
         exclude?: string[];
         /** Emit a Tailwind utility-family inventory. @default true */
         tailwind_inventory?: boolean;
@@ -364,9 +364,13 @@ export interface RulesConfig {
         utility_conflicts?: boolean;
         /** Report Astro components that cross advisory static complexity thresholds. @default true */
         component_complexity?: boolean;
+        /** Minimum occurrences before an exact repeated signature is reported. @default 3 */
         min_duplicate_occurrences?: number;
+        /** Advisory source-line threshold for an Astro component. @default 300 */
         max_component_lines?: number;
+        /** Advisory declared Props member threshold. @default 12 */
         max_component_props?: number;
+        /** Advisory named-slot threshold. @default 6 */
         max_component_slots?: number;
     };
     /**
@@ -384,9 +388,9 @@ export interface RulesConfig {
         max_concurrent?: number;
         /** Broken external links are errors (not just warnings). @default false */
         fail_on_broken?: boolean;
-        /** Only check links to these domains (empty = all). */
+        /** Only check links to these domains (empty = all). @default [] */
         allow_domains?: string[];
-        /** Skip links to these domains. */
+        /** Skip links to these domains. @default [] */
         block_domains?: string[];
     };
     /** I18n consistency audit across route locale, lang, hreflang, and canonical signals. */
@@ -398,6 +402,19 @@ export interface RulesConfig {
     crawl_budget?: {
         /** Enable crawl budget checks in dist output. @default false */
         enabled?: boolean;
+    };
+    /** Per-route CSS payload and route-outlier checks against generated HTML and local dist assets. */
+    css_architecture?: {
+        /** Enable CSS architecture checks. @default false */
+        enabled?: boolean;
+        /** Warn when a route's directly referenced local and inline CSS exceeds this size in KB. @default 50 */
+        max_route_kb?: number;
+        /** Report routes whose CSS payload is much larger than the site median. @default true */
+        detect_route_outliers?: boolean;
+        /** Required multiple of the median for an outlier. @default 2 */
+        outlier_factor?: number;
+        /** Ignore route outliers below this absolute size in KB. @default 20 */
+        min_outlier_kb?: number;
     };
     /** Static render-blocking audit for critical resources and connection hints. */
     render_blocking?: {
@@ -493,21 +510,21 @@ export interface GoLiveConfig {
      * Only set this when the go-live target intentionally differs from Astro `site`.
      */
     expectedSite?: string;
-    /** Domains that must not appear in canonical URLs, sitemaps, OG tags, or absolute links. */
+    /** Domains that must not appear in canonical URLs, sitemaps, OG tags, or absolute links. @default [] */
     forbiddenDomains?: string[];
 }
 export interface PostAuditOptions {
     /** Inline rules config — all check settings go here. */
     rules?: RulesConfig;
-    /** Preset to apply before user overrides. `"strict"` enables all checks, `"relaxed"` is lenient. */
+    /** Preset to apply before user overrides. `"strict"` enables the documented production checks, `"relaxed"` is lenient. */
     preset?: "strict" | "relaxed" | "seo" | "accessibility" | "performance" | "production" | "standard" | "editorial";
     /** Base URL (auto-detected from Astro's `site` config if not set). */
     site?: string;
-    /** Treat warnings as errors. */
+    /** Treat warnings as errors. @default false */
     strict?: boolean;
     /** Maximum number of errors before aborting. */
     maxErrors?: number;
-    /** Show page properties overview instead of running checks. */
+    /** Show page properties overview instead of running checks. @default false */
     pageOverview?: boolean;
     /** Write the JSON report to this file path (relative to project root). */
     output?: string;
@@ -523,7 +540,7 @@ export interface PostAuditOptions {
         /** Show likely source file paths next to dist/ findings. Heuristic — may not always match. @default false */
         sourceFiles?: boolean;
     };
-    /** Print per-check timing benchmarks in the output. */
+    /** Print per-check timing benchmarks in the output. @default false */
     benchmark?: boolean;
     /**
      * Show a live progress bar on stderr while checks run.
@@ -539,9 +556,9 @@ export interface PostAuditOptions {
      * Replaces the progress bar when enabled. @default false
      */
     debug?: boolean;
-    /** Disable the integration (useful for dev mode). */
+    /** Disable the integration (useful for dev mode). @default false */
     disable?: boolean;
-    /** Throw an error when the audit finds issues (fails the build). Ignored when `failOn` is set. Default: false */
+    /** Throw an error when the audit finds issues (fails the build). Ignored when `failOn` is set. @default false */
     throwOnError?: boolean;
     /**
      * Path to a baseline file (relative to project root). When set, only findings that are
@@ -552,6 +569,7 @@ export interface PostAuditOptions {
     /**
      * Write current findings as the new baseline and exit with code 0.
      * Use this once to adopt the plugin on a site with existing issues.
+     * @default false
      */
     writeBaseline?: boolean;
     /**

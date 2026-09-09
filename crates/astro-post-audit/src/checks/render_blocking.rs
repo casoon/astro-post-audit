@@ -11,11 +11,6 @@ use std::sync::LazyLock;
 
 static SCRIPT_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("head script[src]").expect("valid selector"));
-static STYLESHEET_SEL: LazyLock<Selector> =
-    LazyLock::new(|| Selector::parse("head link[rel='stylesheet'][href]").expect("valid selector"));
-static PRELOAD_STYLE_SEL: LazyLock<Selector> = LazyLock::new(|| {
-    Selector::parse("head link[rel='preload'][as='style'][href]").expect("valid selector")
-});
 static PRECONNECT_SEL: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("head link[rel='preconnect'][href], head link[rel='dns-prefetch'][href]")
         .expect("valid selector")
@@ -67,30 +62,6 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 source_hint: None,
                 confidence: Some(Confidence::Medium),
             });
-        }
-
-        let preload_styles: HashSet<String> = html
-            .select(&PRELOAD_STYLE_SEL)
-            .filter_map(|el| el.value().attr("href").map(|s| s.to_string()))
-            .collect();
-        for style in html.select(&STYLESHEET_SEL) {
-            if let Some(href) = style.value().attr("href") {
-                if !preload_styles.contains(href) {
-                    findings.push(Finding {
-                        level: Level::Info,
-                        rule_id: "render-blocking/missing-style-preload".into(),
-                        file: page.rel_path.clone(),
-                        selector: format!("link[rel='stylesheet'][href='{}']", href),
-                        message: format!("Stylesheet '{}' is not preloaded", href),
-                        help:
-                            "Preload critical above-the-fold styles when they are render-critical"
-                                .into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: Some(Confidence::Medium),
-                    });
-                }
-            }
         }
 
         let known_preconnects: HashSet<String> = html

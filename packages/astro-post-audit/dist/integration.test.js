@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import postAudit from "./integration.js";
 function makeLogger() {
     const info = [];
@@ -26,6 +27,23 @@ function makeExecMock(impl) {
 // postAudit integration factory
 // ==========================================================================
 describe("postAudit", () => {
+    it("publishes type-correct documented defaults in the JSON schema", () => {
+        const schema = JSON.parse(readFileSync(new URL("../schema.json", import.meta.url), "utf-8"));
+        const rules = schema.definitions.RulesConfig.properties;
+        for (const section of ["ai_visibility", "c2pa", "content_style", "ux_heuristics"]) {
+            assert.equal(rules[section].default, undefined);
+        }
+        assert.equal(schema.properties.strict.default, false);
+        assert.equal(schema.properties.benchmark.default, false);
+        assert.equal(schema.properties.pageOverview.default, false);
+        assert.equal(schema.properties.disable.default, false);
+        assert.equal(schema.properties.throwOnError.default, false);
+        assert.equal(schema.properties.writeBaseline.default, false);
+        assert.equal(rules.source_analysis.properties?.min_duplicate_occurrences.default, 3);
+        assert.equal(rules.source_analysis.properties?.max_component_lines.default, 300);
+        assert.equal(rules.source_analysis.properties?.max_component_props.default, 12);
+        assert.equal(rules.source_analysis.properties?.max_component_slots.default, 6);
+    });
     it("returns an AstroIntegration with correct name", () => {
         const integration = postAudit();
         assert.equal(integration.name, "astro-post-audit");
@@ -43,7 +61,16 @@ describe("postAudit", () => {
             output: "audit-report.json",
             disable: false,
             throwOnError: true,
-            rules: { canonical: { require: true } },
+            rules: {
+                canonical: { require: true },
+                css_architecture: {
+                    enabled: true,
+                    max_route_kb: 60,
+                    detect_route_outliers: true,
+                    outlier_factor: 2.5,
+                    min_outlier_kb: 25,
+                },
+            },
         };
         const integration = postAudit(options);
         assert.equal(integration.name, "astro-post-audit");

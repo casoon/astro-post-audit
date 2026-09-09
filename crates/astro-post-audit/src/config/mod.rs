@@ -61,6 +61,7 @@ pub struct Config {
     pub robots_txt: RobotsTxtConfig,
     pub i18n_audit: I18nAuditConfig,
     pub crawl_budget: CrawlBudgetConfig,
+    pub css_architecture: CssArchitectureConfig,
     pub render_blocking: RenderBlockingConfig,
     pub privacy_security: PrivacySecurityConfig,
     pub structured_data_graph: StructuredDataGraphConfig,
@@ -542,6 +543,33 @@ pub struct RenderBlockingConfig {
     pub enabled: bool,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct CssArchitectureConfig {
+    /// Enable per-route CSS payload checks. @default false
+    pub enabled: bool,
+    /// Warn when directly referenced local and inline CSS exceeds this size. @default 50
+    pub max_route_kb: u64,
+    /// Report routes whose CSS payload is much larger than the site median. @default true
+    pub detect_route_outliers: bool,
+    /// Required multiple of the median for an outlier. @default 2
+    pub outlier_factor: f64,
+    /// Ignore small outliers below this absolute size. @default 20
+    pub min_outlier_kb: u64,
+}
+
+impl Default for CssArchitectureConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_route_kb: 50,
+            detect_route_outliers: true,
+            outlier_factor: 2.0,
+            min_outlier_kb: 20,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct PrivacySecurityConfig {
@@ -588,13 +616,22 @@ pub struct ContentSyncConfig {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct HtmlValidationConfig {
     /// Report HTML5 conformance findings from `html-conform` (vnu-comparable: tree construction, content-model schema, ARIA, attribute microsyntaxes, table integrity). @default false
     pub enabled: bool,
     /// Maximum distinct findings reported per page. @default 20
     pub max_per_page: Option<usize>,
+}
+
+impl Default for HtmlValidationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_per_page: Some(20),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -1025,6 +1062,16 @@ impl Config {
                 anyhow::bail!("external_links.max_concurrent must be greater than 0 when enabled");
             }
         }
+        if self.css_architecture.enabled {
+            if self.css_architecture.max_route_kb == 0 {
+                anyhow::bail!("css_architecture.max_route_kb must be greater than 0 when enabled");
+            }
+            if self.css_architecture.detect_route_outliers
+                && self.css_architecture.outlier_factor <= 1.0
+            {
+                anyhow::bail!("css_architecture.outlier_factor must be greater than 1");
+            }
+        }
         if self.content_style.enabled {
             if self.content_style.content_selector.trim().is_empty() {
                 anyhow::bail!("content_style.content_selector must not be empty when enabled");
@@ -1112,7 +1159,7 @@ impl Config {
         Ok(())
     }
 
-    /// Preset: strict — all checks enabled, strict mode on.
+    /// Preset: strict — documented production checks enabled, strict mode on.
     fn strict_preset_json() -> serde_json::Value {
         serde_json::json!({
             "strict": true,
@@ -1423,5 +1470,54 @@ impl Config {
                 "enabled": true
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_json_uses_documented_runtime_defaults() {
+        let config = Config::from_json("{}").unwrap();
+
+        assert!(!config.strict);
+        assert_eq!(
+            config.url_normalization.trailing_slash,
+            TrailingSlash::Always
+        );
+        assert_eq!(config.url_normalization.index_html, IndexHtml::Forbid);
+        assert!(config.canonical.require);
+        assert!(config.canonical.absolute);
+        assert!(config.canonical.same_origin);
+        assert!(!config.canonical.self_reference);
+        assert!(config.links.check_internal);
+        assert!(config.links.fail_on_broken);
+        assert_eq!(config.html_basics.title_max_length, Some(60));
+        assert_eq!(config.html_basics.meta_description_max_length, Some(160));
+        assert!(config.headings.require_h1);
+        assert!(config.a11y.check_alt_quality);
+        assert!(config.security.check_target_blank);
+        assert_eq!(config.external_links.timeout_ms, 3000);
+        assert_eq!(config.external_links.max_concurrent, 10);
+        assert_eq!(config.robots_txt.max_crawl_delay, 10);
+        assert!(config.images.check_missing_dimensions);
+        assert_eq!(config.html_validation.max_per_page, Some(20));
+        assert_eq!(config.js_bloat.max_kb, 100);
+        assert_eq!(config.css_architecture.max_route_kb, 50);
+        assert_eq!(config.css_architecture.outlier_factor, 2.0);
+        assert_eq!(config.css_architecture.min_outlier_kb, 20);
+        assert_eq!(config.ux_heuristics.max_links_per_page, 80);
+        assert_eq!(config.ux_heuristics.min_cta_per_page, 1);
+        assert_eq!(config.source_analysis.min_duplicate_occurrences, 3);
+        assert_eq!(config.source_analysis.max_component_lines, 300);
+        assert_eq!(config.source_analysis.max_component_props, 12);
+        assert_eq!(config.source_analysis.max_component_slots, 6);
+
+        assert!(!config.external_links.enabled);
+        assert!(!config.c2pa.enabled);
+        assert!(!config.ai_visibility.enabled);
+        assert!(!config.content_style.enabled);
+        assert!(!config.source_analysis.enabled);
     }
 }

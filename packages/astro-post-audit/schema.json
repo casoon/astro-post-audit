@@ -15,6 +15,7 @@
                     "type": "string"
                 },
                 "forbiddenDomains": {
+                    "default": [],
                     "description": "Domains that must not appear in canonical URLs, sitemaps, OG tags, or absolute links.",
                     "items": {
                         "type": "string"
@@ -169,7 +170,6 @@
                 },
                 "ai_visibility": {
                     "additionalProperties": false,
-                    "default": false,
                     "description": "AI visibility scoring — checks static signals that influence AI search citation probability.",
                     "properties": {
                         "enabled": {
@@ -221,7 +221,6 @@
                 },
                 "c2pa": {
                     "additionalProperties": false,
-                    "default": false,
                     "description": "C2PA Content Credentials validation for local JPEG, PNG, and WebP assets.",
                     "properties": {
                         "enabled": {
@@ -230,6 +229,7 @@
                             "type": "boolean"
                         },
                         "require_for": {
+                            "default": [],
                             "description": "Dist-relative image globs for which embedded credentials are expected. Missing credentials otherwise remain silent.",
                             "items": {
                                 "type": "string"
@@ -305,7 +305,6 @@
                 },
                 "content_style": {
                     "additionalProperties": false,
-                    "default": false,
                     "description": "Configurable heuristic checks for recurring \"reads like AI\" writing patterns\n(em-dash overuse, contrast-formula repetition, uniform sentence rhythm).\nDisabled by default — this is a stylistic signal (always `confidence: \"low\"`), not a correctness check.\nNew patterns can be added as config entries, no code change or new release needed.",
                     "properties": {
                         "content_selector": {
@@ -314,6 +313,7 @@
                             "type": "string"
                         },
                         "disabled_rules": {
+                            "default": [],
                             "description": "Built-in or custom rule IDs to disable (for example `em-dash-density`).",
                             "items": {
                                 "type": "string"
@@ -326,6 +326,7 @@
                             "type": "boolean"
                         },
                         "exclude": {
+                            "default": [],
                             "description": "Dist-relative path globs to skip for content style checks only (for example `tags/**`).",
                             "items": {
                                 "type": "string"
@@ -333,6 +334,7 @@
                             "type": "array"
                         },
                         "extra_rules": {
+                            "default": [],
                             "description": "Always appended to whichever ruleset is in effect (built-in or `rules`).\nUse this to add one pattern without redefining the whole list.",
                             "items": {
                                 "$ref": "#/definitions/StyleRule"
@@ -411,11 +413,44 @@
                     },
                     "type": "object"
                 },
+                "css_architecture": {
+                    "additionalProperties": false,
+                    "description": "Per-route CSS payload and route-outlier checks against generated HTML and local dist assets.",
+                    "properties": {
+                        "detect_route_outliers": {
+                            "default": true,
+                            "description": "Report routes whose CSS payload is much larger than the site median.",
+                            "type": "boolean"
+                        },
+                        "enabled": {
+                            "default": false,
+                            "description": "Enable CSS architecture checks.",
+                            "type": "boolean"
+                        },
+                        "max_route_kb": {
+                            "default": 50,
+                            "description": "Warn when a route's directly referenced local and inline CSS exceeds this size in KB.",
+                            "type": "number"
+                        },
+                        "min_outlier_kb": {
+                            "default": 20,
+                            "description": "Ignore route outliers below this absolute size in KB.",
+                            "type": "number"
+                        },
+                        "outlier_factor": {
+                            "default": 2,
+                            "description": "Required multiple of the median for an outlier.",
+                            "type": "number"
+                        }
+                    },
+                    "type": "object"
+                },
                 "external_links": {
                     "additionalProperties": false,
                     "description": "External link checking (HEAD requests to verify URLs return 2xx).",
                     "properties": {
                         "allow_domains": {
+                            "default": [],
                             "description": "Only check links to these domains (empty = all).",
                             "items": {
                                 "type": "string"
@@ -423,6 +458,7 @@
                             "type": "array"
                         },
                         "block_domains": {
+                            "default": [],
                             "description": "Skip links to these domains.",
                             "items": {
                                 "type": "string"
@@ -457,6 +493,7 @@
                     "description": "File filters — glob patterns to include or exclude pages from all checks.",
                     "properties": {
                         "exclude": {
+                            "default": [],
                             "description": "Skip files matching these glob patterns (e.g. `[\"404.html\", \"drafts/**\"]`).",
                             "items": {
                                 "type": "string"
@@ -464,6 +501,7 @@
                             "type": "array"
                         },
                         "include": {
+                            "default": [],
                             "description": "Only check files matching these glob patterns.",
                             "items": {
                                 "type": "string"
@@ -963,13 +1001,15 @@
                             "type": "boolean"
                         },
                         "exclude": {
-                            "description": "Project-root-relative source glob patterns to exclude.",
+                            "default": [],
+                            "description": "Additional project-root-relative globs. Build and dependency directories are always excluded.",
                             "items": {
                                 "type": "string"
                             },
                             "type": "array"
                         },
                         "extensions": {
+                            "default": [],
                             "description": "Additional source file extensions to inspect (without `.`).",
                             "items": {
                                 "type": "string"
@@ -977,15 +1017,23 @@
                             "type": "array"
                         },
                         "max_component_lines": {
+                            "default": 300,
+                            "description": "Advisory source-line threshold for an Astro component.",
                             "type": "number"
                         },
                         "max_component_props": {
+                            "default": 12,
+                            "description": "Advisory declared Props member threshold.",
                             "type": "number"
                         },
                         "max_component_slots": {
+                            "default": 6,
+                            "description": "Advisory named-slot threshold.",
                             "type": "number"
                         },
                         "min_duplicate_occurrences": {
+                            "default": 3,
+                            "description": "Minimum occurrences before an exact repeated signature is reported.",
                             "type": "number"
                         },
                         "tailwind_inventory": {
@@ -1063,7 +1111,6 @@
                 },
                 "ux_heuristics": {
                     "additionalProperties": false,
-                    "default": false,
                     "description": "UX heuristic checks — CTA clarity, trust signals, cognitive load.",
                     "properties": {
                         "enabled": {
@@ -1180,6 +1227,7 @@
             "type": "string"
         },
         "benchmark": {
+            "default": false,
             "description": "Print per-check timing benchmarks in the output.",
             "type": "boolean"
         },
@@ -1194,6 +1242,7 @@
             "type": "boolean"
         },
         "disable": {
+            "default": false,
             "description": "Disable the integration (useful for dev mode).",
             "type": "boolean"
         },
@@ -1243,11 +1292,12 @@
             "type": "string"
         },
         "pageOverview": {
+            "default": false,
             "description": "Show page properties overview instead of running checks.",
             "type": "boolean"
         },
         "preset": {
-            "description": "Preset to apply before user overrides. `\"strict\"` enables all checks, `\"relaxed\"` is lenient.",
+            "description": "Preset to apply before user overrides. `\"strict\"` enables the documented production checks, `\"relaxed\"` is lenient.",
             "enum": [
                 "accessibility",
                 "editorial",
@@ -1281,11 +1331,13 @@
             "type": "string"
         },
         "strict": {
+            "default": false,
             "description": "Treat warnings as errors.",
             "type": "boolean"
         },
         "throwOnError": {
-            "description": "Throw an error when the audit finds issues (fails the build). Ignored when `failOn` is set. Default: false",
+            "default": false,
+            "description": "Throw an error when the audit finds issues (fails the build). Ignored when `failOn` is set.",
             "type": "boolean"
         },
         "uxHeuristics": {
@@ -1310,6 +1362,7 @@
             "description": "Enable UX heuristic checks. Evaluates CTA clarity, trust signals, and cognitive load.\nPass `true` to enable with defaults, or an object for fine-grained control."
         },
         "writeBaseline": {
+            "default": false,
             "description": "Write current findings as the new baseline and exit with code 0.\nUse this once to adopt the plugin on a site with existing issues.",
             "type": "boolean"
         }

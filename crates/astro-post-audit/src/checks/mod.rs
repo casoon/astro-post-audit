@@ -6,6 +6,7 @@ pub mod content_quality;
 pub mod content_style;
 pub mod content_sync;
 pub mod crawl_budget;
+pub mod css_architecture;
 pub mod external_links;
 pub mod fonts;
 pub mod golive;

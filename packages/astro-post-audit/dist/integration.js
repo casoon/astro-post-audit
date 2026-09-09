@@ -102,7 +102,7 @@ const GROUP_DEFS = {
         ruleIds: [
             "assets/img-dimensions", "assets/unhashed-filename", "assets/large-image",
             "assets/large-js", "assets/large-css", "render-blocking/sync-head-scripts",
-            "render-blocking/missing-style-preload", "render-blocking/missing-preconnect",
+            "render-blocking/missing-preconnect",
         ],
     },
     privacy: {

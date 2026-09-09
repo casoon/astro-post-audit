@@ -2001,7 +2001,7 @@ fn crawl_budget_detects_query_and_variant_links() {
 }
 
 #[test]
-fn render_blocking_detects_sync_scripts_and_missing_hints() {
+fn render_blocking_detects_sync_scripts_and_missing_connection_hints() {
     let dir = TempDir::new().unwrap();
     fs::create_dir_all(dir.path().join("styles")).unwrap();
     fs::write(dir.path().join("styles/main.css"), "body{}").unwrap();
@@ -2034,10 +2034,42 @@ fn render_blocking_detects_sync_scripts_and_missing_hints() {
         .any(|f| f["rule_id"] == "render-blocking/sync-head-scripts"));
     assert!(findings
         .iter()
-        .any(|f| f["rule_id"] == "render-blocking/missing-style-preload"));
-    assert!(findings
-        .iter()
         .any(|f| f["rule_id"] == "render-blocking/missing-preconnect"));
+}
+
+#[test]
+fn css_architecture_measures_route_payload_and_outliers() {
+    let dir = TempDir::new().unwrap();
+    fs::create_dir_all(dir.path().join("styles")).unwrap();
+    fs::write(dir.path().join("styles/base.css"), vec![b'a'; 1024]).unwrap();
+    fs::write(dir.path().join("styles/shop.css"), vec![b'b'; 24 * 1024]).unwrap();
+
+    for (route, extra) in [
+        ("index.html", ""),
+        ("about/index.html", ""),
+        (
+            "shop/index.html",
+            "<link rel=\"stylesheet\" href=\"/styles/shop.css\">",
+        ),
+    ] {
+        let path = dir.path().join(route);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, format!(r#"<!doctype html><html lang="en"><head><title>Page</title><link rel="stylesheet" href="/styles/base.css">{extra}</head><body><h1>Page</h1></body></html>"#)).unwrap();
+    }
+
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"css_architecture":{"enabled":true,"max_route_kb":20,"min_outlier_kb":20,"outlier_factor":2}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(findings.iter().any(|finding| {
+        finding["rule_id"] == "css-architecture/route-payload"
+            && finding["file"] == "shop/index.html"
+    }));
+    assert!(findings.iter().any(|finding| {
+        finding["rule_id"] == "css-architecture/route-outlier"
+            && finding["file"] == "shop/index.html"
+    }));
 }
 
 #[test]
@@ -2261,7 +2293,7 @@ fn fragment_percent_encoded_umlaut_cross_page() {
 // ==========================================================================
 
 #[test]
-fn preset_strict_enables_all_checks() {
+fn preset_strict_enables_documented_production_checks() {
     let dir = TempDir::new().unwrap();
     // Valid page but missing OG, structured data, skip-link etc.
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
