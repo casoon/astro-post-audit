@@ -2,7 +2,7 @@
 
 Fast, offline post-build auditor for Astro sites — SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output, with 33 check modules covering structured data, performance, privacy, and more. Static analysis only: no browser, and no network calls unless opt-in external-link checking is enabled — runs in <1s on typical sites. Recent releases added per-route CSS payload analysis, static Astro/Tailwind source analysis, offline HTML5 conformance validation, and C2PA Content Credentials verification.
 
-## What's new in 0.5.8
+## What's new in 0.6.0
 
 | Area | What | Rule IDs | How to enable |
 |------|------|----------|---------------|
