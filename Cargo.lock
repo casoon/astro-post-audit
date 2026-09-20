@@ -4,9 +4,9 @@ version = 4
 
 [[package]]
 name = "a11y-report"
-version = "0.3.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9eb9c0c5f6a7c9923f41b8f0dbf66a91478a7edf784badc9e2c296e54cded3d2"
+checksum = "64dba305c5c9de2558f8633a119ac59d75bdbacf0c08c36e91c14c5d23b112bf"
 dependencies = [
  "serde",
 ]
