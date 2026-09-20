@@ -25,7 +25,10 @@ fn good_fixtures_pass_clean() {
     // Good fixtures should produce no errors under default config.
     // They may produce canonical/target-missing warnings since canonicals point
     // to https://example.com/... but the fixture dist doesn't include all routes.
-    let errors: Vec<_> = findings.iter().filter(|f| f["severity"] == "high").collect();
+    let errors: Vec<_> = findings
+        .iter()
+        .filter(|f| f["severity"] == "high")
+        .collect();
     assert!(
         errors.is_empty(),
         "Expected no errors on good fixtures, got: {:?}",
@@ -1429,7 +1432,10 @@ fn json_finding_structure() {
     let f = &findings[0];
     // Zwei Achsen, kein zusammengefasster Level: outcome sagt, wie sicher die
     // Aussage ist, severity, wie schwer das Problem wiegt.
-    assert!(f["level"].is_null(), "level ist durch outcome + severity ersetzt");
+    assert!(
+        f["level"].is_null(),
+        "level ist durch outcome + severity ersetzt"
+    );
     assert!(f["outcome"].is_string());
     assert!(f["severity"].is_string());
     assert!(f["rule_id"].is_string());
@@ -4247,14 +4253,15 @@ fn content_style_exclude_skips_only_matching_pages() {
     let findings = json["findings"].as_array().unwrap();
     assert!(
         !findings.iter().any(|f| {
-            f["location"]["file"] == "tags/kubernetes/index.html" && f["rule_id"] == "content-style/test-word"
+            f["location"]["file"] == "tags/kubernetes/index.html"
+                && f["rule_id"] == "content-style/test-word"
         }),
         "matching paths must skip content style checks: {findings:?}"
     );
     assert!(
-        findings
-            .iter()
-            .any(|f| { f["location"]["file"] == "post.html" && f["rule_id"] == "content-style/test-word" }),
+        findings.iter().any(|f| {
+            f["location"]["file"] == "post.html" && f["rule_id"] == "content-style/test-word"
+        }),
         "non-matching pages must still receive content style findings: {findings:?}"
     );
     assert!(
@@ -4771,4 +4778,61 @@ fn html_format_renders_html_to_stdout() {
     let (stdout, _, code) = run_audit(dir.path(), r#"{"format":"html"}"#);
     assert_eq!(code, 0);
     assert!(stdout.starts_with("<!DOCTYPE html>"));
+}
+
+// ==========================================================================
+// Migration der Regelkennungen auf a11y-core
+// ==========================================================================
+
+/// Eine Baseline, die noch die alte Kennung trägt, unterdrückt den Befund
+/// weiterhin. Das ist der Migrationspfad: Wer eine Baseline committet hat,
+/// soll nicht beim nächsten Update einen Schwall neuer Fehler sehen.
+#[test]
+fn baseline_mit_alter_kennung_unterdrueckt_weiterhin() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><title>T</title></head><body><h1>T</h1><img src="/x.png"></body></html>"#,
+    )
+    .unwrap();
+    let baseline_path = dir.path().join("baseline.json");
+    let baseline_str = baseline_path.to_string_lossy().replace('\\', "/");
+
+    // Von Hand geschrieben, mit der Kennung von vor der Umstellung.
+    fs::write(
+        &baseline_path,
+        r#"{"version":1,"findings":[{"rule_id":"a11y/img-alt","file":"index.html","selector":""}]}"#,
+    )
+    .unwrap();
+
+    let (json, _) = run_audit_json(dir.path(), &format!(r#"{{"baseline":"{}"}}"#, baseline_str));
+    let alt_befunde = json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["rule_id"] == "a11y/img-alt" || f["rule_id"] == "images/alt-missing")
+        .count();
+    assert_eq!(
+        alt_befunde, 0,
+        "die alte Baseline-Kennung muss weiter greifen"
+    );
+}
+
+/// Dasselbe für `severity`-Overrides aus `astro.config.mjs`.
+#[test]
+fn severity_override_mit_alter_kennung_greift_weiterhin() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><title>T</title></head><body><h1>T</h1><img src="/x.png"></body></html>"#,
+    )
+    .unwrap();
+
+    let (json, _) = run_audit_json(dir.path(), r#"{"severity":{"a11y/img-alt":"off"}}"#);
+    let vorhanden = json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|f| f["rule_id"] == "a11y/img-alt" || f["rule_id"] == "images/alt-missing");
+    assert!(!vorhanden, "off unter der alten Kennung muss abschalten");
 }

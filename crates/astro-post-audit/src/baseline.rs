@@ -47,10 +47,17 @@ pub fn filter(findings: Vec<Finding>, path: &str) -> Result<(Vec<Finding>, usize
     }
     let raw = std::fs::read_to_string(path)?;
     let baseline: BaselineFile = serde_json::from_str(&raw)?;
+    // Eine committete Baseline kann noch die alten Kennungen tragen. Sie wird
+    // beim Einlesen uebersetzt, nicht beim Schreiben -- geschrieben wird
+    // ausschliesslich neu.
     let known: HashSet<(String, String, String)> = baseline
         .findings
         .into_iter()
-        .map(|e| (e.rule_id, e.file, e.selector))
+        .flat_map(|e| {
+            crate::rule_ids::beide_kennungen(&e.rule_id, "baseline file")
+                .into_iter()
+                .map(move |kennung| (kennung, e.file.clone(), e.selector.clone()))
+        })
         .collect();
     let before = findings.len();
     let filtered: Vec<Finding> = findings

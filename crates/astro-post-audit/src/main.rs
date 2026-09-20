@@ -13,6 +13,7 @@ mod hints;
 mod normalize;
 mod overview;
 mod report;
+mod rule_ids;
 
 use config::Config;
 use discovery::SiteIndex;
@@ -218,6 +219,19 @@ fn run() -> Result<i32> {
         ("source_analysis", checks::source_analysis::check_all),
     ];
 
+    // Die severity-Overrides kommen aus astro.config.mjs und koennen noch die
+    // alten Kennungen tragen. Einmal uebersetzt statt bei jedem Befund.
+    let severity_overrides: std::collections::HashMap<String, config::SeverityLevel> = config
+        .severity
+        .overrides
+        .iter()
+        .flat_map(|(kennung, stufe)| {
+            rule_ids::beide_kennungen(kennung, "severity config")
+                .into_iter()
+                .map(move |k| (k, stufe.clone()))
+        })
+        .collect();
+
     let total_checks = registry.len();
     if show_progress {
         eprintln!("  Auditing {} pages…", site_index.pages.len());
@@ -240,7 +254,7 @@ fn run() -> Result<i32> {
         if !config.severity.overrides.is_empty() {
             use config::SeverityLevel;
             new_findings.retain_mut(|f| {
-                if let Some(override_level) = config.severity.overrides.get(&f.rule_id) {
+                if let Some(override_level) = severity_overrides.get(&f.rule_id) {
                     match override_level {
                         SeverityLevel::Off => return false,
                         SeverityLevel::Error => f.severity = report::Severity::High,
