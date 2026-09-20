@@ -353,7 +353,7 @@ postAudit({
     headings: { no_skip: true },
     severity: {
       'html/title-too-long': 'off',
-      'a11y/img-alt': 'error',
+      'images/alt-missing': 'error',
     },
   },
 })
@@ -1015,7 +1015,7 @@ Text output is rendered by Runemark with semantic severity markers, grouped find
 * blog/post/index.html (2)
   - Missing canonical tag [canonical/missing] at `head`
     Remedy: Set `site` in astro.config.mjs and render <link rel="canonical" ... /> in BaseHead.
-  - <img> missing alt attribute [a11y/img-alt] at `img[src='/photo.jpg']`
+  - <img> missing alt attribute [images/alt-missing] at `img[src='/photo.jpg']`
     Remedy: Add an `alt` prop to <Image>/<Picture> or the <img> tag.
 ```
 
@@ -1025,9 +1025,26 @@ When the result set is large (20 or more findings), the report prepends a top-ru
   Top issue rules:
        8x  html/meta-description-missing
        3x  canonical/missing
-       2x  a11y/img-alt
+       2x  images/alt-missing
        1x  links/broken-internal
 ```
+
+### Rule ids come from a11y-core
+
+The accessibility and document rules are not implemented here. They come from
+[`a11y-rules`](https://crates.io/crates/a11y-rules), the shared core that also
+backs `auditmysite` and LiveAudit, so a finding has the same id on every
+surface: `images/alt-missing`, not `a11y/img-alt`.
+
+Older ids still work in `severity` overrides and in baseline files — they are
+translated on read, with one warning per id. Writing always uses the new ones.
+
+A finding carries two axes, never one merged number: `outcome` says how certain
+the statement is (`fail`, `review`, `pass`, `untested`), `severity` how heavy
+the problem is (`low` … `critical`). The JSON report also lists `rule_runs` for
+rules this tool could not serve at all — static HTML has no computed styles, so
+the contrast rules appear there with `capability_missing` rather than silently
+counting as passed.
 
 ### Report files
 
