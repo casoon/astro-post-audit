@@ -861,7 +861,7 @@ rules: {
 
 ## Content style
 
-Configurable heuristics for recurring "reads like AI" writing patterns. This is a stylistic signal, not a correctness check — every finding carries `confidence: "low"`. Info-level findings do not affect `--strict`; the built-in chatbot-leftover rule is a warning and therefore does. Regex-based findings include a short excerpt around the first match so they can be reviewed in context.
+Configurable heuristics for recurring "reads like AI" writing patterns. This is a stylistic signal, not a correctness check — every finding comes back as `outcome: "review"`. Info-level findings do not affect `--strict`; the built-in chatbot-leftover rule is a warning and therefore does. Regex-based findings include a short excerpt around the first match so they can be reviewed in context.
 
 Enable via `contentStyle: true` (top-level option), `rules.content_style.enabled: true`, or `preset: 'editorial'`. With the default `content_selector` (`article, main, .prose`), the audit prefers a semantic `<article>`, otherwise `<main>`, then `.prose`. It omits header, nav, aside and footer content as well as repeated linked card groups (three or more equal sibling cards with a link and H2/H3), so article teasers and a small related-content hub do not distort one continuous writing sample. A custom `content_selector` uses its outermost matches directly.
 
@@ -903,7 +903,7 @@ Rule types are validated at runtime as well as by TypeScript. This catches missp
 
 The German and English built-in rule packs are selected from the primary `<html lang>` value (`de-AT` selects German, `en-US` English). Language-neutral rules always run; pages without `lang` run both language-specific packs so a missing language signal does not hide findings. Custom rules can use `languages: ["de"]` or `languages: ["en"]` for the same behavior.
 
-The built-in language-consistency heuristic compares common German and English function words with `<html lang>`. It only reports a clear mismatch (at least 12 signal words and a 2:1 advantage), always with low confidence; it does not attempt to classify other languages or mixed-language pages. Tune or disable it with `language_detection`.
+The built-in language-consistency heuristic compares common German and English function words with `<html lang>`. It only reports a clear mismatch (at least 12 signal words and a 2:1 advantage), always as `review`; it does not attempt to classify other languages or mixed-language pages. Tune or disable it with `language_detection`.
 
 ```js
 contentStyle: true, // or, for fine-grained control:

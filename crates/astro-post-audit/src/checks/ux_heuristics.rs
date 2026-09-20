@@ -3,7 +3,7 @@ use scraper::Selector;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 const CTA_KEYWORDS_DE: &[&str] = &[
     "kaufen",
@@ -99,17 +99,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             });
 
             if ux.min_cta_per_page > 0 && !cta_found {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "ux/no-cta".into(),
-                    file: page.rel_path.clone(),
-                    selector: "body".into(),
-                    message: "No call-to-action found on this page".into(),
-                    help: "Add at least one clear CTA (button or link with action-oriented text like 'Get started', 'Contact', 'Buy').".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("ux/no-cta","No call-to-action found on this page")
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("body"))
+.with_help("Add at least one clear CTA (button or link with action-oriented text like 'Get started', 'Contact', 'Buy')."));
             }
 
             // Generic link text (UX signal, separate from a11y check)
@@ -118,20 +111,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 let normalized = text.trim().to_lowercase();
                 if GENERIC_LINK_TEXTS.iter().any(|&g| normalized == g) {
                     let href = link.value().attr("href").unwrap_or("(no href)");
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "ux/generic-link-text".into(),
-                        file: page.rel_path.clone(),
-                        selector: format!("a[href='{}']", href),
-                        message: format!(
+                    findings.push(Finding::fail("ux/generic-link-text", format!(
                             "Generic link text '{}' is not descriptive — users can't predict the destination",
                             text.trim()
-                        ),
-                        help: "Replace with descriptive text that explains where the link leads.".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                        ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("a[href='{}']", href)))
+.with_help("Replace with descriptive text that explains where the link leads."));
                 }
             }
 
@@ -146,55 +132,34 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             let has_address = html.select(&ADDRESS_SEL).next().is_some();
 
             if !has_trust_link && !has_address {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "ux/no-trust-signals".into(),
-                    file: page.rel_path.clone(),
-                    selector: "body".into(),
-                    message: "No trust signal links found (Impressum, Datenschutz, Contact, About)".into(),
-                    help: "Add links to legal/contact pages to build user trust and comply with legal requirements.".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("ux/no-trust-signals","No trust signal links found (Impressum, Datenschutz, Contact, About)")
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("body"))
+.with_help("Add links to legal/contact pages to build user trust and comply with legal requirements."));
             }
 
             // === Dimension 4: Cognitive Load ===
 
             let link_count = links.len();
             if link_count > ux.max_links_per_page {
-                findings.push(Finding {
-                    level: Level::Info,
-                    rule_id: "ux/high-link-density".into(),
-                    file: page.rel_path.clone(),
-                    selector: "body".into(),
-                    message: format!(
+                findings.push(Finding::fail("ux/high-link-density", format!(
                         "{} links on this page may overwhelm users (threshold: {})",
                         link_count, ux.max_links_per_page
-                    ),
-                    help: "Consider reducing the number of links or grouping them into fewer, clearer navigation areas.".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                    ))
+.with_severity(Severity::Low)
+.at(Location::file(page.rel_path.clone()).with_selector("body"))
+.with_help("Consider reducing the number of links or grouping them into fewer, clearer navigation areas."));
             }
 
             let interactive_count = html.select(&INTERACTIVE_SEL).count();
             if interactive_count > 20 {
-                findings.push(Finding {
-                    level: Level::Info,
-                    rule_id: "ux/high-interactive-density".into(),
-                    file: page.rel_path.clone(),
-                    selector: "body".into(),
-                    message: format!(
+                findings.push(Finding::fail("ux/high-interactive-density", format!(
                         "{} interactive elements on this page — high cognitive load",
                         interactive_count
-                    ),
-                    help: "Simplify forms and reduce the number of interactive elements per page.".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                    ))
+.with_severity(Severity::Low)
+.at(Location::file(page.rel_path.clone()).with_selector("body"))
+.with_help("Simplify forms and reduce the number of interactive elements per page."));
             }
 
             findings

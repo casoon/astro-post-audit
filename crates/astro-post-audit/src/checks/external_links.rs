@@ -7,7 +7,7 @@ use rayon::prelude::*;
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::normalize;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 /// Collect all unique external URLs across all pages, then check them via HEAD requests.
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
@@ -93,24 +93,23 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 let Some((status, message)) = check_url(&agent, url) else {
                     return Vec::new();
                 };
-                let level = if config.external_links.fail_on_broken {
-                    Level::Error
+                let schwere = if config.external_links.fail_on_broken {
+                    Severity::High
                 } else {
-                    Level::Warning
+                    Severity::Medium
                 };
 
                 pages
                     .iter()
-                    .map(|page| Finding {
-                        level: level.clone(),
-                        rule_id: "external-links/broken".into(),
-                        file: page.clone(),
-                        selector: format!("a[href='{}']", url),
-                        message: format!("{} (status: {})", message, status),
-                        help: "Fix or remove this broken external link".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
+                    .map(|page| {
+                        Finding::fail(
+                            "external-links/broken",
+                            format!("{} (status: {})", message, status),
+                        )
+                        .with_severity(schwere)
+                        .at(Location::file(page.clone())
+                            .with_selector(format!("a[href='{}']", url)))
+                        .with_help("Fix or remove this broken external link")
                     })
                     .collect::<Vec<_>>()
             })

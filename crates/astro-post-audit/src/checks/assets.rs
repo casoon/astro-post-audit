@@ -4,7 +4,7 @@ use std::path::Path;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     let mut findings = Vec::new();
@@ -114,20 +114,13 @@ fn check_broken_assets(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     let has_height = el.value().attr("height").is_some();
                     if !has_width || !has_height {
                         let src = el.value().attr("src").unwrap_or("(unknown)");
-                        findings.push(Finding {
-                            level: Level::Warning,
-                            rule_id: "assets/img-dimensions".into(),
-                            file: page.rel_path.clone(),
-                            selector: format!("img[src='{}']", src),
-                            message: format!(
+                        findings.push(Finding::fail("assets/img-dimensions", format!(
                                 "Image missing width/height attributes: src='{}'",
                                 src
-                            ),
-                            help: "Use <Image>/<Picture> from `astro:assets` (sets width/height automatically) or add explicit width and height attributes to prevent layout shift (CLS)".into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                            ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("img[src='{}']", src)))
+.with_help("Use <Image>/<Picture> from `astro:assets` (sets width/height automatically) or add explicit width and height attributes to prevent layout shift (CLS)"));
                     }
                 }
             }
@@ -163,17 +156,16 @@ fn check_asset_exists(
     };
 
     if !asset_path.exists() {
-        findings.push(Finding {
-            level: Level::Error,
-            rule_id: "assets/broken".into(),
-            file: page_file.to_string(),
-            selector: format!("{}='{}'", selector_hint, src),
-            message: format!("Broken asset reference: '{}'", src),
-            help: "Fix the path or add the missing asset file".into(),
-            suggestion: None,
-            source_hint: None,
-            confidence: None,
-        });
+        findings.push(
+            Finding::fail(
+                "assets/broken",
+                format!("Broken asset reference: '{}'", src),
+            )
+            .with_severity(Severity::High)
+            .at(Location::file(page_file.to_string())
+                .with_selector(format!("{}='{}'", selector_hint, src)))
+            .with_help("Fix the path or add the missing asset file"),
+        );
     }
 }
 
@@ -195,20 +187,13 @@ fn check_hashed_filenames(index: &SiteIndex, _config: &Config) -> Vec<Finding> {
             for el in html.select(&script_sel) {
                 if let Some(src) = el.value().attr("src") {
                     if should_check_asset(src) && !has_hash_in_filename(src) {
-                        findings.push(Finding {
-                            level: Level::Warning,
-                            rule_id: "assets/unhashed-filename".into(),
-                            file: page.rel_path.clone(),
-                            selector: format!("script[src='{}']", src),
-                            message: format!(
+                        findings.push(Finding::fail("assets/unhashed-filename", format!(
                                 "Script '{}' does not use a hashed filename",
                                 src
-                            ),
-                            help: "Use content hashing in filenames for cache busting (e.g. main.a1b2c3.js)".into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                            ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("script[src='{}']", src)))
+.with_help("Use content hashing in filenames for cache busting (e.g. main.a1b2c3.js)"));
                     }
                 }
             }
@@ -216,20 +201,13 @@ fn check_hashed_filenames(index: &SiteIndex, _config: &Config) -> Vec<Finding> {
             for el in html.select(&link_sel) {
                 if let Some(href) = el.value().attr("href") {
                     if should_check_asset(href) && !has_hash_in_filename(href) {
-                        findings.push(Finding {
-                            level: Level::Warning,
-                            rule_id: "assets/unhashed-filename".into(),
-                            file: page.rel_path.clone(),
-                            selector: format!("link[href='{}']", href),
-                            message: format!(
+                        findings.push(Finding::fail("assets/unhashed-filename", format!(
                                 "Stylesheet '{}' does not use a hashed filename",
                                 href
-                            ),
-                            help: "Use content hashing in filenames for cache busting (e.g. style.a1b2c3.css)".into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                            ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("link[href='{}']", href)))
+.with_help("Use content hashing in filenames for cache busting (e.g. style.a1b2c3.css)"));
                     }
                 }
             }
@@ -299,52 +277,42 @@ fn check_asset_sizes(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             "jpg" | "jpeg" | "png" | "gif" | "webp" | "avif" | "svg" => {
                 if let Some(max) = config.assets.max_image_size_kb {
                     if size_kb > max {
-                        findings.push(Finding {
-                            level: Level::Warning,
-                            rule_id: "assets/large-image".into(),
-                            file: rel,
-                            selector: String::new(),
-                            message: format!("Image is {}KB (max: {}KB)", size_kb, max),
-                            help: "Use <Image> or <Picture> from `astro:assets` for automatic compression and modern formats (AVIF/WebP)".into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                        findings.push(Finding::fail("assets/large-image", format!("Image is {}KB (max: {}KB)", size_kb, max))
+.with_severity(Severity::Medium)
+.at(Location::file(rel))
+.with_help("Use <Image> or <Picture> from `astro:assets` for automatic compression and modern formats (AVIF/WebP)"));
                     }
                 }
             }
             "js" | "mjs" => {
                 if let Some(max) = config.assets.max_js_size_kb {
                     if size_kb > max {
-                        findings.push(Finding {
-                            level: Level::Warning,
-                            rule_id: "assets/large-js".into(),
-                            file: rel,
-                            selector: String::new(),
-                            message: format!("JavaScript file is {}KB (max: {}KB)", size_kb, max),
-                            help: "Consider code splitting or tree-shaking to reduce bundle size"
-                                .into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                        findings.push(
+                            Finding::fail(
+                                "assets/large-js",
+                                format!("JavaScript file is {}KB (max: {}KB)", size_kb, max),
+                            )
+                            .with_severity(Severity::Medium)
+                            .at(Location::file(rel))
+                            .with_help(
+                                "Consider code splitting or tree-shaking to reduce bundle size",
+                            ),
+                        );
                     }
                 }
             }
             "css" => {
                 if let Some(max) = config.assets.max_css_size_kb {
                     if size_kb > max {
-                        findings.push(Finding {
-                            level: Level::Warning,
-                            rule_id: "assets/large-css".into(),
-                            file: rel,
-                            selector: String::new(),
-                            message: format!("CSS file is {}KB (max: {}KB)", size_kb, max),
-                            help: "Consider splitting CSS or removing unused styles".into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                        findings.push(
+                            Finding::fail(
+                                "assets/large-css",
+                                format!("CSS file is {}KB (max: {}KB)", size_kb, max),
+                            )
+                            .with_severity(Severity::Medium)
+                            .at(Location::file(rel))
+                            .with_help("Consider splitting CSS or removing unused styles"),
+                        );
                     }
                 }
             }

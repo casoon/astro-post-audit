@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::normalize;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 /// Build a `GlobSet` matching routes declared as known dynamic/SSR routes.
 /// Returns `None` if no patterns are configured (or none compile, which
@@ -57,20 +57,13 @@ fn check_url_depth(index: &SiteIndex, max_depth: usize) -> Vec<Finding> {
         .filter_map(|page| {
             let depth = page.route.split('/').filter(|s| !s.is_empty()).count();
             if depth > max_depth {
-                Some(Finding {
-                    level: Level::Warning,
-                    rule_id: "links/url-depth".into(),
-                    file: page.rel_path.clone(),
-                    selector: String::new(),
-                    message: format!(
+                Some(Finding::fail("links/url-depth", format!(
                         "URL is {} levels deep (max recommended: {}): {}",
                         depth, max_depth, page.route
-                    ),
-                    help: "Deeply nested URLs are crawled less efficiently. Flatten the structure or use a shallower slug.".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                })
+                    ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()))
+.with_help("Deeply nested URLs are crawled less efficiently. Flatten the structure or use a shallower slug."))
             } else {
                 None
             }
@@ -118,56 +111,34 @@ fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         && !page_ids.contains(fragment)
                         && !page_ids.contains(decoded.as_str())
                     {
-                        findings.push(Finding {
-                            level: Level::Warning,
-                            rule_id: "links/broken-fragment".into(),
-                            file: page.rel_path.clone(),
-                            selector: format!("a[href='{}']", href),
-                            message: format!(
+                        findings.push(Finding::fail("links/broken-fragment", format!(
                                 "Fragment target '{}' not found on this page",
                                 fragment
-                            ),
-                            help: "Add an element with the matching id, or fix the fragment"
-                                .into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                            ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("a[href='{}']", href)))
+.with_help("Add an element with the matching id, or fix the fragment"));
                     }
                     continue;
                 }
 
                 // Check query params
                 if config.links.forbid_query_params_internal && normalize::has_query_params(href) {
-                    findings.push(Finding {
-                        level: Level::Error,
-                        rule_id: "links/query-params".into(),
-                        file: page.rel_path.clone(),
-                        selector: format!("a[href='{}']", href),
-                        message: format!(
+                    findings.push(Finding::fail("links/query-params", format!(
                             "Internal link contains query parameters: '{}'",
                             href
-                        ),
-                        help: "Remove query parameters from internal links to avoid duplicate content signals".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                        ))
+.with_severity(Severity::High)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("a[href='{}']", href)))
+.with_help("Remove query parameters from internal links to avoid duplicate content signals"));
                 }
 
                 // Check mixed content: absolute http:// internal links
                 if config.links.check_mixed_content && href.starts_with("http://") {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "links/mixed-content".into(),
-                        file: page.rel_path.clone(),
-                        selector: format!("a[href='{}']", href),
-                        message: format!("Internal link uses HTTP instead of HTTPS: '{}'", href),
-                        help: "Use HTTPS for all internal links".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(Finding::fail("links/mixed-content", format!("Internal link uses HTTP instead of HTTPS: '{}'", href))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("a[href='{}']", href)))
+.with_help("Use HTTPS for all internal links"));
                 }
 
                 // Resolve and check if target exists
@@ -185,25 +156,24 @@ fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         // Also check raw path as file
                         let file_check = resolved.trim_start_matches('/');
                         if !is_known_route && !index.file_exists(file_check) {
-                            let level = if config.links.fail_on_broken {
-                                Level::Error
+                            let schwere = if config.links.fail_on_broken {
+                                Severity::High
                             } else {
-                                Level::Warning
+                                Severity::Medium
                             };
-                            findings.push(Finding {
-                                level,
-                                rule_id: "links/broken".into(),
-                                file: page.rel_path.clone(),
-                                selector: format!("a[href='{}']", href),
-                                message: format!(
-                                    "Broken internal link '{}' -> '{}' (not found in dist)",
-                                    href, normalized
-                                ),
-                                help: "Verify the route in `src/pages/` or your Content Collection slug. If the target was renamed, update the href.".into(),
-                                suggestion: None,
-                                source_hint: None,
-                                confidence: None,
-                            });
+                            findings.push(
+                                Finding::fail(
+                                    "links/broken",
+                                    format!(
+                                        "Broken internal link '{}' -> '{}' (not found in dist)",
+                                        href, normalized
+                                    ),
+                                )
+                                .with_severity(schwere)
+                                .at(Location::file(page.rel_path.clone())
+                                    .with_selector(format!("a[href='{}']", href)))
+                                .with_help("Verify the route in `src/pages/` or your Content Collection slug. If the target was renamed, update the href."),
+                            );
                         }
                     }
 
@@ -223,21 +193,13 @@ fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                                         .any(|frag| target_page.element_ids.contains(*frag));
 
                                     if !found {
-                                        findings.push(Finding {
-                                            level: Level::Warning,
-                                            rule_id: "links/broken-fragment".into(),
-                                            file: page.rel_path.clone(),
-                                            selector: format!("a[href='{}']", href),
-                                            message: format!(
+                                        findings.push(Finding::fail("links/broken-fragment", format!(
                                                 "Fragment '{}' not found on target page '{}'",
                                                 fragment, normalized
-                                            ),
-                                            help: "Fix the fragment or add the target id"
-                                                .into(),
-                                            suggestion: None,
-                                            source_hint: None,
-                                            confidence: None,
-                                        });
+                                            ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("a[href='{}']", href)))
+.with_help("Fix the fragment or add the target id"));
                                     }
                                 }
                             }
@@ -289,19 +251,17 @@ fn check_orphan_pages(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         .pages
         .iter()
         .filter(|page| !linked_routes.contains(&page.route))
-        .map(|page| Finding {
-            level: Level::Warning,
-            rule_id: "links/orphan-page".into(),
-            file: page.rel_path.clone(),
-            selector: String::new(),
-            message: format!(
-                "Orphan page '{}' is not linked from any other page",
-                page.route
-            ),
-            help: "Add internal links to this page or remove it if unneeded".into(),
-            suggestion: None,
-            source_hint: None,
-            confidence: None,
+        .map(|page| {
+            Finding::fail(
+                "links/orphan-page",
+                format!(
+                    "Orphan page '{}' is not linked from any other page",
+                    page.route
+                ),
+            )
+            .with_severity(Severity::Medium)
+            .at(Location::file(page.rel_path.clone()))
+            .with_help("Add internal links to this page or remove it if unneeded")
         })
         .collect()
 }

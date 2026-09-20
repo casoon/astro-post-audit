@@ -2,7 +2,7 @@ use rayon::prelude::*;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     index
@@ -41,65 +41,49 @@ fn check_lang(page: &crate::discovery::PageInfo, findings: &mut Vec<Finding>) {
         .is_some_and(|v| !v.trim().is_empty());
 
     if !has_lang {
-        findings.push(Finding {
-            level: Level::Error,
-            rule_id: "html/lang-missing".into(),
-            file: page.rel_path.clone(),
-            selector: "html".into(),
-            message: "Missing lang attribute on <html> element".into(),
-            help: "Set the lang attribute on the root <html> element in your main Layout (e.g. <html lang=\"en\">). For multilingual sites, derive it from Astro.currentLocale.".into(),
-            suggestion: Some("<html lang=\"en\">".into()),
-            source_hint: None,
-            confidence: None,
-        });
+        findings.push(Finding::fail("html/lang-missing","Missing lang attribute on <html> element")
+.with_severity(Severity::High)
+.at(Location::file(page.rel_path.clone()).with_selector("html"))
+.with_help("Set the lang attribute on the root <html> element in your main Layout (e.g. <html lang=\"en\">). For multilingual sites, derive it from Astro.currentLocale.")
+.with_suggestion("<html lang=\"en\">"));
     }
 }
 
 fn check_title(page: &crate::discovery::PageInfo, config: &Config, findings: &mut Vec<Finding>) {
     match &page.title_text {
         None => {
-            findings.push(Finding {
-                level: Level::Error,
-                rule_id: "html/title-missing".into(),
-                file: page.rel_path.clone(),
-                selector: "head".into(),
-                message: "Missing <title> tag".into(),
-                help: "Add a <title> tag inside <head>".into(),
-                suggestion: Some("<title>Page Title</title>".into()),
-                source_hint: None,
-                confidence: None,
-            });
+            findings.push(
+                Finding::fail("html/title-missing", "Missing <title> tag")
+                    .with_severity(Severity::High)
+                    .at(Location::file(page.rel_path.clone()).with_selector("head"))
+                    .with_help("Add a <title> tag inside <head>")
+                    .with_suggestion("<title>Page Title</title>"),
+            );
         }
         Some(trimmed) => {
             if trimmed.is_empty() {
-                findings.push(Finding {
-                    level: Level::Error,
-                    rule_id: "html/title-empty".into(),
-                    file: page.rel_path.clone(),
-                    selector: "title".into(),
-                    message: "Title tag is empty".into(),
-                    help: "Add descriptive text to the <title> tag".into(),
-                    suggestion: Some("<title>Page Title</title>".into()),
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(
+                    Finding::fail("html/title-empty", "Title tag is empty")
+                        .with_severity(Severity::High)
+                        .at(Location::file(page.rel_path.clone()).with_selector("title"))
+                        .with_help("Add descriptive text to the <title> tag")
+                        .with_suggestion("<title>Page Title</title>"),
+                );
             } else if let Some(max) = config.html_basics.title_max_length {
                 if trimmed.len() > max {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "html/title-too-long".into(),
-                        file: page.rel_path.clone(),
-                        selector: "title".into(),
-                        message: format!(
-                            "Title is {} chars (recommended max: {})",
-                            trimmed.len(),
-                            max
-                        ),
-                        help: "Shorten the title for better display in search results".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(
+                        Finding::fail(
+                            "html/title-too-long",
+                            format!(
+                                "Title is {} chars (recommended max: {})",
+                                trimmed.len(),
+                                max
+                            ),
+                        )
+                        .with_severity(Severity::Medium)
+                        .at(Location::file(page.rel_path.clone()).with_selector("title"))
+                        .with_help("Shorten the title for better display in search results"),
+                    );
                 }
             }
         }
@@ -115,52 +99,39 @@ fn check_meta_description(
         None => {
             // Only warn about missing description if required
             if config.html_basics.meta_description_required {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "html/meta-description-missing".into(),
-                    file: page.rel_path.clone(),
-                    selector: "head".into(),
-                    message: "Missing or empty meta description".into(),
-                    help: "Render <meta name=\"description\" content={...}> in your BaseHead component, driven by a `description` prop from page frontmatter".into(),
-                    suggestion: Some("<meta name=\"description\" content=\"...\">".into()),
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("html/meta-description-missing","Missing or empty meta description")
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("head"))
+.with_help("Render <meta name=\"description\" content={...}> in your BaseHead component, driven by a `description` prop from page frontmatter")
+.with_suggestion("<meta name=\"description\" content=\"...\">"));
             }
         }
         Some(trimmed) => {
             if trimmed.is_empty() {
                 if config.html_basics.meta_description_required {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "html/meta-description-missing".into(),
-                        file: page.rel_path.clone(),
-                        selector: "head".into(),
-                        message: "Missing or empty meta description".into(),
-                        help: "Render <meta name=\"description\" content={...}> in your BaseHead component, driven by a `description` prop from page frontmatter".into(),
-                        suggestion: Some("<meta name=\"description\" content=\"...\">".into()),
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(Finding::fail("html/meta-description-missing","Missing or empty meta description")
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("head"))
+.with_help("Render <meta name=\"description\" content={...}> in your BaseHead component, driven by a `description` prop from page frontmatter")
+.with_suggestion("<meta name=\"description\" content=\"...\">"));
                 }
             } else if let Some(max) = config.html_basics.meta_description_max_length {
                 // Length check runs independently, even if description is not required
                 if trimmed.len() > max {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "html/meta-description-too-long".into(),
-                        file: page.rel_path.clone(),
-                        selector: "meta[name='description']".into(),
-                        message: format!(
-                            "Meta description is {} chars (recommended max: {})",
-                            trimmed.len(),
-                            max
-                        ),
-                        help: "Shorten the description for better display in search results".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(
+                        Finding::fail(
+                            "html/meta-description-too-long",
+                            format!(
+                                "Meta description is {} chars (recommended max: {})",
+                                trimmed.len(),
+                                max
+                            ),
+                        )
+                        .with_severity(Severity::Medium)
+                        .at(Location::file(page.rel_path.clone())
+                            .with_selector("meta[name='description']"))
+                        .with_help("Shorten the description for better display in search results"),
+                    );
                 }
             }
         }
@@ -169,19 +140,16 @@ fn check_meta_description(
 
 fn check_viewport(page: &crate::discovery::PageInfo, findings: &mut Vec<Finding>) {
     if !page.has_viewport {
-        findings.push(Finding {
-            level: Level::Error,
-            rule_id: "html/viewport-missing".into(),
-            file: page.rel_path.clone(),
-            selector: "head".into(),
-            message: "Missing viewport meta tag".into(),
-            help: "Add <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-                .into(),
-            suggestion: Some(
-                "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">".into(),
-            ),
-            source_hint: None,
-            confidence: None,
-        });
+        findings.push(
+            Finding::fail("html/viewport-missing", "Missing viewport meta tag")
+                .with_severity(Severity::High)
+                .at(Location::file(page.rel_path.clone()).with_selector("head"))
+                .with_help(
+                    "Add <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+                )
+                .with_suggestion(
+                    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+                ),
+        );
     }
 }

@@ -4,7 +4,7 @@ use crate::checks::links::build_known_routes_set;
 use crate::config::{Config, UrlNormalizationConfig};
 use crate::discovery::SiteIndex;
 use crate::normalize;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 /// Normalize a full URL using the configured normalization rules.
 /// Returns the URL with its path normalized (trailing slash, index.html handling).
@@ -26,37 +26,28 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     let sitemap_path = index.dist_path.join("sitemap.xml");
     if !sitemap_path.exists() {
         if config.sitemap.require {
-            findings.push(Finding {
-                level: Level::Error,
-                rule_id: "sitemap/missing".into(),
-                file: "sitemap.xml".into(),
-                selector: String::new(),
-                message: "sitemap.xml not found in dist directory".into(),
-                help: "Add a sitemap integration to astro.config.mjs (e.g. `@casoon/astro-sitemap` or `@astrojs/sitemap`) and ensure `site` is set".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: None,
-            });
+            findings.push(Finding::fail("sitemap/missing","sitemap.xml not found in dist directory")
+.with_severity(Severity::High)
+.at(Location::file("sitemap.xml"))
+.with_help("Add a sitemap integration to astro.config.mjs (e.g. `@casoon/astro-sitemap` or `@astrojs/sitemap`) and ensure `site` is set"));
         }
         return findings;
     }
 
     if let Some(parse_error) = &index.sitemap_parse_error {
-        findings.push(Finding {
-            level: if config.sitemap.require {
-                Level::Error
+        findings.push(
+            Finding::fail(
+                "sitemap/parse-error",
+                format!("Could not parse sitemap.xml: {}", parse_error),
+            )
+            .with_severity(if config.sitemap.require {
+                Severity::High
             } else {
-                Level::Warning
-            },
-            rule_id: "sitemap/parse-error".into(),
-            file: "sitemap.xml".into(),
-            selector: String::new(),
-            message: format!("Could not parse sitemap.xml: {}", parse_error),
-            help: "Fix sitemap.xml syntax and regenerate the file".into(),
-            suggestion: None,
-            source_hint: None,
-            confidence: None,
-        });
+                Severity::Medium
+            })
+            .at(Location::file("sitemap.xml"))
+            .with_help("Fix sitemap.xml syntax and regenerate the file"),
+        );
     }
 
     if index.sitemap_urls.is_empty() {
@@ -82,20 +73,16 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 let norm_canonical = normalize_url(canonical, norm);
 
                 if !normalized_sitemap.contains(&norm_canonical) {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "sitemap/canonical-missing".into(),
-                        file: page.rel_path.clone(),
-                        selector: format!("link[rel='canonical'][href='{}']", canonical),
-                        message: format!(
-                            "Canonical URL '{}' is not listed in sitemap.xml",
-                            canonical
-                        ),
-                        help: "Add this URL to your sitemap or check the canonical".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(
+                        Finding::fail(
+                            "sitemap/canonical-missing",
+                            format!("Canonical URL '{}' is not listed in sitemap.xml", canonical),
+                        )
+                        .with_severity(Severity::Medium)
+                        .at(Location::file(page.rel_path.clone())
+                            .with_selector(format!("link[rel='canonical'][href='{}']", canonical)))
+                        .with_help("Add this URL to your sitemap or check the canonical"),
+                    );
                 }
             }
         }
@@ -111,20 +98,19 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     .as_ref()
                     .is_some_and(|set| set.is_match(&route));
                 if !is_known_route && !index.route_exists(&route) {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "sitemap/entry-not-in-dist".into(),
-                        file: "sitemap.xml".into(),
-                        selector: format!("<loc>{}</loc>", url_str),
-                        message: format!(
-                            "Sitemap entry '{}' (route '{}') not found in dist",
-                            url_str, route
-                        ),
-                        help: "Remove stale entries from sitemap or add the missing page".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(
+                        Finding::fail(
+                            "sitemap/entry-not-in-dist",
+                            format!(
+                                "Sitemap entry '{}' (route '{}') not found in dist",
+                                url_str, route
+                            ),
+                        )
+                        .with_severity(Severity::Medium)
+                        .at(Location::file("sitemap.xml")
+                            .with_selector(format!("<loc>{}</loc>", url_str)))
+                        .with_help("Remove stale entries from sitemap or add the missing page"),
+                    );
                 }
             }
         }
@@ -146,20 +132,19 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         let norm_sitemap_url = normalize_url(url_str, norm);
                         let norm_canonical = normalize_url(canonical, norm);
                         if norm_canonical != norm_sitemap_url {
-                            findings.push(Finding {
-                                level: Level::Warning,
-                                rule_id: "sitemap/non-canonical-entry".into(),
-                                file: "sitemap.xml".into(),
-                                selector: format!("<loc>{}</loc>", url_str),
-                                message: format!(
-                                    "Sitemap contains '{}' but page canonical is '{}'",
-                                    url_str, canonical
-                                ),
-                                help: "Use the canonical URL in the sitemap".into(),
-                                suggestion: None,
-                                source_hint: None,
-                                confidence: None,
-                            });
+                            findings.push(
+                                Finding::fail(
+                                    "sitemap/non-canonical-entry",
+                                    format!(
+                                        "Sitemap contains '{}' but page canonical is '{}'",
+                                        url_str, canonical
+                                    ),
+                                )
+                                .with_severity(Severity::Medium)
+                                .at(Location::file("sitemap.xml")
+                                    .with_selector(format!("<loc>{}</loc>", url_str)))
+                                .with_help("Use the canonical URL in the sitemap"),
+                            );
                         }
                     }
                 }

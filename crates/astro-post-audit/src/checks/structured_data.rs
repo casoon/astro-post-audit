@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 static LD_SEL: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("script[type='application/ld+json']").expect("valid selector")
@@ -32,18 +32,17 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             if scripts.is_empty() {
                 if config.structured_data.require_json_ld {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "structured-data/missing".into(),
-                        file: page.rel_path.clone(),
-                        selector: "head".into(),
-                        message: "No JSON-LD structured data found".into(),
-                        help: "Add <script type=\"application/ld+json\"> with schema.org data"
-                            .into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(
+                        Finding::fail(
+                            "structured-data/missing",
+                            "No JSON-LD structured data found",
+                        )
+                        .with_severity(Severity::Medium)
+                        .at(Location::file(page.rel_path.clone()).with_selector("head"))
+                        .with_help(
+                            "Add <script type=\"application/ld+json\"> with schema.org data",
+                        ),
+                    );
                 }
                 return findings;
             }
@@ -57,17 +56,15 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
                 if trimmed.is_empty() {
                     if config.structured_data.check_json_ld {
-                        findings.push(Finding {
-                            level: Level::Error,
-                            rule_id: "structured-data/empty".into(),
-                            file: page.rel_path.clone(),
-                            selector: selector_hint,
-                            message: "JSON-LD script is empty".into(),
-                            help: "Add valid JSON-LD content or remove the empty script tag".into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                        findings.push(
+                            Finding::fail("structured-data/empty", "JSON-LD script is empty")
+                                .with_severity(Severity::High)
+                                .at(Location::file(page.rel_path.clone())
+                                    .with_selector(selector_hint))
+                                .with_help(
+                                    "Add valid JSON-LD content or remove the empty script tag",
+                                ),
+                        );
                     }
                     continue;
                 }
@@ -75,17 +72,16 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 match serde_json::from_str::<Value>(trimmed) {
                     Err(e) => {
                         if config.structured_data.check_json_ld {
-                            findings.push(Finding {
-                                level: Level::Error,
-                                rule_id: "structured-data/invalid-json".into(),
-                                file: page.rel_path.clone(),
-                                selector: selector_hint.clone(),
-                                message: format!("Invalid JSON in JSON-LD: {}", e),
-                                help: "Fix the JSON syntax in the structured data block".into(),
-                                suggestion: None,
-                                source_hint: None,
-                                confidence: None,
-                            });
+                            findings.push(
+                                Finding::fail(
+                                    "structured-data/invalid-json",
+                                    format!("Invalid JSON in JSON-LD: {}", e),
+                                )
+                                .with_severity(Severity::High)
+                                .at(Location::file(page.rel_path.clone())
+                                    .with_selector(selector_hint.clone()))
+                                .with_help("Fix the JSON syntax in the structured data block"),
+                            );
                         }
                     }
                     Ok(json) => {
@@ -107,24 +103,23 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 }
                 for (type_name, selectors) in &type_counts {
                     if selectors.len() > 1 {
-                        findings.push(Finding {
-                            level: Level::Warning,
-                            rule_id: "structured-data/duplicate-type".into(),
-                            file: page.rel_path.clone(),
-                            selector: selectors.join(", "),
-                            message: format!(
-                                "Duplicate JSON-LD @type '{}' found {} times on this page",
-                                type_name,
-                                selectors.len()
-                            ),
-                            help: format!(
+                        findings.push(
+                            Finding::fail(
+                                "structured-data/duplicate-type",
+                                format!(
+                                    "Duplicate JSON-LD @type '{}' found {} times on this page",
+                                    type_name,
+                                    selectors.len()
+                                ),
+                            )
+                            .with_severity(Severity::Medium)
+                            .at(Location::file(page.rel_path.clone())
+                                .with_selector(selectors.join(", ")))
+                            .with_help(format!(
                                 "Consolidate {} blocks into a single JSON-LD script or use @graph",
                                 type_name
-                            ),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                            )),
+                        );
                     }
                 }
             }
@@ -173,30 +168,26 @@ fn check_semantics(json: &Value, file: &str, selector: &str, findings: &mut Vec<
 
     // Check @context is present and plausible at root level
     if json.get("@context").is_none() && json.get("@graph").is_none() {
-        findings.push(Finding {
-            level: Level::Warning,
-            rule_id: "structured-data/missing-context".into(),
-            file: file.to_string(),
-            selector: selector.to_string(),
-            message: "JSON-LD missing @context property".into(),
-            help: "Add \"@context\": \"https://schema.org\" to the JSON-LD object".into(),
-            suggestion: None,
-            source_hint: None,
-            confidence: None,
-        });
+        findings.push(
+            Finding::fail(
+                "structured-data/missing-context",
+                "JSON-LD missing @context property",
+            )
+            .with_severity(Severity::Medium)
+            .at(Location::file(file.to_string()).with_selector(selector.to_string()))
+            .with_help("Add \"@context\": \"https://schema.org\" to the JSON-LD object"),
+        );
     } else if let Some(ctx) = json.get("@context").and_then(|c| c.as_str()) {
         if !ctx.contains("schema.org") {
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "structured-data/unusual-context".into(),
-                file: file.to_string(),
-                selector: selector.to_string(),
-                message: format!("JSON-LD @context '{}' is not schema.org", ctx),
-                help: "Use \"https://schema.org\" as the @context".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: None,
-            });
+            findings.push(
+                Finding::fail(
+                    "structured-data/unusual-context",
+                    format!("JSON-LD @context '{}' is not schema.org", ctx),
+                )
+                .with_severity(Severity::Medium)
+                .at(Location::file(file.to_string()).with_selector(selector.to_string()))
+                .with_help("Use \"https://schema.org\" as the @context"),
+            );
         }
     }
 }
@@ -208,17 +199,15 @@ fn check_single_entity(entity: &Value, file: &str, selector: &str, findings: &mu
         Some(t) => t,
         None => {
             if entity.is_object() && !entity.as_object().unwrap().is_empty() {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "structured-data/missing-type".into(),
-                    file: file.to_string(),
-                    selector: selector.to_string(),
-                    message: "JSON-LD entity missing @type property".into(),
-                    help: "Add an @type property (e.g. \"Article\", \"WebPage\")".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(
+                    Finding::fail(
+                        "structured-data/missing-type",
+                        "JSON-LD entity missing @type property",
+                    )
+                    .with_severity(Severity::Medium)
+                    .at(Location::file(file.to_string()).with_selector(selector.to_string()))
+                    .with_help("Add an @type property (e.g. \"Article\", \"WebPage\")"),
+                );
             }
             return;
         }
@@ -253,20 +242,21 @@ fn check_single_entity(entity: &Value, file: &str, selector: &str, findings: &mu
 
     for field in required_fields {
         if entity.get(field).is_none() {
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "structured-data/missing-property".into(),
-                file: file.to_string(),
-                selector: selector.to_string(),
-                message: format!(
-                    "JSON-LD {} is missing required property '{}'",
-                    type_name, field
-                ),
-                help: format!("Add the '{}' property to the {} schema", field, type_name),
-                suggestion: None,
-                source_hint: None,
-                confidence: None,
-            });
+            findings.push(
+                Finding::fail(
+                    "structured-data/missing-property",
+                    format!(
+                        "JSON-LD {} is missing required property '{}'",
+                        type_name, field
+                    ),
+                )
+                .with_severity(Severity::Medium)
+                .at(Location::file(file.to_string()).with_selector(selector.to_string()))
+                .with_help(format!(
+                    "Add the '{}' property to the {} schema",
+                    field, type_name
+                )),
+            );
         }
     }
 
@@ -286,123 +276,92 @@ fn check_property_completeness(
         "Article" | "BlogPosting" | "NewsArticle" => {
             // Recommended: author
             if entity.get("author").is_none() {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "structured-data/article-missing-author".into(),
-                    file: file.to_string(),
-                    selector: selector.to_string(),
-                    message: format!("JSON-LD {} is missing recommended property 'author'", type_name),
-                    help: "Add \"author\": {\"@type\": \"Person\", \"name\": \"...\"} for rich results".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("structured-data/article-missing-author", format!("JSON-LD {} is missing recommended property 'author'", type_name))
+.with_severity(Severity::Medium)
+.at(Location::file(file.to_string()).with_selector(selector.to_string()))
+.with_help("Add \"author\": {\"@type\": \"Person\", \"name\": \"...\"} for rich results"));
             }
             // Recommended: datePublished
             if entity.get("datePublished").is_none() {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "structured-data/article-missing-date-published".into(),
-                    file: file.to_string(),
-                    selector: selector.to_string(),
-                    message: format!("JSON-LD {} is missing recommended property 'datePublished'", type_name),
-                    help: "Add \"datePublished\": \"YYYY-MM-DD\" (ISO 8601) for search-engine rich results".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("structured-data/article-missing-date-published", format!("JSON-LD {} is missing recommended property 'datePublished'", type_name))
+.with_severity(Severity::Medium)
+.at(Location::file(file.to_string()).with_selector(selector.to_string()))
+.with_help("Add \"datePublished\": \"YYYY-MM-DD\" (ISO 8601) for search-engine rich results"));
             }
             // Info: dateModified
             if entity.get("dateModified").is_none() {
-                findings.push(Finding {
-                    level: Level::Info,
-                    rule_id: "structured-data/article-missing-date-modified".into(),
-                    file: file.to_string(),
-                    selector: selector.to_string(),
-                    message: format!("JSON-LD {} has no 'dateModified' property", type_name),
-                    help: "Add \"dateModified\" to help search engines understand freshness".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(
+                    Finding::fail(
+                        "structured-data/article-missing-date-modified",
+                        format!("JSON-LD {} has no 'dateModified' property", type_name),
+                    )
+                    .with_severity(Severity::Low)
+                    .at(Location::file(file.to_string()).with_selector(selector.to_string()))
+                    .with_help("Add \"dateModified\" to help search engines understand freshness"),
+                );
             }
             // Recommended: image
             if entity.get("image").is_none() {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "structured-data/article-missing-image".into(),
-                    file: file.to_string(),
-                    selector: selector.to_string(),
-                    message: format!(
-                        "JSON-LD {} is missing recommended property 'image'",
-                        type_name
-                    ),
-                    help: "Add an \"image\" property with an absolute URL for rich results".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(
+                    Finding::fail(
+                        "structured-data/article-missing-image",
+                        format!(
+                            "JSON-LD {} is missing recommended property 'image'",
+                            type_name
+                        ),
+                    )
+                    .with_severity(Severity::Medium)
+                    .at(Location::file(file.to_string()).with_selector(selector.to_string()))
+                    .with_help("Add an \"image\" property with an absolute URL for rich results"),
+                );
             }
             // NewsArticle requires publisher with logo
             if type_name == "NewsArticle" && entity.get("publisher").is_none() {
-                findings.push(Finding {
-                    level: Level::Error,
-                    rule_id: "structured-data/news-article-missing-publisher".into(),
-                    file: file.to_string(),
-                    selector: selector.to_string(),
-                    message: "JSON-LD NewsArticle is missing required 'publisher' property".into(),
-                    help: "Add \"publisher\": {\"@type\": \"Organization\", \"name\": \"...\", \"logo\": {\"@type\": \"ImageObject\", \"url\": \"...\"}}".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("structured-data/news-article-missing-publisher","JSON-LD NewsArticle is missing required 'publisher' property")
+.with_severity(Severity::High)
+.at(Location::file(file.to_string()).with_selector(selector.to_string()))
+.with_help("Add \"publisher\": {\"@type\": \"Organization\", \"name\": \"...\", \"logo\": {\"@type\": \"ImageObject\", \"url\": \"...\"}}"));
             }
         }
         "Organization" | "LocalBusiness" => {
             // Recommended: url
             if entity.get("url").is_none() {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "structured-data/organization-missing-url".into(),
-                    file: file.to_string(),
-                    selector: selector.to_string(),
-                    message: format!(
-                        "JSON-LD {} is missing recommended property 'url'",
-                        type_name
-                    ),
-                    help: "Add a \"url\" property with the organization's website URL".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(
+                    Finding::fail(
+                        "structured-data/organization-missing-url",
+                        format!(
+                            "JSON-LD {} is missing recommended property 'url'",
+                            type_name
+                        ),
+                    )
+                    .with_severity(Severity::Medium)
+                    .at(Location::file(file.to_string()).with_selector(selector.to_string()))
+                    .with_help("Add a \"url\" property with the organization's website URL"),
+                );
             }
             // Info for LocalBusiness: telephone, address
             if type_name == "LocalBusiness" {
                 if entity.get("telephone").is_none() {
-                    findings.push(Finding {
-                        level: Level::Info,
-                        rule_id: "structured-data/local-business-missing-telephone".into(),
-                        file: file.to_string(),
-                        selector: selector.to_string(),
-                        message: "JSON-LD LocalBusiness has no 'telephone' property".into(),
-                        help: "Add \"telephone\" for local search visibility".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(
+                        Finding::fail(
+                            "structured-data/local-business-missing-telephone",
+                            "JSON-LD LocalBusiness has no 'telephone' property",
+                        )
+                        .with_severity(Severity::Low)
+                        .at(Location::file(file.to_string()).with_selector(selector.to_string()))
+                        .with_help("Add \"telephone\" for local search visibility"),
+                    );
                 }
                 if entity.get("address").is_none() {
-                    findings.push(Finding {
-                        level: Level::Info,
-                        rule_id: "structured-data/local-business-missing-address".into(),
-                        file: file.to_string(),
-                        selector: selector.to_string(),
-                        message: "JSON-LD LocalBusiness has no 'address' property".into(),
-                        help: "Add \"address\" with a PostalAddress for local search".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(
+                        Finding::fail(
+                            "structured-data/local-business-missing-address",
+                            "JSON-LD LocalBusiness has no 'address' property",
+                        )
+                        .with_severity(Severity::Low)
+                        .at(Location::file(file.to_string()).with_selector(selector.to_string()))
+                        .with_help("Add \"address\" with a PostalAddress for local search"),
+                    );
                 }
             }
         }
@@ -416,17 +375,10 @@ fn check_property_completeness(
                 };
                 for item in &items {
                     if item.get("acceptedAnswer").is_none() {
-                        findings.push(Finding {
-                            level: Level::Error,
-                            rule_id: "structured-data/faq-missing-answer".into(),
-                            file: file.to_string(),
-                            selector: selector.to_string(),
-                            message: "JSON-LD FAQPage mainEntity item is missing 'acceptedAnswer'".into(),
-                            help: "Each Question in FAQPage must have an \"acceptedAnswer\": {\"@type\": \"Answer\", \"text\": \"...\"}".into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                        findings.push(Finding::fail("structured-data/faq-missing-answer","JSON-LD FAQPage mainEntity item is missing 'acceptedAnswer'")
+.with_severity(Severity::High)
+.at(Location::file(file.to_string()).with_selector(selector.to_string()))
+.with_help("Each Question in FAQPage must have an \"acceptedAnswer\": {\"@type\": \"Answer\", \"text\": \"...\"}"));
                         break; // report once per block
                     }
                 }
@@ -434,37 +386,34 @@ fn check_property_completeness(
         }
         "WebSite" if entity.get("potentialAction").is_none() => {
             // Info: potentialAction (SearchAction)
-            findings.push(Finding {
-                level: Level::Info,
-                rule_id: "structured-data/website-missing-search-action".into(),
-                file: file.to_string(),
-                selector: selector.to_string(),
-                message: "JSON-LD WebSite has no 'potentialAction' (SearchAction)".into(),
-                help: "Add a SearchAction to enable Google Sitelinks search box".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: None,
-            });
+            findings.push(
+                Finding::fail(
+                    "structured-data/website-missing-search-action",
+                    "JSON-LD WebSite has no 'potentialAction' (SearchAction)",
+                )
+                .with_severity(Severity::Low)
+                .at(Location::file(file.to_string()).with_selector(selector.to_string()))
+                .with_help("Add a SearchAction to enable Google Sitelinks search box"),
+            );
         }
         "BreadcrumbList" => {
             // Each ListItem must have position and item.name
             if let Some(items) = entity.get("itemListElement").and_then(|v| v.as_array()) {
                 for (i, item) in items.iter().enumerate() {
                     if item.get("position").is_none() {
-                        findings.push(Finding {
-                            level: Level::Error,
-                            rule_id: "structured-data/breadcrumb-missing-position".into(),
-                            file: file.to_string(),
-                            selector: selector.to_string(),
-                            message: format!(
-                                "JSON-LD BreadcrumbList item [{}] is missing 'position'",
-                                i
-                            ),
-                            help: "Each ListItem must have \"position\": N (1-based index)".into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                        findings.push(
+                            Finding::fail(
+                                "structured-data/breadcrumb-missing-position",
+                                format!(
+                                    "JSON-LD BreadcrumbList item [{}] is missing 'position'",
+                                    i
+                                ),
+                            )
+                            .with_severity(Severity::High)
+                            .at(Location::file(file.to_string())
+                                .with_selector(selector.to_string()))
+                            .with_help("Each ListItem must have \"position\": N (1-based index)"),
+                        );
                     }
                     let has_name = item
                         .get("item")
@@ -476,20 +425,13 @@ fn check_property_completeness(
                         .and_then(|n| n.as_str())
                         .is_some_and(|n| !n.is_empty());
                     if !has_name && !has_name_direct {
-                        findings.push(Finding {
-                            level: Level::Error,
-                            rule_id: "structured-data/breadcrumb-missing-name".into(),
-                            file: file.to_string(),
-                            selector: selector.to_string(),
-                            message: format!(
+                        findings.push(Finding::fail("structured-data/breadcrumb-missing-name", format!(
                                 "JSON-LD BreadcrumbList item [{}] is missing 'name'",
                                 i
-                            ),
-                            help: "Each ListItem must have a \"name\" or \"item\": {\"name\": \"...\"}".into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                            ))
+.with_severity(Severity::High)
+.at(Location::file(file.to_string()).with_selector(selector.to_string()))
+.with_help("Each ListItem must have a \"name\" or \"item\": {\"name\": \"...\"}"));
                     }
                 }
             }

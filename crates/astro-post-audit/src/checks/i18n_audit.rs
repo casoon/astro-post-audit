@@ -5,7 +5,7 @@ use scraper::Selector;
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::normalize;
-use crate::report::{Confidence, Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 static HREFLANG_SEL: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("link[rel='alternate'][hreflang][href]").expect("valid selector")
@@ -26,38 +26,34 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         if let Some(route_locale) = inferred_locale {
             if let Some(lang) = &html_lang {
                 if !same_language_family(route_locale, lang) {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "i18n/lang-locale-mismatch".into(),
-                        file: page.rel_path.clone(),
-                        selector: "html[lang]".into(),
-                        message: format!(
-                            "Route locale '{}' does not match html lang '{}'",
-                            route_locale, lang
-                        ),
-                        help: "Align route locale and html lang for consistent i18n signals".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: Some(Confidence::Medium),
-                    });
+                    findings.push(
+                        Finding::review(
+                            "i18n/lang-locale-mismatch",
+                            format!(
+                                "Route locale '{}' does not match html lang '{}'",
+                                route_locale, lang
+                            ),
+                        )
+                        .with_severity(Severity::Medium)
+                        .at(Location::file(page.rel_path.clone()).with_selector("html[lang]"))
+                        .with_help("Align route locale and html lang for consistent i18n signals"),
+                    );
                 }
             } else {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "i18n/lang-missing-for-locale-route".into(),
-                    file: page.rel_path.clone(),
-                    selector: "html".into(),
-                    message: format!(
-                        "Route looks localized ('{}') but html lang is missing",
-                        route_locale
+                findings.push(
+                    Finding::review(
+                        "i18n/lang-missing-for-locale-route",
+                        format!(
+                            "Route looks localized ('{}') but html lang is missing",
+                            route_locale
+                        ),
+                    )
+                    .with_severity(Severity::Medium)
+                    .at(Location::file(page.rel_path.clone()).with_selector("html"))
+                    .with_help(
+                        "Set html lang to the page locale (for example lang=\"en\" or lang=\"de\")",
                     ),
-                    help:
-                        "Set html lang to the page locale (for example lang=\"en\" or lang=\"de\")"
-                            .into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: Some(Confidence::Medium),
-                });
+                );
             }
         }
 
@@ -83,17 +79,16 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         .is_some_and(|r| r == canonical_norm)
                 });
                 if !has_canonical_in_hreflang {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "i18n/canonical-not-in-hreflang-set".into(),
-                        file: page.rel_path.clone(),
-                        selector: "link[rel='alternate'][hreflang]".into(),
-                        message: "Canonical URL is not represented in hreflang alternates".into(),
-                        help: "Add a self hreflang entry matching the canonical URL".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: Some(Confidence::Medium),
-                    });
+                    findings.push(
+                        Finding::review(
+                            "i18n/canonical-not-in-hreflang-set",
+                            "Canonical URL is not represented in hreflang alternates",
+                        )
+                        .with_severity(Severity::Medium)
+                        .at(Location::file(page.rel_path.clone())
+                            .with_selector("link[rel='alternate'][hreflang]"))
+                        .with_help("Add a self hreflang entry matching the canonical URL"),
+                    );
                 }
             }
 
@@ -102,20 +97,19 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     .iter()
                     .any(|(lang, _)| same_language_family(route_locale, &normalize_lang(lang)));
                 if !has_matching_hreflang {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "i18n/no-matching-hreflang-for-route-locale".into(),
-                        file: page.rel_path.clone(),
-                        selector: "link[rel='alternate'][hreflang]".into(),
-                        message: format!(
-                            "No hreflang entry matches the route locale '{}'",
-                            route_locale
-                        ),
-                        help: "Add hreflang entries that include the page locale".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: Some(Confidence::Medium),
-                    });
+                    findings.push(
+                        Finding::review(
+                            "i18n/no-matching-hreflang-for-route-locale",
+                            format!(
+                                "No hreflang entry matches the route locale '{}'",
+                                route_locale
+                            ),
+                        )
+                        .with_severity(Severity::Medium)
+                        .at(Location::file(page.rel_path.clone())
+                            .with_selector("link[rel='alternate'][hreflang]"))
+                        .with_help("Add hreflang entries that include the page locale"),
+                    );
                 }
             }
         }

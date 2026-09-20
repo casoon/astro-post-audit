@@ -15,6 +15,10 @@ name = "astro-post-audit"
 path = "src/main.rs"
 
 [dependencies]
+# Gemeinsames Befundmodell ueber astro-post-audit, auditmysite und LiveAudit.
+# Der Vertrag liegt in a11y-core, nicht hier.
+a11y-report = "0.3.0"
+
 # CLI
 clap = { version = "4", features = ["derive"] }
 

@@ -3,6 +3,15 @@
 version = 4
 
 [[package]]
+name = "a11y-report"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9eb9c0c5f6a7c9923f41b8f0dbf66a91478a7edf784badc9e2c296e54cded3d2"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "abnf"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -168,6 +177,7 @@ dependencies = [
 name = "astro-post-audit"
 version = "0.6.0"
 dependencies = [
+ "a11y-report",
  "anyhow",
  "c2pa",
  "clap",

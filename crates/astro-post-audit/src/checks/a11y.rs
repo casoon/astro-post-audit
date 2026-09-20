@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 /// Generic link texts that should trigger a warning (lowercase, trimmed).
 const GENERIC_LINK_TEXTS_DE: &[&str] = &[
@@ -107,32 +107,19 @@ fn check_img_alt(
         match attrs.attr("alt") {
             None => {
                 let src = attrs.attr("src").unwrap_or("(unknown)");
-                findings.push(Finding {
-                    level: Level::Error,
-                    rule_id: "a11y/img-alt".into(),
-                    file: page.rel_path.clone(),
-                    selector: format!("img[src='{}']", src),
-                    message: format!("Image missing alt attribute: src='{}'", src),
-                    help: "Add an `alt` prop to <Image>/<Picture> or the <img> tag. Use alt=\"\" only for decorative images.".into(),
-                    suggestion: Some("alt=\"...\"".into()),
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("a11y/img-alt", format!("Image missing alt attribute: src='{}'", src))
+.with_severity(Severity::High)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("img[src='{}']", src)))
+.with_help("Add an `alt` prop to <Image>/<Picture> or the <img> tag. Use alt=\"\" only for decorative images.")
+.with_suggestion("alt=\"...\""));
             }
             Some(alt) if config.a11y.check_alt_quality => {
                 let src = attrs.attr("src").unwrap_or("(unknown)");
                 if let Some(reason) = low_quality_alt_reason(alt, src) {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "a11y/invalid-img-alt".into(),
-                        file: page.rel_path.clone(),
-                        selector: format!("img[src='{}']", src),
-                        message: format!("Image alt text looks low-quality ({}): alt='{}'", reason, alt),
-                        help: "Describe the image's meaning for screen-reader users. Use alt=\"\" only for purely decorative images.".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: Some(crate::report::Confidence::Medium),
-                    });
+                    findings.push(Finding::review("a11y/invalid-img-alt", format!("Image alt text looks low-quality ({}): alt='{}'", reason, alt))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("img[src='{}']", src)))
+.with_help("Describe the image's meaning for screen-reader users. Use alt=\"\" only for purely decorative images."));
                 }
             }
             Some(_) => {}
@@ -240,17 +227,16 @@ fn check_link_names(
 
         if !has_aria_label && !has_aria_labelledby && !has_text && !has_img_alt {
             let href = attrs.attr("href").unwrap_or("(no href)");
-            findings.push(Finding {
-                level: Level::Error,
-                rule_id: "a11y/link-name".into(),
-                file: page.rel_path.clone(),
-                selector: format!("a[href='{}']", href),
-                message: format!("Link has no accessible name: href='{}'", href),
-                help: "Add text content, aria-label, or aria-labelledby to the link".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: None,
-            });
+            findings.push(
+                Finding::fail(
+                    "a11y/link-name",
+                    format!("Link has no accessible name: href='{}'", href),
+                )
+                .with_severity(Severity::High)
+                .at(Location::file(page.rel_path.clone())
+                    .with_selector(format!("a[href='{}']", href)))
+                .with_help("Add text content, aria-label, or aria-labelledby to the link"),
+            );
             continue;
         }
 
@@ -262,20 +248,19 @@ fn check_link_names(
 
             if is_generic {
                 let href = attrs.attr("href").unwrap_or("(no href)");
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "a11y/generic-link-text".into(),
-                    file: page.rel_path.clone(),
-                    selector: format!("a[href='{}']", href),
-                    message: format!(
-                        "Link has generic text '{}' - not descriptive for screen readers",
-                        text_content.trim()
-                    ),
-                    help: "Use descriptive link text or add an aria-label".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(
+                    Finding::fail(
+                        "a11y/generic-link-text",
+                        format!(
+                            "Link has generic text '{}' - not descriptive for screen readers",
+                            text_content.trim()
+                        ),
+                    )
+                    .with_severity(Severity::Medium)
+                    .at(Location::file(page.rel_path.clone())
+                        .with_selector(format!("a[href='{}']", href)))
+                    .with_help("Use descriptive link text or add an aria-label"),
+                );
             }
         }
     }
@@ -299,17 +284,12 @@ fn check_button_names(page: &crate::discovery::PageInfo, html: &Html, findings: 
         let has_text = !text_content.trim().is_empty();
 
         if !has_aria_label && !has_aria_labelledby && !has_text {
-            findings.push(Finding {
-                level: Level::Error,
-                rule_id: "a11y/button-name".into(),
-                file: page.rel_path.clone(),
-                selector: "button".into(),
-                message: "Button has no accessible name".into(),
-                help: "Add text content, aria-label, or aria-labelledby to the button".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: None,
-            });
+            findings.push(
+                Finding::fail("a11y/button-name", "Button has no accessible name")
+                    .with_severity(Severity::High)
+                    .at(Location::file(page.rel_path.clone()).with_selector("button"))
+                    .with_help("Add text content, aria-label, or aria-labelledby to the button"),
+            );
         }
     }
 }
@@ -345,20 +325,19 @@ fn check_form_labels(page: &crate::discovery::PageInfo, html: &Html, findings: &
         if !has_aria_label && !has_aria_labelledby && !has_id_with_label && !has_wrapping_label {
             let input_type = attrs.attr("type").unwrap_or("text");
             let name = attrs.attr("name").unwrap_or("(unnamed)");
-            findings.push(Finding {
-                level: Level::Error,
-                rule_id: "a11y/form-label".into(),
-                file: page.rel_path.clone(),
-                selector: format!("input[type='{}'][name='{}']", input_type, name),
-                message: format!(
-                    "Form control '{}' (type='{}') has no associated label",
-                    name, input_type
-                ),
-                help: "Add a <label for='id'>, aria-label, or aria-labelledby".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: None,
-            });
+            findings.push(
+                Finding::fail(
+                    "a11y/form-label",
+                    format!(
+                        "Form control '{}' (type='{}') has no associated label",
+                        name, input_type
+                    ),
+                )
+                .with_severity(Severity::High)
+                .at(Location::file(page.rel_path.clone())
+                    .with_selector(format!("input[type='{}'][name='{}']", input_type, name)))
+                .with_help("Add a <label for='id'>, aria-label, or aria-labelledby"),
+            );
         }
     }
 }
@@ -394,17 +373,11 @@ fn check_skip_link(page: &crate::discovery::PageInfo, html: &Html, findings: &mu
     });
 
     if !has_skip {
-        findings.push(Finding {
-            level: Level::Warning,
-            rule_id: "a11y/skip-link".into(),
-            file: page.rel_path.clone(),
-            selector: "body".into(),
-            message: "No skip navigation link found".into(),
-            help: "Add a skip link like <a href=\"#main-content\" class=\"sr-only focus:not-sr-only\">Skip to content</a> as the first element in <body>".into(),
-            suggestion: Some("<a href=\"#main-content\" class=\"sr-only\">Skip to content</a>".into()),
-            source_hint: None,
-            confidence: None,
-        });
+        findings.push(Finding::fail("a11y/skip-link","No skip navigation link found")
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("body"))
+.with_help("Add a skip link like <a href=\"#main-content\" class=\"sr-only focus:not-sr-only\">Skip to content</a> as the first element in <body>")
+.with_suggestion("<a href=\"#main-content\" class=\"sr-only\">Skip to content</a>"));
     }
 }
 
@@ -421,17 +394,16 @@ fn check_aria_hidden_focusable(
             || el.value().attr("tabindex").is_some_and(|v| v != "-1");
 
         if is_focusable {
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "a11y/aria-hidden-focusable".into(),
-                file: page.rel_path.clone(),
-                selector: format!("{}[aria-hidden='true']", tag),
-                message: format!("Focusable element <{}> has aria-hidden=\"true\"", tag),
-                help: "Remove aria-hidden from focusable elements, or add tabindex=\"-1\"".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: None,
-            });
+            findings.push(
+                Finding::fail(
+                    "a11y/aria-hidden-focusable",
+                    format!("Focusable element <{}> has aria-hidden=\"true\"", tag),
+                )
+                .with_severity(Severity::Medium)
+                .at(Location::file(page.rel_path.clone())
+                    .with_selector(format!("{}[aria-hidden='true']", tag)))
+                .with_help("Remove aria-hidden from focusable elements, or add tabindex=\"-1\""),
+            );
         }
     }
 }
@@ -452,75 +424,65 @@ fn check_landmarks(page: &crate::discovery::PageInfo, html: &Html, findings: &mu
 
     let main_count = html.select(&main_sel).count();
     if main_count == 0 {
-        findings.push(Finding {
-            level: Level::Error,
-            rule_id: "a11y/landmark-main-missing".into(),
-            file: page.rel_path.clone(),
-            selector: "body".into(),
-            message: "Page has no <main> element or role=\"main\"".into(),
-            help: "Add a <main> element to wrap the primary page content (WCAG 1.3.1, 2.4.1)"
-                .into(),
-            suggestion: Some("<main id=\"main-content\">...</main>".into()),
-            source_hint: None,
-            confidence: None,
-        });
+        findings.push(
+            Finding::fail(
+                "a11y/landmark-main-missing",
+                "Page has no <main> element or role=\"main\"",
+            )
+            .with_severity(Severity::High)
+            .at(Location::file(page.rel_path.clone()).with_selector("body"))
+            .with_help("Add a <main> element to wrap the primary page content (WCAG 1.3.1, 2.4.1)")
+            .with_suggestion("<main id=\"main-content\">...</main>"),
+        );
     } else if main_count > 1 {
-        findings.push(Finding {
-            level: Level::Error,
-            rule_id: "a11y/landmark-main-duplicate".into(),
-            file: page.rel_path.clone(),
-            selector: "main".into(),
-            message: format!(
-                "Page has {} <main> elements — only one is allowed",
-                main_count
-            ),
-            help: "There must be exactly one <main> landmark per page".into(),
-            suggestion: None,
-            source_hint: None,
-            confidence: None,
-        });
+        findings.push(
+            Finding::fail(
+                "a11y/landmark-main-duplicate",
+                format!(
+                    "Page has {} <main> elements — only one is allowed",
+                    main_count
+                ),
+            )
+            .with_severity(Severity::High)
+            .at(Location::file(page.rel_path.clone()).with_selector("main"))
+            .with_help("There must be exactly one <main> landmark per page"),
+        );
     }
 
     if html.select(&nav_sel).next().is_none() {
-        findings.push(Finding {
-            level: Level::Warning,
-            rule_id: "a11y/landmark-nav-missing".into(),
-            file: page.rel_path.clone(),
-            selector: "body".into(),
-            message: "Page has no <nav> element or role=\"navigation\"".into(),
-            help: "Add a <nav> landmark for navigation regions (WCAG 2.4.1)".into(),
-            suggestion: None,
-            source_hint: None,
-            confidence: None,
-        });
+        findings.push(
+            Finding::fail(
+                "a11y/landmark-nav-missing",
+                "Page has no <nav> element or role=\"navigation\"",
+            )
+            .with_severity(Severity::Medium)
+            .at(Location::file(page.rel_path.clone()).with_selector("body"))
+            .with_help("Add a <nav> landmark for navigation regions (WCAG 2.4.1)"),
+        );
     }
 
     if html.select(&header_sel).next().is_none() {
-        findings.push(Finding {
-            level: Level::Info,
-            rule_id: "a11y/landmark-header-missing".into(),
-            file: page.rel_path.clone(),
-            selector: "body".into(),
-            message: "Page has no top-level <header> or role=\"banner\"".into(),
-            help: "Add a <header> landmark at the top of the page".into(),
-            suggestion: None,
-            source_hint: None,
-            confidence: None,
-        });
+        findings.push(
+            Finding::fail(
+                "a11y/landmark-header-missing",
+                "Page has no top-level <header> or role=\"banner\"",
+            )
+            .with_severity(Severity::Low)
+            .at(Location::file(page.rel_path.clone()).with_selector("body"))
+            .with_help("Add a <header> landmark at the top of the page"),
+        );
     }
 
     if html.select(&footer_sel).next().is_none() {
-        findings.push(Finding {
-            level: Level::Info,
-            rule_id: "a11y/landmark-footer-missing".into(),
-            file: page.rel_path.clone(),
-            selector: "body".into(),
-            message: "Page has no top-level <footer> or role=\"contentinfo\"".into(),
-            help: "Add a <footer> landmark at the bottom of the page".into(),
-            suggestion: None,
-            source_hint: None,
-            confidence: None,
-        });
+        findings.push(
+            Finding::fail(
+                "a11y/landmark-footer-missing",
+                "Page has no top-level <footer> or role=\"contentinfo\"",
+            )
+            .with_severity(Severity::Low)
+            .at(Location::file(page.rel_path.clone()).with_selector("body"))
+            .with_help("Add a <footer> landmark at the bottom of the page"),
+        );
     }
 }
 
@@ -560,22 +522,15 @@ fn check_duplicate_ids(
             } else {
                 "a11y/duplicate-id"
             };
-            findings.push(Finding {
-                level: Level::Error,
-                rule_id: rule_id.into(),
-                file: page.rel_path.clone(),
-                selector: format!("[id='{}']", id),
-                message: format!(
+            findings.push(Finding::fail(rule_id, format!(
                     "Duplicate id=\"{}\" found {} times on this page{}",
                     id,
                     count,
                     if is_aria_ref { " (referenced by ARIA attribute)" } else { "" }
-                ),
-                help: "Each id must be unique per page — duplicate ids break ARIA references and form associations (WCAG 4.1.1)".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: None,
-            });
+                ))
+.with_severity(Severity::High)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("[id='{}']", id)))
+.with_help("Each id must be unique per page — duplicate ids break ARIA references and form associations (WCAG 4.1.1)"));
         }
     }
 }
@@ -682,36 +637,22 @@ fn check_aria_roles(page: &crate::discovery::PageInfo, html: &Html, findings: &m
         // A role attribute can contain multiple space-separated tokens
         for role in role_val.split_whitespace() {
             if ABSTRACT_ARIA_ROLES.contains(&role) {
-                findings.push(Finding {
-                    level: Level::Error,
-                    rule_id: "a11y/aria-role-abstract".into(),
-                    file: page.rel_path.clone(),
-                    selector: format!("[role='{}']", role_val),
-                    message: format!("Abstract ARIA role \"{}\" must not be used in HTML", role),
-                    help: "Use a concrete role instead — abstract roles are base concepts, not usable in content".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("a11y/aria-role-abstract", format!("Abstract ARIA role \"{}\" must not be used in HTML", role))
+.with_severity(Severity::High)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("[role='{}']", role_val)))
+.with_help("Use a concrete role instead — abstract roles are base concepts, not usable in content"));
                 continue;
             }
 
             if !VALID_ARIA_ROLES.contains(&role) {
-                findings.push(Finding {
-                    level: Level::Error,
-                    rule_id: "a11y/aria-role-invalid".into(),
-                    file: page.rel_path.clone(),
-                    selector: format!("[role='{}']", role_val),
-                    message: format!("Unknown ARIA role \"{}\" — likely a typo", role),
-                    help: format!("Check the WAI-ARIA specification for valid role values. Did you mean one of: {:?}?",
+                findings.push(Finding::fail("a11y/aria-role-invalid", format!("Unknown ARIA role \"{}\" — likely a typo", role))
+.with_severity(Severity::High)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("[role='{}']", role_val)))
+.with_help(format!("Check the WAI-ARIA specification for valid role values. Did you mean one of: {:?}?",
                         VALID_ARIA_ROLES.iter().filter(|&&r| {
                             let d = strsim_distance(r, role);
                             d <= 2 && d > 0
-                        }).take(3).collect::<Vec<_>>()),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                        }).take(3).collect::<Vec<_>>())));
                 continue;
             }
 
@@ -720,31 +661,31 @@ fn check_aria_roles(page: &crate::discovery::PageInfo, html: &Html, findings: &m
             let attrs = el.value();
             match role {
                 "checkbox" | "switch" if attrs.attr("aria-checked").is_none() => {
-                    findings.push(Finding {
-                        level: Level::Error,
-                        rule_id: "a11y/aria-required-attr".into(),
-                        file: page.rel_path.clone(),
-                        selector: format!("{}[role='{}']", tag, role),
-                        message: format!("role=\"{}\" requires aria-checked attribute", role),
-                        help: "Add aria-checked=\"true\", \"false\", or \"mixed\"".into(),
-                        suggestion: Some("aria-checked=\"false\"".into()),
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(
+                        Finding::fail(
+                            "a11y/aria-required-attr",
+                            format!("role=\"{}\" requires aria-checked attribute", role),
+                        )
+                        .with_severity(Severity::High)
+                        .at(Location::file(page.rel_path.clone())
+                            .with_selector(format!("{}[role='{}']", tag, role)))
+                        .with_help("Add aria-checked=\"true\", \"false\", or \"mixed\"")
+                        .with_suggestion("aria-checked=\"false\""),
+                    );
                 }
                 "checkbox" | "switch" => {}
                 "combobox" if attrs.attr("aria-expanded").is_none() => {
-                    findings.push(Finding {
-                        level: Level::Error,
-                        rule_id: "a11y/aria-required-attr".into(),
-                        file: page.rel_path.clone(),
-                        selector: format!("{}[role='combobox']", tag),
-                        message: "role=\"combobox\" requires aria-expanded attribute".into(),
-                        help: "Add aria-expanded=\"true\" or \"false\"".into(),
-                        suggestion: Some("aria-expanded=\"false\"".into()),
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(
+                        Finding::fail(
+                            "a11y/aria-required-attr",
+                            "role=\"combobox\" requires aria-expanded attribute",
+                        )
+                        .with_severity(Severity::High)
+                        .at(Location::file(page.rel_path.clone())
+                            .with_selector(format!("{}[role='combobox']", tag)))
+                        .with_help("Add aria-expanded=\"true\" or \"false\"")
+                        .with_suggestion("aria-expanded=\"false\""),
+                    );
                 }
                 "combobox" => {}
                 "slider" => {
@@ -754,20 +695,19 @@ fn check_aria_roles(page: &crate::discovery::PageInfo, html: &Html, findings: &m
                         .filter(|&a| attrs.attr(a).is_none())
                         .collect();
                     if !missing.is_empty() {
-                        findings.push(Finding {
-                            level: Level::Error,
-                            rule_id: "a11y/aria-required-attr".into(),
-                            file: page.rel_path.clone(),
-                            selector: format!("{}[role='slider']", tag),
-                            message: format!(
-                                "role=\"slider\" requires missing attribute(s): {}",
-                                missing.join(", ")
-                            ),
-                            help: "Add aria-valuenow, aria-valuemin, and aria-valuemax".into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                        findings.push(
+                            Finding::fail(
+                                "a11y/aria-required-attr",
+                                format!(
+                                    "role=\"slider\" requires missing attribute(s): {}",
+                                    missing.join(", ")
+                                ),
+                            )
+                            .with_severity(Severity::High)
+                            .at(Location::file(page.rel_path.clone())
+                                .with_selector(format!("{}[role='slider']", tag)))
+                            .with_help("Add aria-valuenow, aria-valuemin, and aria-valuemax"),
+                        );
                     }
                 }
                 _ => {}

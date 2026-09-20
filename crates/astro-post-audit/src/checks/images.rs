@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 const LEGACY_IMAGE_EXTENSIONS: &[&str] = &[".jpg", ".jpeg", ".png", ".gif"];
 
@@ -41,12 +41,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     let has_width = attrs.attr("width").is_some();
                     let has_height = attrs.attr("height").is_some();
                     if !has_width || !has_height {
-                        findings.push(Finding {
-                            level: Level::Error,
-                            rule_id: "images/missing-dimensions".into(),
-                            file: page.rel_path.clone(),
-                            selector: format!("img[src='{}']", src),
-                            message: format!(
+                        findings.push(Finding::fail("images/missing-dimensions", format!(
                                 "Image missing {} attribute (causes CLS): src='{}'",
                                 match (has_width, has_height) {
                                     (false, false) => "width and height",
@@ -55,12 +50,11 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                                     _ => unreachable!(),
                                 },
                                 src
-                            ),
-                            help: "Add explicit width and height attributes to prevent Cumulative Layout Shift. Use <Image> from astro:assets to get them automatically.".into(),
-                            suggestion: Some("width=\"...\" height=\"...\"".into()),
-                            source_hint: None,
-                            confidence: None,
-                        });
+                            ))
+.with_severity(Severity::High)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("img[src='{}']", src)))
+.with_help("Add explicit width and height attributes to prevent Cumulative Layout Shift. Use <Image> from astro:assets to get them automatically.")
+.with_suggestion("width=\"...\" height=\"...\""));
                     }
                 }
 
@@ -68,21 +62,15 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 if img.warn_missing_lazy && i > 0 {
                     let loading = attrs.attr("loading").unwrap_or("");
                     if loading.is_empty() {
-                        findings.push(Finding {
-                            level: Level::Warning,
-                            rule_id: "images/missing-lazy".into(),
-                            file: page.rel_path.clone(),
-                            selector: format!("img[src='{}']", src),
-                            message: format!(
+                        findings.push(Finding::fail("images/missing-lazy", format!(
                                 "Image #{} has no loading attribute: src='{}'",
                                 i + 1,
                                 src
-                            ),
-                            help: "Add loading=\"lazy\" to defer off-screen images. Use <Image> from astro:assets to get this automatically.".into(),
-                            suggestion: Some("loading=\"lazy\"".into()),
-                            source_hint: None,
-                            confidence: None,
-                        });
+                            ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("img[src='{}']", src)))
+.with_help("Add loading=\"lazy\" to defer off-screen images. Use <Image> from astro:assets to get this automatically.")
+.with_suggestion("loading=\"lazy\""));
                     }
                 }
 
@@ -90,20 +78,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 if img.info_missing_srcset && !is_svg {
                     let has_srcset = attrs.attr("srcset").is_some();
                     if !has_srcset {
-                        findings.push(Finding {
-                            level: Level::Info,
-                            rule_id: "images/missing-srcset".into(),
-                            file: page.rel_path.clone(),
-                            selector: format!("img[src='{}']", src),
-                            message: format!(
+                        findings.push(Finding::fail("images/missing-srcset", format!(
                                 "Image has no srcset (no responsive image markup): src='{}'",
                                 src
-                            ),
-                            help: "Use <Image> or <Picture> from astro:assets to generate responsive srcset automatically.".into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                            ))
+.with_severity(Severity::Low)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("img[src='{}']", src)))
+.with_help("Use <Image> or <Picture> from astro:assets to generate responsive srcset automatically."));
                     }
                 }
 
@@ -114,20 +95,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         .iter()
                         .any(|ext| src_lower.ends_with(ext));
                     if is_legacy {
-                        findings.push(Finding {
-                            level: Level::Info,
-                            rule_id: "images/legacy-format".into(),
-                            file: page.rel_path.clone(),
-                            selector: format!("img[src='{}']", src),
-                            message: format!(
+                        findings.push(Finding::fail("images/legacy-format", format!(
                                 "Image uses legacy format — consider WebP or AVIF: src='{}'",
                                 src
-                            ),
-                            help: "Use <Image> from astro:assets to automatically convert to WebP/AVIF for better compression.".into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                            ))
+.with_severity(Severity::Low)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("img[src='{}']", src)))
+.with_help("Use <Image> from astro:assets to automatically convert to WebP/AVIF for better compression."));
                     }
                 }
             }

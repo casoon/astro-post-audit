@@ -5,7 +5,7 @@ use scraper::Selector;
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::normalize;
-use crate::report::{Confidence, Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     if !config.crawl_budget.enabled {
@@ -39,37 +39,28 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         }
 
         if query_variant_count > 0 {
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "crawl-budget/query-variants".into(),
-                file: page.rel_path.clone(),
-                selector: "a[href*='?']".into(),
-                message: format!(
+            findings.push(
+                Finding::review(
+                    "crawl-budget/query-variants",
+                    format!(
                     "Found {} internal links with query parameters (crawl budget dilution risk)",
                     query_variant_count
                 ),
-                help: "Use canonical internal URLs without tracking/query params".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: Some(Confidence::Medium),
-            });
+                )
+                .with_severity(Severity::Medium)
+                .at(Location::file(page.rel_path.clone()).with_selector("a[href*='?']"))
+                .with_help("Use canonical internal URLs without tracking/query params"),
+            );
         }
 
         if !non_canonical_variant_hrefs.is_empty() {
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "crawl-budget/non-canonical-link-variant".into(),
-                file: page.rel_path.clone(),
-                selector: "a".into(),
-                message: format!(
+            findings.push(Finding::review("crawl-budget/non-canonical-link-variant", format!(
                     "Found {} internal links using non-canonical URL variants (trailing slash/index.html)",
                     non_canonical_variant_hrefs.len()
-                ),
-                help: "Link consistently to canonical URL variants only".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: Some(Confidence::Medium),
-            });
+                ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("a"))
+.with_help("Link consistently to canonical URL variants only"));
         }
 
         let html = page.parse_html();
@@ -87,22 +78,14 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     }
     for (canonical, pages) in canonical_to_pages {
         if pages.len() > 1 {
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "crawl-budget/duplicate-cluster".into(),
-                file: pages.first().cloned().unwrap_or_default(),
-                selector: "link[rel='canonical']".into(),
-                message: format!(
+            findings.push(Finding::review("crawl-budget/duplicate-cluster", format!(
                     "{} pages share canonical '{}', which can waste crawl budget",
                     pages.len(),
                     canonical
-                ),
-                help: "Consolidate duplicates or ensure only one canonical target page remains indexable"
-                    .into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: Some(Confidence::Low),
-            });
+                ))
+.with_severity(Severity::Medium)
+.at(Location::file(pages.first().cloned().unwrap_or_default()).with_selector("link[rel='canonical']"))
+.with_help("Consolidate duplicates or ensure only one canonical target page remains indexable"));
         }
     }
 
@@ -115,18 +98,17 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 continue;
             };
             if index.sitemap_urls.contains(abs) {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "crawl-budget/noindex-in-sitemap".into(),
-                    file: page.rel_path.clone(),
-                    selector: "meta[name='robots']".into(),
-                    message: "Noindex page appears in sitemap.xml".into(),
-                    help: "Remove noindex URLs from sitemap to avoid mixed indexability signals"
-                        .into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: Some(Confidence::Medium),
-                });
+                findings.push(
+                    Finding::review(
+                        "crawl-budget/noindex-in-sitemap",
+                        "Noindex page appears in sitemap.xml",
+                    )
+                    .with_severity(Severity::Medium)
+                    .at(Location::file(page.rel_path.clone()).with_selector("meta[name='robots']"))
+                    .with_help(
+                        "Remove noindex URLs from sitemap to avoid mixed indexability signals",
+                    ),
+                );
             }
         }
     }
@@ -135,19 +117,17 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         if page.noindex {
             let incoming = incoming_links.get(&page.route).copied().unwrap_or(0);
             if incoming > 0 {
-                findings.push(Finding {
-                    level: Level::Info,
-                    rule_id: "crawl-budget/noindex-with-internal-demand".into(),
-                    file: page.rel_path.clone(),
-                    selector: "meta[name='robots']".into(),
-                    message: format!("Noindex page receives {} internal links", incoming),
-                    help:
-                        "Consider de-linking or changing indexability to keep crawl paths focused"
-                            .into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: Some(Confidence::Medium),
-                });
+                findings.push(
+                    Finding::review(
+                        "crawl-budget/noindex-with-internal-demand",
+                        format!("Noindex page receives {} internal links", incoming),
+                    )
+                    .with_severity(Severity::Low)
+                    .at(Location::file(page.rel_path.clone()).with_selector("meta[name='robots']"))
+                    .with_help(
+                        "Consider de-linking or changing indexability to keep crawl paths focused",
+                    ),
+                );
             }
         }
     }
@@ -184,17 +164,16 @@ fn check_meta_refresh_targets(
         {
             let normalized = normalize::normalize_path(&resolved, &config.url_normalization);
             if !index.route_exists(&normalized) {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "crawl-budget/redirect-target-missing".into(),
-                    file: page.rel_path.clone(),
-                    selector: "meta[http-equiv='refresh']".into(),
-                    message: format!("Meta refresh target '{}' does not exist in dist", target),
-                    help: "Point redirects to existing canonical targets".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: Some(Confidence::Medium),
-                });
+                findings.push(
+                    Finding::review(
+                        "crawl-budget/redirect-target-missing",
+                        format!("Meta refresh target '{}' does not exist in dist", target),
+                    )
+                    .with_severity(Severity::Medium)
+                    .at(Location::file(page.rel_path.clone())
+                        .with_selector("meta[http-equiv='refresh']"))
+                    .with_help("Point redirects to existing canonical targets"),
+                );
             }
         }
     }

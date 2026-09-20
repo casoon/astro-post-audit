@@ -5,7 +5,7 @@ use std::sync::LazyLock;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 static TRANSITION_NAME_SEL: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("[transition\\:name], [data-astro-transition-name]").expect("valid selector")
@@ -38,17 +38,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         .or_else(|| el.value().attr("data-astro-transition-name"))
                         .unwrap_or("");
                     if !name_val.is_empty() && !seen_names.insert(name_val.to_string()) {
-                        findings.push(Finding {
-                            level: Level::Error,
-                            rule_id: "view-transitions/duplicate-name".into(),
-                            file: page.rel_path.clone(),
-                            selector: format!("[transition:name='{}']", name_val),
-                            message: format!("Duplicate transition:name '{}' on page — View Transitions require unique names per page", name_val),
-                            help: "Ensure transition:name values are unique across all elements on the same page.".into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                        findings.push(Finding::fail("view-transitions/duplicate-name", format!("Duplicate transition:name '{}' on page — View Transitions require unique names per page", name_val))
+.with_severity(Severity::High)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("[transition:name='{}']", name_val)))
+.with_help("Ensure transition:name values are unique across all elements on the same page."));
                     }
                 }
             }
@@ -63,17 +56,11 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         let href = link.value().attr("href").unwrap_or("");
                         let target = link.value().attr("target").unwrap_or("");
                         if !has_reload && target != "_blank" && !href.is_empty() {
-                            findings.push(Finding {
-                                level: Level::Info,
-                                rule_id: "view-transitions/missing-reload-hint".into(),
-                                file: page.rel_path.clone(),
-                                selector: format!("a[href='{}']", href),
-                                message: format!("External link '{}' under ClientRouter missing data-astro-reload", href),
-                                help: "Add data-astro-reload to external links so the Client Router does not intercept external navigation.".into(),
-                                suggestion: Some("data-astro-reload".into()),
-                                source_hint: None,
-                                confidence: None,
-                            });
+                            findings.push(Finding::fail("view-transitions/missing-reload-hint", format!("External link '{}' under ClientRouter missing data-astro-reload", href))
+.with_severity(Severity::Low)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("a[href='{}']", href)))
+.with_help("Add data-astro-reload to external links so the Client Router does not intercept external navigation.")
+.with_suggestion("data-astro-reload"));
                         }
                     }
                 }

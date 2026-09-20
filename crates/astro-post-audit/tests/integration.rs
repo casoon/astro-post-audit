@@ -25,7 +25,7 @@ fn good_fixtures_pass_clean() {
     // Good fixtures should produce no errors under default config.
     // They may produce canonical/target-missing warnings since canonicals point
     // to https://example.com/... but the fixture dist doesn't include all routes.
-    let errors: Vec<_> = findings.iter().filter(|f| f["level"] == "error").collect();
+    let errors: Vec<_> = findings.iter().filter(|f| f["severity"] == "high").collect();
     assert!(
         errors.is_empty(),
         "Expected no errors on good fixtures, got: {:?}",
@@ -1023,7 +1023,7 @@ fn exclude_glob_skips_files() {
     assert!(
         !findings
             .iter()
-            .any(|f| f["file"].as_str().unwrap() == "bad.html"),
+            .any(|f| f["location"]["file"].as_str().unwrap() == "bad.html"),
         "Excluded file should not have findings"
     );
     assert_eq!(code, 0);
@@ -1054,13 +1054,13 @@ fn config_exclude_filters_files() {
     assert!(
         !findings
             .iter()
-            .any(|f| f["file"].as_str().unwrap().contains("404")),
+            .any(|f| f["location"]["file"].as_str().unwrap().contains("404")),
         "Config-excluded 404.html should not have findings"
     );
     assert!(
         !findings
             .iter()
-            .any(|f| f["file"].as_str().unwrap().contains("drafts")),
+            .any(|f| f["location"]["file"].as_str().unwrap().contains("drafts")),
         "Config-excluded drafts/** should not have findings"
     );
     assert_eq!(code, 0);
@@ -1194,7 +1194,7 @@ fn max_errors_caps_output() {
     ).unwrap();
     let (json, _) = run_audit_json(dir.path(), r#"{"max_errors":2}"#);
     let findings = json["findings"].as_array().unwrap();
-    let error_count = findings.iter().filter(|f| f["level"] == "error").count();
+    let error_count = findings.iter().filter(|f| f["severity"] == "high").count();
     // With --max-errors=2, at most 2 errors
     assert!(
         error_count <= 2,
@@ -1239,7 +1239,7 @@ fn max_errors_exact_count() {
         r#"{"site":{"base_url":"https://example.com"},"max_errors":2}"#,
     );
     let findings = json["findings"].as_array().unwrap();
-    let error_count = findings.iter().filter(|f| f["level"] == "error").count();
+    let error_count = findings.iter().filter(|f| f["severity"] == "high").count();
     assert!(
         error_count <= 2,
         "With --max-errors=2, should have at most 2 errors, got {}",
@@ -1274,7 +1274,7 @@ fn max_errors_truncated_in_json() {
 
     let (json, _) = run_audit_json(dir.path(), r#"{"max_errors":1}"#);
     let findings = json["findings"].as_array().unwrap();
-    let error_count = findings.iter().filter(|f| f["level"] == "error").count();
+    let error_count = findings.iter().filter(|f| f["severity"] == "high").count();
     // The seo check runs in parallel and returns 5 errors,
     // then the post-processing caps to exactly 1
     assert!(
@@ -1427,12 +1427,36 @@ fn json_finding_structure() {
     let findings = json["findings"].as_array().unwrap();
     assert!(!findings.is_empty());
     let f = &findings[0];
-    assert!(f["level"].is_string());
+    // Zwei Achsen, kein zusammengefasster Level: outcome sagt, wie sicher die
+    // Aussage ist, severity, wie schwer das Problem wiegt.
+    assert!(f["level"].is_null(), "level ist durch outcome + severity ersetzt");
+    assert!(f["outcome"].is_string());
+    assert!(f["severity"].is_string());
     assert!(f["rule_id"].is_string());
-    assert!(f["file"].is_string());
-    assert!(f["selector"].is_string());
+    assert!(f["location"]["file"].is_string());
     assert!(f["message"].is_string());
     assert!(f["help"].is_string());
+}
+
+/// Eine heuristisch belegte Regel liefert `review`, nicht `fail` mit
+/// abgesenkter Gewissheit — eine dritte Achse gibt es bewusst nicht.
+#[test]
+fn json_heuristische_regel_liefert_review() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>T</title></head><body><h1>T</h1><img src="a.png" alt="image"></body></html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"a11y":{"invalid_img_alt":true}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    let alt = findings
+        .iter()
+        .find(|f| f["rule_id"] == "a11y/invalid-img-alt");
+    if let Some(alt) = alt {
+        assert_eq!(alt["outcome"], "review");
+        assert_ne!(alt["severity"], "high", "Review traegt hoechstens Medium");
+    }
 }
 
 // ==========================================================================
@@ -1708,8 +1732,8 @@ fn severity_mapping_downgrades_error_to_warning() {
         .find(|f| f["rule_id"] == "html/lang-missing");
     assert!(lang.is_some(), "Should still report lang-missing");
     assert_eq!(
-        lang.unwrap()["level"],
-        "warning",
+        lang.unwrap()["severity"],
+        "medium",
         "Severity should be downgraded to warning"
     );
     // Without --strict, warnings don't cause exit code 1
@@ -1765,8 +1789,8 @@ fn severity_mapping_upgrades_warning_to_error() {
         .find(|f| f["rule_id"] == "html/title-too-long");
     assert!(title.is_some(), "Should still report title-too-long");
     assert_eq!(
-        title.unwrap()["level"],
-        "error",
+        title.unwrap()["severity"],
+        "high",
         "Severity should be upgraded to error"
     );
     assert_eq!(code, 1, "Upgraded to error should cause exit code 1");
@@ -2064,11 +2088,11 @@ fn css_architecture_measures_route_payload_and_outliers() {
     let findings = json["findings"].as_array().unwrap();
     assert!(findings.iter().any(|finding| {
         finding["rule_id"] == "css-architecture/route-payload"
-            && finding["file"] == "shop/index.html"
+            && finding["location"]["file"] == "shop/index.html"
     }));
     assert!(findings.iter().any(|finding| {
         finding["rule_id"] == "css-architecture/route-outlier"
-            && finding["file"] == "shop/index.html"
+            && finding["location"]["file"] == "shop/index.html"
     }));
 }
 
@@ -3426,7 +3450,7 @@ fn ai_visibility_rich_page_pass() {
                 .as_str()
                 .unwrap_or("")
                 .starts_with("ai-visibility/")
-                && f["level"] == "error"
+                && f["severity"] == "high"
         })
         .collect();
     assert!(
@@ -3886,7 +3910,7 @@ fn content_sync_missing_page() {
     let missing: Vec<&str> = findings
         .iter()
         .filter(|f| f["rule_id"] == "content/missing-page")
-        .map(|f| f["file"].as_str().unwrap())
+        .map(|f| f["location"]["file"].as_str().unwrap())
         .collect();
     assert!(
         missing.iter().any(|f| f.contains("hidden-post")),
@@ -4223,19 +4247,19 @@ fn content_style_exclude_skips_only_matching_pages() {
     let findings = json["findings"].as_array().unwrap();
     assert!(
         !findings.iter().any(|f| {
-            f["file"] == "tags/kubernetes/index.html" && f["rule_id"] == "content-style/test-word"
+            f["location"]["file"] == "tags/kubernetes/index.html" && f["rule_id"] == "content-style/test-word"
         }),
         "matching paths must skip content style checks: {findings:?}"
     );
     assert!(
         findings
             .iter()
-            .any(|f| { f["file"] == "post.html" && f["rule_id"] == "content-style/test-word" }),
+            .any(|f| { f["location"]["file"] == "post.html" && f["rule_id"] == "content-style/test-word" }),
         "non-matching pages must still receive content style findings: {findings:?}"
     );
     assert!(
         findings.iter().any(|f| {
-            f["file"] == "tags/kubernetes/index.html" && f["rule_id"] == "a11y/img-alt"
+            f["location"]["file"] == "tags/kubernetes/index.html" && f["rule_id"] == "a11y/img-alt"
         }),
         "excluding content style must not suppress other checks: {findings:?}"
     );
@@ -4285,7 +4309,7 @@ fn content_style_chatbot_leftover_presence() {
     assert!(
         findings
             .iter()
-            .any(|f| f["rule_id"] == "content-style/chatbot-leftover" && f["level"] == "warning"),
+            .any(|f| f["rule_id"] == "content-style/chatbot-leftover" && f["severity"] == "medium"),
         "Chatbot leftover phrase should trigger a warning-level finding: {findings:?}"
     );
     let finding = findings
@@ -4371,7 +4395,7 @@ fn content_style_language_mismatch_detects_conflicting_content_language() {
     assert!(
         findings.iter().any(|f| {
             f["rule_id"] == "content-style/language-mismatch"
-                && f["level"] == "info"
+                && f["severity"] == "low"
                 && f["message"].as_str().unwrap_or("").contains("English signal words")
         }),
         "English content with html lang=de should produce a low-confidence language mismatch: {findings:?}"

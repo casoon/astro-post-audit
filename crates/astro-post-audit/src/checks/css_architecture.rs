@@ -6,7 +6,7 @@ use scraper::Selector;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Confidence, Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 static LINK_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("link[href]").expect("valid selector"));
@@ -103,11 +103,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 }
 
 fn payload_finding(route: &RouteCss, max_kb: u64) -> Finding {
-    Finding::new(
-        Level::Warning,
+    Finding::fail(
         "css-architecture/route-payload",
-        route.file.clone(),
-        "link[rel~='stylesheet'], style",
         format!(
             "Route '{}' loads {:.1}KB of local CSS across {} stylesheet(s) (max: {}KB)",
             route.route,
@@ -115,27 +112,23 @@ fn payload_finding(route: &RouteCss, max_kb: u64) -> Finding {
             route.stylesheet_count,
             max_kb
         ),
-        "Split route-specific styles or remove CSS that is not needed by this route.",
-        None,
     )
+    .with_severity(Severity::Medium)
+    .at(Location::file(route.file.clone()).with_selector("link[rel~='stylesheet'], style"))
+    .with_help("Split route-specific styles or remove CSS that is not needed by this route.")
 }
 
 fn outlier_finding(route: &RouteCss, median: u64, factor: f64) -> Finding {
-    Finding::new(
-        Level::Info,
-        "css-architecture/route-outlier",
-        route.file.clone(),
-        "link[rel~='stylesheet'], style",
-        format!(
+    Finding::review("css-architecture/route-outlier", format!(
             "Route '{}' loads {:.1}KB of local CSS; the route median is {:.1}KB (outlier factor: {:.1}x)",
             route.route,
             route.bytes as f64 / 1024.0,
             median as f64 / 1024.0,
             factor
-        ),
-        "Review the stylesheets unique to this route and confirm that the difference is intentional.",
-        Some(Confidence::Medium),
-    )
+        ))
+.with_severity(Severity::Low)
+.at(Location::file(route.file.clone()).with_selector("link[rel~='stylesheet'], style"))
+.with_help("Review the stylesheets unique to this route and confirm that the difference is intentional.")
 }
 
 fn resolve_local_stylesheet(href: &str, page_rel: &str, dist: &Path) -> Option<PathBuf> {

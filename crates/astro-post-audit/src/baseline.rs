@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::Path;
 
-use crate::report::Finding;
+use crate::report::{self, Finding};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct BaselineEntry {
@@ -25,8 +25,8 @@ pub fn write(findings: &[Finding], path: &str) -> Result<usize> {
         .iter()
         .map(|f| BaselineEntry {
             rule_id: f.rule_id.clone(),
-            file: f.file.clone(),
-            selector: f.selector.clone(),
+            file: report::datei_von(f).to_string(),
+            selector: f.location.selector.clone().unwrap_or_default(),
         })
         .collect();
     let count = entries.len();
@@ -56,8 +56,15 @@ pub fn filter(findings: Vec<Finding>, path: &str) -> Result<(Vec<Finding>, usize
     let filtered: Vec<Finding> = findings
         .into_iter()
         .filter(|f| {
-            !known.contains(&(f.rule_id.clone(), f.file.clone(), f.selector.clone()))
-                && !known.contains(&(f.rule_id.clone(), f.file.clone(), String::new()))
+            !known.contains(&(
+                f.rule_id.clone(),
+                report::datei_von(f).to_string(),
+                f.location.selector.clone().unwrap_or_default(),
+            )) && !known.contains(&(
+                f.rule_id.clone(),
+                report::datei_von(f).to_string(),
+                String::new(),
+            ))
         })
         .collect();
     let suppressed = before - filtered.len();

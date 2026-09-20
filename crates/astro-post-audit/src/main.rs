@@ -243,9 +243,9 @@ fn run() -> Result<i32> {
                 if let Some(override_level) = config.severity.overrides.get(&f.rule_id) {
                     match override_level {
                         SeverityLevel::Off => return false,
-                        SeverityLevel::Error => f.level = report::Level::Error,
-                        SeverityLevel::Warning => f.level = report::Level::Warning,
-                        SeverityLevel::Info => f.level = report::Level::Info,
+                        SeverityLevel::Error => f.severity = report::Severity::High,
+                        SeverityLevel::Warning => f.severity = report::Severity::Medium,
+                        SeverityLevel::Info => f.severity = report::Severity::Low,
                     }
                 }
                 true
@@ -271,10 +271,7 @@ fn run() -> Result<i32> {
                 elapsed_ms
             );
         }
-        error_count += new_findings
-            .iter()
-            .filter(|f| f.level == report::Level::Error)
-            .count();
+        error_count += new_findings.iter().filter(|f| report::is_error(f)).count();
         findings.extend(new_findings);
     }
     let _ = error_count;
@@ -291,10 +288,11 @@ fn run() -> Result<i32> {
             let mut hint_cache: std::collections::HashMap<String, Option<String>> =
                 std::collections::HashMap::new();
             for f in &mut findings {
+                let datei = report::datei_von(f).to_string();
                 let hint = hint_cache
-                    .entry(f.file.clone())
-                    .or_insert_with(|| hints::find_source(&f.file, root));
-                f.source_hint = hint.clone();
+                    .entry(datei.clone())
+                    .or_insert_with(|| hints::find_source(&datei, root));
+                f.location.source_hint = hint.clone();
             }
         }
     }
@@ -313,14 +311,11 @@ fn run() -> Result<i32> {
 
     // Enforce exact --max-errors cap: keep only the first N errors (plus all non-errors before them)
     let truncated = if let Some(max) = max_errors {
-        let total_errors = findings
-            .iter()
-            .filter(|f| f.level == report::Level::Error)
-            .count();
+        let total_errors = findings.iter().filter(|f| report::is_error(f)).count();
         if total_errors > max {
             let mut error_seen = 0usize;
             findings.retain(|f| {
-                if f.level == report::Level::Error {
+                if report::is_error(f) {
                     error_seen += 1;
                     error_seen <= max
                 } else {

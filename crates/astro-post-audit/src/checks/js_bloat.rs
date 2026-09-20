@@ -6,7 +6,7 @@ use scraper::Selector;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Confidence, Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 static SCRIPT_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("script[src]").expect("valid selector"));
@@ -68,20 +68,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             } else {
                 String::new()
             };
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "performance/js-bloat".into(),
-                file: page.rel_path.clone(),
-                selector: "script".into(),
-                message: format!(
+            findings.push(Finding::review("performance/js-bloat", format!(
                     "Route '{}' loads {}KB of client-side JavaScript{} (max: {}KB)",
                     page.route, total_kb, island_note, max_kb
-                ),
-                help: "Consider using `client:visible`/`client:idle`, or removing interactivity if the content can be static.".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: Some(Confidence::Medium),
-            });
+                ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("script"))
+.with_help("Consider using `client:visible`/`client:idle`, or removing interactivity if the content can be static."));
         }
     }
 

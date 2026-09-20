@@ -5,7 +5,7 @@ use url::Url;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Confidence, Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 use std::sync::LazyLock;
 
@@ -48,20 +48,18 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             }
         }
         if sync_scripts > 0 {
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "render-blocking/sync-head-scripts".into(),
-                file: page.rel_path.clone(),
-                selector: "head script[src]".into(),
-                message: format!(
-                    "Found {} synchronous head script(s) that can block rendering",
-                    sync_scripts
-                ),
-                help: "Use defer/async (or type=module) for non-critical scripts in <head>".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: Some(Confidence::Medium),
-            });
+            findings.push(
+                Finding::review(
+                    "render-blocking/sync-head-scripts",
+                    format!(
+                        "Found {} synchronous head script(s) that can block rendering",
+                        sync_scripts
+                    ),
+                )
+                .with_severity(Severity::Medium)
+                .at(Location::file(page.rel_path.clone()).with_selector("head script[src]"))
+                .with_help("Use defer/async (or type=module) for non-critical scripts in <head>"),
+            );
         }
 
         let known_preconnects: HashSet<String> = html
@@ -89,18 +87,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
         for origin in critical_third_party_origins {
             if !known_preconnects.contains(&origin) {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "render-blocking/missing-preconnect".into(),
-                    file: page.rel_path.clone(),
-                    selector: "head".into(),
-                    message: format!("Missing preconnect/dns-prefetch for critical origin '{}'", origin),
-                    help: "Add <link rel=\"preconnect\"> (or dns-prefetch) for critical third-party origins"
-                        .into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: Some(Confidence::Medium),
-                });
+                findings.push(Finding::review("render-blocking/missing-preconnect", format!("Missing preconnect/dns-prefetch for critical origin '{}'", origin))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("head"))
+.with_help("Add <link rel=\"preconnect\"> (or dns-prefetch) for critical third-party origins"));
             }
         }
     }
