@@ -1,3 +1,12 @@
+//! Was an `<head>` nicht Barrierefreiheit ist.
+//!
+//! `html/lang-missing`, `html/title-missing`, `html/title-empty` und
+//! `html/viewport-missing` sind hier abgelöst — sie kommen jetzt als
+//! `document/lang-missing`, `document/title-missing`, `document/title-empty`
+//! und `zoom/viewport-missing` aus `a11y-rules`. Was bleibt, ist SEO:
+//! Meta-Description und Titellänge. Die gehören nicht nach `a11y-core` und
+//! behalten ihre Kennung.
+
 use rayon::prelude::*;
 
 use crate::config::Config;
@@ -11,82 +20,45 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         .flat_map(|page| {
             let mut findings = Vec::new();
 
-            // lang attribute
-            if config.html_basics.lang_attr_required {
-                check_lang(page, &mut findings);
-            }
-
-            // title tag
-            if config.html_basics.title_required {
-                check_title(page, config, &mut findings);
-            }
+            // Titellaenge -- eine Empfehlung fuer die Suchergebnisseite,
+            // keine Barrierefreiheit. Dass der Titel ueberhaupt da und nicht
+            // leer ist, prueft jetzt document/title-* aus a11y-rules.
+            check_title_length(page, config, &mut findings);
 
             // meta description: presence check + length check (independent)
             check_meta_description(page, config, &mut findings);
-
-            // viewport
-            if config.html_basics.viewport_required {
-                check_viewport(page, &mut findings);
-            }
 
             findings
         })
         .collect()
 }
 
-fn check_lang(page: &crate::discovery::PageInfo, findings: &mut Vec<Finding>) {
-    let has_lang = page
-        .html_lang
-        .as_ref()
-        .is_some_and(|v| !v.trim().is_empty());
-
-    if !has_lang {
-        findings.push(Finding::fail("html/lang-missing","Missing lang attribute on <html> element")
-.with_severity(Severity::High)
-.at(Location::file(page.rel_path.clone()).with_selector("html"))
-.with_help("Set the lang attribute on the root <html> element in your main Layout (e.g. <html lang=\"en\">). For multilingual sites, derive it from Astro.currentLocale.")
-.with_suggestion("<html lang=\"en\">"));
-    }
-}
-
-fn check_title(page: &crate::discovery::PageInfo, config: &Config, findings: &mut Vec<Finding>) {
-    match &page.title_text {
-        None => {
-            findings.push(
-                Finding::fail("html/title-missing", "Missing <title> tag")
-                    .with_severity(Severity::High)
-                    .at(Location::file(page.rel_path.clone()).with_selector("head"))
-                    .with_help("Add a <title> tag inside <head>")
-                    .with_suggestion("<title>Page Title</title>"),
-            );
-        }
-        Some(trimmed) => {
-            if trimmed.is_empty() {
-                findings.push(
-                    Finding::fail("html/title-empty", "Title tag is empty")
-                        .with_severity(Severity::High)
-                        .at(Location::file(page.rel_path.clone()).with_selector("title"))
-                        .with_help("Add descriptive text to the <title> tag")
-                        .with_suggestion("<title>Page Title</title>"),
-                );
-            } else if let Some(max) = config.html_basics.title_max_length {
-                if trimmed.len() > max {
-                    findings.push(
-                        Finding::fail(
-                            "html/title-too-long",
-                            format!(
-                                "Title is {} chars (recommended max: {})",
-                                trimmed.len(),
-                                max
-                            ),
-                        )
-                        .with_severity(Severity::Medium)
-                        .at(Location::file(page.rel_path.clone()).with_selector("title"))
-                        .with_help("Shorten the title for better display in search results"),
-                    );
-                }
-            }
-        }
+/// Nur noch die Laenge. Vorhandensein und Leere prueft `a11y-rules`.
+fn check_title_length(
+    page: &crate::discovery::PageInfo,
+    config: &Config,
+    findings: &mut Vec<Finding>,
+) {
+    let Some(trimmed) = page.title_text.as_ref().filter(|t| !t.is_empty()) else {
+        return;
+    };
+    let Some(max) = config.html_basics.title_max_length else {
+        return;
+    };
+    if trimmed.len() > max {
+        findings.push(
+            Finding::fail(
+                "html/title-too-long",
+                format!(
+                    "Title is {} chars (recommended max: {})",
+                    trimmed.len(),
+                    max
+                ),
+            )
+            .with_severity(Severity::Medium)
+            .at(Location::file(page.rel_path.clone()).with_selector("title"))
+            .with_help("Shorten the title for better display in search results"),
+        );
     }
 }
 
@@ -135,21 +107,5 @@ fn check_meta_description(
                 }
             }
         }
-    }
-}
-
-fn check_viewport(page: &crate::discovery::PageInfo, findings: &mut Vec<Finding>) {
-    if !page.has_viewport {
-        findings.push(
-            Finding::fail("html/viewport-missing", "Missing viewport meta tag")
-                .with_severity(Severity::High)
-                .at(Location::file(page.rel_path.clone()).with_selector("head"))
-                .with_help(
-                    "Add <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
-                )
-                .with_suggestion(
-                    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
-                ),
-        );
     }
 }

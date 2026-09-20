@@ -291,6 +291,14 @@ impl Reporter {
         #[derive(Serialize)]
         struct Report<'a> {
             findings: &'a [Finding],
+            /// Regeln, die dieser Host nicht bedienen konnte, samt Grund.
+            ///
+            /// Ohne dieses Feld hiesse „nicht geprueft" nach aussen dasselbe
+            /// wie „bestanden" -- genau der Unterschied, den das gemeinsame
+            /// Modell festhalten soll. Statisches HTML kennt keine berechneten
+            /// Stile, deshalb steht der Kontrast hier.
+            #[serde(skip_serializing_if = "Vec::is_empty")]
+            rule_runs: Vec<a11y_report::RuleRun>,
             summary: &'a Summary,
             #[serde(skip_serializing_if = "Option::is_none")]
             benchmark: Option<&'a BenchmarkData>,
@@ -298,6 +306,7 @@ impl Reporter {
 
         let report = Report {
             findings,
+            rule_runs: crate::checks::a11y_core::nicht_gelaufen(),
             summary,
             benchmark,
         };

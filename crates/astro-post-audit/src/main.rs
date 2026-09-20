@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::process;
 use std::time::Instant;
 
+mod adapter;
 mod baseline;
 mod checks;
 mod config;
@@ -183,9 +184,10 @@ fn run() -> Result<i32> {
     let registry: &[(&str, CheckFn)] = &[
         ("seo", checks::seo::check_all),
         ("links", checks::links::check_all),
-        ("a11y", checks::a11y::check_all),
+        // Der gemeinsame Regelbestand aus a11y-core, ueber dem Adapter.
+        // Loest die frueheren Module a11y und headings vollstaendig ab.
+        ("a11y_core", checks::a11y_core::check_all),
         ("html_basics", checks::html_basics::check_all),
-        ("headings", checks::headings::check_all),
         ("sitemap", checks::sitemap::check_all),
         ("robots_txt", checks::robots_txt::check_all),
         ("assets", checks::assets::check_all),

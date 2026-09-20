@@ -17,7 +17,10 @@ path = "src/main.rs"
 [dependencies]
 # Gemeinsames Befundmodell ueber astro-post-audit, auditmysite und LiveAudit.
 # Der Vertrag liegt in a11y-core, nicht hier.
-a11y-report = "0.7.0"
+a11y-report = "0.10.0"
+a11y-dom = "0.10.0"
+a11y-rules = "0.10.0"
+accname = "0.10.0"
 
 # CLI
 clap = { version = "4", features = ["derive"] }
@@ -34,6 +37,8 @@ rayon = "1"
 
 # HTML parsing
 scraper = "0.22"
+# Der Baum, den scraper benutzt -- fuer den a11y-dom-Adapter direkt gebraucht.
+ego-tree = "0.10"
 
 # HTML5 conformance validation (html_validation check) — vnu-comparable, no JVM
 html-conform = "0.2"

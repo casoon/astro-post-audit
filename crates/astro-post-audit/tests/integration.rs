@@ -53,23 +53,29 @@ fn bad_fixtures_detect_errors() {
 
     // Should detect these errors on the bad fixture
     assert!(
-        rule_ids.contains(&"html/lang-missing"),
+        rule_ids.contains(&"document/lang-missing"),
         "Missing lang detection"
     );
     assert!(
-        rule_ids.contains(&"html/title-empty"),
+        rule_ids.contains(&"document/title-empty"),
         "Empty title detection"
     );
     assert!(
-        rule_ids.contains(&"html/viewport-missing"),
+        rule_ids.contains(&"zoom/viewport-missing"),
         "Missing viewport"
     );
     assert!(rule_ids.contains(&"canonical/missing"), "Missing canonical");
-    assert!(rule_ids.contains(&"a11y/img-alt"), "Missing img alt");
-    assert!(rule_ids.contains(&"a11y/link-name"), "Empty link name");
-    assert!(rule_ids.contains(&"a11y/button-name"), "Empty button name");
-    assert!(rule_ids.contains(&"a11y/form-label"), "Missing form label");
-    assert!(rule_ids.contains(&"headings/no-h1"), "Missing h1");
+    assert!(rule_ids.contains(&"images/alt-missing"), "Missing img alt");
+    assert!(rule_ids.contains(&"links/name-missing"), "Empty link name");
+    assert!(
+        rule_ids.contains(&"buttons/name-missing"),
+        "Empty button name"
+    );
+    assert!(
+        rule_ids.contains(&"forms/label-missing"),
+        "Missing form label"
+    );
+    assert!(rule_ids.contains(&"headings/h1-missing"), "Missing h1");
 
     assert_eq!(code, 1, "Should exit with code 1 on errors");
 }
@@ -191,7 +197,9 @@ fn html_basics_lang_missing() {
     ).unwrap();
     let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
-    assert!(findings.iter().any(|f| f["rule_id"] == "html/lang-missing"));
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "document/lang-missing"));
 }
 
 #[test]
@@ -205,7 +213,7 @@ fn html_basics_title_missing() {
     let findings = json["findings"].as_array().unwrap();
     assert!(findings
         .iter()
-        .any(|f| f["rule_id"] == "html/title-missing"));
+        .any(|f| f["rule_id"] == "document/title-missing"));
 }
 
 #[test]
@@ -238,7 +246,7 @@ fn html_basics_viewport_missing() {
     let findings = json["findings"].as_array().unwrap();
     assert!(findings
         .iter()
-        .any(|f| f["rule_id"] == "html/viewport-missing"));
+        .any(|f| f["rule_id"] == "zoom/viewport-missing"));
 }
 
 // ==========================================================================
@@ -254,7 +262,9 @@ fn headings_no_h1() {
     ).unwrap();
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
-    assert!(findings.iter().any(|f| f["rule_id"] == "headings/no-h1"));
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "headings/h1-missing"));
     assert_eq!(code, 1);
 }
 
@@ -269,7 +279,7 @@ fn headings_multiple_h1() {
     let findings = json["findings"].as_array().unwrap();
     assert!(findings
         .iter()
-        .any(|f| f["rule_id"] == "headings/multiple-h1"));
+        .any(|f| f["rule_id"] == "headings/h1-multiple"));
     assert_eq!(code, 0, "multiple-h1 is a warning");
 }
 
@@ -286,7 +296,9 @@ fn a11y_img_alt_missing() {
     ).unwrap();
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
-    assert!(findings.iter().any(|f| f["rule_id"] == "a11y/img-alt"));
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "images/alt-missing"));
     assert_eq!(code, 1);
 }
 
@@ -301,7 +313,7 @@ fn a11y_decorative_image_no_error() {
     let findings = json["findings"].as_array().unwrap();
     let img_alt_findings: Vec<_> = findings
         .iter()
-        .filter(|f| f["rule_id"] == "a11y/img-alt")
+        .filter(|f| f["rule_id"] == "images/alt-missing")
         .collect();
     assert!(
         img_alt_findings.is_empty(),
@@ -318,7 +330,9 @@ fn a11y_link_name_empty() {
     ).unwrap();
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
-    assert!(findings.iter().any(|f| f["rule_id"] == "a11y/link-name"));
+    assert!(findings
+        .iter()
+        .any(|f| f["rule_id"] == "links/name-missing"));
     assert_eq!(code, 1);
 }
 
@@ -332,7 +346,9 @@ fn a11y_link_with_aria_label_ok() {
     let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        !findings.iter().any(|f| f["rule_id"] == "a11y/link-name"),
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "links/name-missing"),
         "aria-label should satisfy link-name"
     );
 }
@@ -348,7 +364,7 @@ fn a11y_generic_link_text() {
     let findings = json["findings"].as_array().unwrap();
     let generic: Vec<_> = findings
         .iter()
-        .filter(|f| f["rule_id"] == "a11y/generic-link-text")
+        .filter(|f| f["rule_id"] == "links/generic-name")
         .collect();
     assert_eq!(
         generic.len(),
@@ -368,7 +384,7 @@ fn a11y_button_name_missing() {
     let findings = json["findings"].as_array().unwrap();
     let button_findings: Vec<_> = findings
         .iter()
-        .filter(|f| f["rule_id"] == "a11y/button-name")
+        .filter(|f| f["rule_id"] == "buttons/name-missing")
         .collect();
     assert_eq!(
         button_findings.len(),
@@ -389,7 +405,7 @@ fn a11y_form_label_missing() {
     let findings = json["findings"].as_array().unwrap();
     let label_findings: Vec<_> = findings
         .iter()
-        .filter(|f| f["rule_id"] == "a11y/form-label")
+        .filter(|f| f["rule_id"] == "forms/label-missing")
         .collect();
     assert_eq!(
         label_findings.len(),
@@ -408,7 +424,9 @@ fn a11y_form_label_wrapped_input_ok() {
     ).unwrap();
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
-    let has_form_label = findings.iter().any(|f| f["rule_id"] == "a11y/form-label");
+    let has_form_label = findings
+        .iter()
+        .any(|f| f["rule_id"] == "forms/label-missing");
     assert!(!has_form_label, "Wrapped input should count as labeled");
     assert_eq!(code, 0);
 }
@@ -424,7 +442,7 @@ fn a11y_aria_hidden_focusable() {
     let findings = json["findings"].as_array().unwrap();
     let aria_findings: Vec<_> = findings
         .iter()
-        .filter(|f| f["rule_id"] == "a11y/aria-hidden-focusable")
+        .filter(|f| f["rule_id"] == "keyboard/hidden-focusable")
         .collect();
     assert_eq!(
         aria_findings.len(),
@@ -899,9 +917,12 @@ fn edge_case_empty_file() {
         .map(|f| f["rule_id"].as_str().unwrap())
         .collect();
     assert!(rule_ids.contains(&"canonical/missing"));
-    assert!(rule_ids.contains(&"html/lang-missing"));
-    assert!(rule_ids.contains(&"html/title-missing"));
-    assert!(rule_ids.contains(&"headings/no-h1"));
+    assert!(rule_ids.contains(&"document/lang-missing"));
+    assert!(rule_ids.contains(&"document/title-missing"));
+    // headings/h1-missing setzt voraus, dass es ueberhaupt Ueberschriften
+    // gibt. Eine leere Datei hat keine Gliederung, der sie fehlen koennte --
+    // sie meldet document/title-missing und landmarks/main-missing.
+    assert!(rule_ids.contains(&"landmarks/main-missing"));
     assert_eq!(code, 1);
     // Should NOT crash
 }
@@ -942,7 +963,7 @@ fn edge_case_no_doctype() {
         .iter()
         .map(|f| f["rule_id"].as_str().unwrap())
         .collect();
-    assert!(rule_ids.contains(&"html/lang-missing"));
+    assert!(rule_ids.contains(&"document/lang-missing"));
     assert!(rule_ids.contains(&"canonical/missing"));
     assert_eq!(code, 1);
 }
@@ -954,10 +975,12 @@ fn edge_case_no_doctype() {
 #[test]
 fn strict_mode_warnings_become_errors() {
     let dir = TempDir::new().unwrap();
-    // Create a page with only warnings (e.g., multiple h1)
+    // Eine Seite mit genau einem Warnbefund: doppelte ID (medium). Zwei h1
+    // taugen dafuer nicht mehr -- der Kern stuft headings/h1-multiple als
+    // low ein, weil mehrere h1 in HTML zulaessig sind.
     fs::write(
         dir.path().join("index.html"),
-        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>First</h1><h1>Second</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><div id="x">A</div><div id="x">B</div></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
     // Without strict: exit 0 (only warnings)
     let (_, _, code_normal) = run_audit(
@@ -1356,7 +1379,9 @@ fn config_disables_checks() {
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        !findings.iter().any(|f| f["rule_id"] == "html/lang-missing"),
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "document/lang-missing"),
         "Disabled check should not fire"
     );
 }
@@ -1458,7 +1483,7 @@ fn json_heuristische_regel_liefert_review() {
     let findings = json["findings"].as_array().unwrap();
     let alt = findings
         .iter()
-        .find(|f| f["rule_id"] == "a11y/invalid-img-alt");
+        .find(|f| f["rule_id"] == "images/alt-suspicious");
     if let Some(alt) = alt {
         assert_eq!(alt["outcome"], "review");
         assert_ne!(alt["severity"], "high", "Review traegt hoechstens Medium");
@@ -1730,12 +1755,12 @@ fn severity_mapping_downgrades_error_to_warning() {
     ).unwrap();
     let (json, code) = run_audit_json(
         dir.path(),
-        r#"{"site":{"base_url":"https://example.com"},"severity":{"html/lang-missing":"warning"}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"severity":{"document/lang-missing":"warning"}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     let lang = findings
         .iter()
-        .find(|f| f["rule_id"] == "html/lang-missing");
+        .find(|f| f["rule_id"] == "document/lang-missing");
     assert!(lang.is_some(), "Should still report lang-missing");
     assert_eq!(
         lang.unwrap()["severity"],
@@ -1755,11 +1780,13 @@ fn severity_mapping_off_suppresses_finding() {
     ).unwrap();
     let (json, code) = run_audit_json(
         dir.path(),
-        r#"{"site":{"base_url":"https://example.com"},"severity":{"html/lang-missing":"off"}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"severity":{"document/lang-missing":"off"}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        !findings.iter().any(|f| f["rule_id"] == "html/lang-missing"),
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "document/lang-missing"),
         "Rule with severity=off should be suppressed entirely"
     );
     assert_eq!(code, 0, "No errors should mean exit code 0");
@@ -2342,7 +2369,9 @@ fn preset_strict_enables_documented_production_checks() {
     );
     // Strict should flag missing skip link
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "a11y/skip-link"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "keyboard/skip-link-missing"),
         "Strict preset should enable skip-link check"
     );
 }
@@ -2423,7 +2452,9 @@ fn preset_accessibility_is_supported() {
         "Accessibility preset should run without config parse errors"
     );
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "a11y/skip-link"),
+        findings
+            .iter()
+            .any(|f| f["rule_id"] == "keyboard/skip-link-missing"),
         "Accessibility preset should require skip links"
     );
 }
@@ -2519,11 +2550,11 @@ fn json_suggestion_present_for_lang_missing() {
     let findings = json["findings"].as_array().unwrap();
     let lang = findings
         .iter()
-        .find(|f| f["rule_id"] == "html/lang-missing");
+        .find(|f| f["rule_id"] == "document/lang-missing");
     assert!(lang.is_some());
     assert!(
         lang.unwrap()["suggestion"].is_string(),
-        "html/lang-missing should have a suggestion"
+        "document/lang-missing should have a suggestion"
     );
 }
 
@@ -2838,7 +2869,7 @@ fn config_parity_severity_level_names_valid() {
         "format": "json",
         "severity": {
             "html/title-too-long": "error",
-            "a11y/img-alt": "warning",
+            "images/alt-missing": "warning",
             "links/orphan-page": "info",
             "canonical/missing": "off"
         }
@@ -2863,7 +2894,7 @@ fn a11y_landmark_main_missing() {
     assert!(
         findings
             .iter()
-            .any(|f| f["rule_id"] == "a11y/landmark-main-missing"),
+            .any(|f| f["rule_id"] == "landmarks/main-missing"),
         "Missing <main> should be reported"
     );
     assert_eq!(code, 1);
@@ -2881,7 +2912,7 @@ fn a11y_landmark_main_duplicate() {
     assert!(
         findings
             .iter()
-            .any(|f| f["rule_id"] == "a11y/landmark-main-duplicate"),
+            .any(|f| f["rule_id"] == "landmarks/main-duplicate"),
         "Two <main> elements should be reported"
     );
     assert_eq!(code, 1);
@@ -2899,7 +2930,7 @@ fn a11y_landmark_nav_missing() {
     assert!(
         findings
             .iter()
-            .any(|f| f["rule_id"] == "a11y/landmark-nav-missing"),
+            .any(|f| f["rule_id"] == "landmarks/navigation-missing"),
         "Missing <nav> should be a warning"
     );
 }
@@ -2944,7 +2975,7 @@ fn a11y_landmark_header_inside_div_no_false_positive() {
     assert!(
         !findings
             .iter()
-            .any(|f| f["rule_id"] == "a11y/landmark-header-missing"),
+            .any(|f| f["rule_id"] == "landmarks/banner-missing"),
         "<header> inside <div> must not trigger landmark-header-missing (false positive #31)"
     );
 }
@@ -2980,10 +3011,13 @@ fn a11y_duplicate_id_detected() {
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "a11y/duplicate-id"),
+        findings.iter().any(|f| f["rule_id"] == "ids/duplicate"),
         "Duplicate id should be reported"
     );
-    assert_eq!(code, 1);
+    // Der Kern stuft ids/duplicate als medium ein, nicht als high: WCAG 4.1.1
+    // ist in 2.2 zurueckgezogen. Damit faellt der Exit-Code auf 0. Wer das
+    // anders haelt, setzt severity in astro.config.mjs.
+    assert_eq!(code, 0);
 }
 
 #[test]
@@ -2996,12 +3030,12 @@ fn a11y_duplicate_id_aria_ref() {
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings
-            .iter()
-            .any(|f| f["rule_id"] == "a11y/duplicate-id-aria"),
-        "Duplicate id referenced by ARIA should be reported as duplicate-id-aria"
+        findings.iter().any(|f| f["rule_id"] == "ids/duplicate"),
+        "Duplicate id referenced by ARIA should be reported"
     );
-    assert_eq!(code, 1);
+    // Der Kern fuehrt keine eigene Kennung fuer per ARIA referenzierte IDs --
+    // eine doppelte ID ist eine doppelte ID. Siehe oben zur Einstufung.
+    assert_eq!(code, 0);
 }
 
 #[test]
@@ -3017,7 +3051,7 @@ fn a11y_unique_ids_pass() {
         !findings.iter().any(|f| f["rule_id"]
             .as_str()
             .unwrap_or("")
-            .starts_with("a11y/duplicate-id")),
+            .starts_with("ids/duplicate")),
         "Unique ids should produce no duplicate-id findings"
     );
 }
@@ -3036,9 +3070,7 @@ fn a11y_aria_role_invalid() {
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings
-            .iter()
-            .any(|f| f["rule_id"] == "a11y/aria-role-invalid"),
+        findings.iter().any(|f| f["rule_id"] == "aria/role-invalid"),
         "Typo in role name should be reported"
     );
     assert_eq!(code, 1);
@@ -3056,7 +3088,7 @@ fn a11y_aria_role_abstract() {
     assert!(
         findings
             .iter()
-            .any(|f| f["rule_id"] == "a11y/aria-role-abstract"),
+            .any(|f| f["rule_id"] == "aria/role-abstract"),
         "Abstract role should be reported"
     );
     assert_eq!(code, 1);
@@ -3074,7 +3106,7 @@ fn a11y_aria_checkbox_missing_checked() {
     assert!(
         findings
             .iter()
-            .any(|f| f["rule_id"] == "a11y/aria-required-attr"),
+            .any(|f| f["rule_id"] == "aria/required-attribute-missing"),
         "role=checkbox without aria-checked should be reported"
     );
     assert_eq!(code, 1);
@@ -3582,7 +3614,7 @@ fn a11y_invalid_alt_filename() {
     let findings = json["findings"].as_array().unwrap();
     let count = findings
         .iter()
-        .filter(|f| f["rule_id"] == "a11y/invalid-img-alt")
+        .filter(|f| f["rule_id"] == "images/alt-suspicious")
         .count();
     assert!(
         count >= 3,
@@ -3602,7 +3634,7 @@ fn a11y_good_alt_not_flagged() {
     assert!(
         !findings
             .iter()
-            .any(|f| f["rule_id"] == "a11y/invalid-img-alt"),
+            .any(|f| f["rule_id"] == "images/alt-suspicious"),
         "Descriptive and empty (decorative) alts should not be flagged"
     );
 }
@@ -4266,7 +4298,8 @@ fn content_style_exclude_skips_only_matching_pages() {
     );
     assert!(
         findings.iter().any(|f| {
-            f["location"]["file"] == "tags/kubernetes/index.html" && f["rule_id"] == "a11y/img-alt"
+            f["location"]["file"] == "tags/kubernetes/index.html"
+                && f["rule_id"] == "images/alt-missing"
         }),
         "excluding content style must not suppress other checks: {findings:?}"
     );
@@ -4810,7 +4843,7 @@ fn baseline_mit_alter_kennung_unterdrueckt_weiterhin() {
         .as_array()
         .unwrap()
         .iter()
-        .filter(|f| f["rule_id"] == "a11y/img-alt" || f["rule_id"] == "images/alt-missing")
+        .filter(|f| f["rule_id"] == "images/alt-missing" || f["rule_id"] == "images/alt-missing")
         .count();
     assert_eq!(
         alt_befunde, 0,

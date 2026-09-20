@@ -3,12 +3,22 @@
 version = 4
 
 [[package]]
+name = "a11y-dom"
+version = "0.10.0"
+
+[[package]]
 name = "a11y-report"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64dba305c5c9de2558f8633a119ac59d75bdbacf0c08c36e91c14c5d23b112bf"
+version = "0.10.0"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "a11y-rules"
+version = "0.10.0"
+dependencies = [
+ "a11y-dom",
+ "a11y-report",
 ]
 
 [[package]]
@@ -28,6 +38,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c44e09c43ae1c368fb91a03a566472d0087c26cf7e1b9e8e289c14ede681dd7d"
 dependencies = [
  "nom",
+]
+
+[[package]]
+name = "accname"
+version = "0.10.0"
+dependencies = [
+ "a11y-dom",
 ]
 
 [[package]]
@@ -177,10 +194,14 @@ dependencies = [
 name = "astro-post-audit"
 version = "0.6.0"
 dependencies = [
+ "a11y-dom",
  "a11y-report",
+ "a11y-rules",
+ "accname",
  "anyhow",
  "c2pa",
  "clap",
+ "ego-tree",
  "globset",
  "html-conform",
  "imagesize",

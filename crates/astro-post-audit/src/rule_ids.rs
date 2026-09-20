@@ -35,7 +35,10 @@ pub const ALTE_KENNUNGEN: &[(&str, &str)] = &[
     ("a11y/duplicate-id", "ids/duplicate"),
     ("a11y/duplicate-id-aria", "ids/duplicate"),
     ("a11y/form-label", "forms/label-missing"),
-    ("a11y/generic-link-text", "links/ambiguous-name"),
+    // Nicht auf links/ambiguous-name: Das ist eine andere Regel ("zwei Links
+    // heissen gleich, fuehren aber woandershin"). Der nichtssagende Linktext
+    // heisst im Kern links/generic-name.
+    ("a11y/generic-link-text", "links/generic-name"),
     ("a11y/img-alt", "images/alt-missing"),
     ("a11y/invalid-img-alt", "images/alt-suspicious"),
     (

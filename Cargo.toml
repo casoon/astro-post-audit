@@ -7,3 +7,11 @@ opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
+
+# Solange 0.10.0 nicht auf crates.io steht, wird gegen den lokalen Stand
+# gebaut. Beim Veroeffentlichen faellt dieser Block ersatzlos weg.
+[patch.crates-io]
+a11y-dom = { path = "../a11y-core/crates/a11y-dom" }
+a11y-report = { path = "../a11y-core/crates/a11y-report" }
+a11y-rules = { path = "../a11y-core/crates/a11y-rules" }
+accname = { path = "../a11y-core/crates/accname" }
