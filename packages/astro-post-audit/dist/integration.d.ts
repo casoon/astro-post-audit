@@ -300,7 +300,7 @@ export interface RulesConfig {
     /**
      * Configurable heuristic checks for recurring "reads like AI" writing patterns
      * (em-dash overuse, contrast-formula repetition, uniform sentence rhythm).
-     * Disabled by default — this is a stylistic signal (always `confidence: "low"`), not a correctness check.
+     * Disabled by default — this is a stylistic signal, not a correctness check, so every finding comes back as `outcome: "review"`.
      * New patterns can be added as config entries, no code change or new release needed.
      */
     content_style?: {

@@ -4,6 +4,16 @@ Fast, offline post-build auditor for Astro sites — SEO signals, internal link 
 
 **Website:** [astro-post-audit.casoon.de](https://astro-post-audit.casoon.de/en/)
 
+## What's new in 0.7.0
+
+This release changes rule ids, the report model, and the set of shipped platforms. Read the breaking changes before upgrading.
+
+| Area | What | Rule IDs | How to enable |
+|------|------|----------|---------------|
+| Accessibility rules | **Breaking.** The accessibility and document rules are no longer implemented here — they come from [`a11y-rules`](https://crates.io/crates/a11y-rules), the shared core behind `auditmysite` and LiveAudit, so a finding carries the same id on every surface. Rule ids changed accordingly (`images/alt-missing`, not `a11y/img-alt`). Old ids still work in `severity` overrides and baseline files — they are translated on read with one warning per id — but reports always write the new ones | all `a11y/*` ids replaced, see [Rule ids come from a11y-core](#rule-ids-come-from-a11y-core) | Automatic |
+| Report model | **Breaking.** A finding now carries two axes instead of one merged number: `outcome` (`fail`, `review`, `pass`, `untested`) says how certain the statement is, `severity` (`low` … `critical`) how heavy the problem is. The JSON report gained `rule_runs`, listing rules this tool cannot serve at all — static HTML has no computed styles, so the contrast rules appear there as `capability_missing` instead of silently counting as passed. Consumers that parse the JSON report need updating | — | Automatic |
+| Platforms | **Breaking.** Intel macOS (`darwin-x64`) is no longer built or shipped. `x86_64-apple-darwin` was removed from the release matrix, and the postinstall script now fails with `Unsupported platform: darwin-x64` on those machines. Apple Silicon, Linux (x64/arm64) and Windows (x64/arm64) are unaffected | — | — |
+
 ## What's new in 0.6.0
 
 | Area | What | Rule IDs | How to enable |
