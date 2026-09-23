@@ -20,7 +20,6 @@ function getPlatformTarget() {
   const arch = process.arch;
 
   const targets = {
-    "darwin-x64": "x86_64-apple-darwin",
     "darwin-arm64": "aarch64-apple-darwin",
     "linux-x64": "x86_64-unknown-linux-gnu",
     "linux-arm64": "aarch64-unknown-linux-gnu",
@@ -34,6 +33,9 @@ function getPlatformTarget() {
   if (!target) {
     console.error(`Unsupported platform: ${key}`);
     console.error(`Supported platforms: ${Object.keys(targets).join(", ")}`);
+    console.error(
+      `Build from source instead: cargo install ${PACKAGE} --version ${VERSION}`,
+    );
     process.exit(1);
   }
 
