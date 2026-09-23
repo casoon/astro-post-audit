@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::normalize;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 static H2_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("h2").expect("valid selector"));
@@ -42,17 +42,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         let llms_path = index.dist_path.join("llms.txt");
         let llms_full_path = index.dist_path.join("llms-full.txt");
         if !llms_path.exists() && !llms_full_path.exists() {
-            site_findings.push(Finding {
-                level: Level::Info,
-                rule_id: "ai-visibility/missing-llms-txt".into(),
-                file: "llms.txt".into(),
-                selector: "root".into(),
-                message: "No llms.txt or llms-full.txt found in dist/ — AI crawlers use this file for site context".into(),
-                help: "Create public/llms.txt with key site links and summaries for LLM crawlers.".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: None,
-            });
+            site_findings.push(Finding::fail("ai-visibility/missing-llms-txt","No llms.txt or llms-full.txt found in dist/ — AI crawlers use this file for site context")
+.with_severity(Severity::Low)
+.at(Location::file("llms.txt").with_selector("root"))
+.with_help("Create public/llms.txt with key site links and summaries for LLM crawlers."));
         }
         for path in [&llms_path, &llms_full_path] {
             if let Ok(content) = std::fs::read_to_string(path) {
@@ -77,35 +70,22 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 .collect::<String>();
             let word_count = body_text.split_whitespace().count();
             if word_count < 300 {
-                findings.push(Finding {
-                    level: Level::Info,
-                    rule_id: "ai-visibility/low-word-count".into(),
-                    file: page.rel_path.clone(),
-                    selector: "body".into(),
-                    message: format!(
+                findings.push(Finding::fail("ai-visibility/low-word-count", format!(
                         "Page has only ~{} words — AI systems prefer content-rich pages (300+ words)",
                         word_count
-                    ),
-                    help: "Add more substantive content to improve AI citation probability.".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                    ))
+.with_severity(Severity::Low)
+.at(Location::file(page.rel_path.clone()).with_selector("body"))
+.with_help("Add more substantive content to improve AI citation probability."));
             }
 
             // lang attribute
             if html.select(&LANG_SEL).next().is_none() {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "ai-visibility/lang-missing".into(),
-                    file: page.rel_path.clone(),
-                    selector: "html".into(),
-                    message: "Missing lang attribute on <html> — AI systems use language signals for relevance".into(),
-                    help: "Add lang=\"en\" (or your language) to the <html> element.".into(),
-                    suggestion: Some("lang=\"en\"".into()),
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("ai-visibility/lang-missing","Missing lang attribute on <html> — AI systems use language signals for relevance")
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("html"))
+.with_help("Add lang=\"en\" (or your language) to the <html> element.")
+.with_suggestion("lang=\"en\""));
             }
 
             // === Dimension 2: Citability ===
@@ -129,45 +109,24 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 .is_some_and(|v| !v.trim().is_empty());
 
             if !has_og_title {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "ai-visibility/missing-og-title".into(),
-                    file: page.rel_path.clone(),
-                    selector: "head".into(),
-                    message: "Missing og:title — AI systems use this as the citation title".into(),
-                    help: "Add <meta property=\"og:title\" content=\"...\"> for better AI citations.".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("ai-visibility/missing-og-title","Missing og:title — AI systems use this as the citation title")
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("head"))
+.with_help("Add <meta property=\"og:title\" content=\"...\"> for better AI citations."));
             }
 
             if !has_og_desc {
-                findings.push(Finding {
-                    level: Level::Info,
-                    rule_id: "ai-visibility/missing-og-description".into(),
-                    file: page.rel_path.clone(),
-                    selector: "head".into(),
-                    message: "Missing og:description — AI systems use this as the citation snippet".into(),
-                    help: "Add <meta property=\"og:description\" content=\"...\"> for AI citation snippets.".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("ai-visibility/missing-og-description","Missing og:description — AI systems use this as the citation snippet")
+.with_severity(Severity::Low)
+.at(Location::file(page.rel_path.clone()).with_selector("head"))
+.with_help("Add <meta property=\"og:description\" content=\"...\"> for AI citation snippets."));
             }
 
             if !has_canonical {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "ai-visibility/missing-canonical".into(),
-                    file: page.rel_path.clone(),
-                    selector: "head".into(),
-                    message: "Missing canonical URL — AI systems need a definitive URL for citations".into(),
-                    help: "Add <link rel=\"canonical\" href=\"https://...\"> to each page.".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("ai-visibility/missing-canonical","Missing canonical URL — AI systems need a definitive URL for citations")
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("head"))
+.with_help("Add <link rel=\"canonical\" href=\"https://...\"> to each page."));
             }
 
             // Author / publisher schema
@@ -181,53 +140,32 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             });
 
             if !has_author_schema {
-                findings.push(Finding {
-                    level: Level::Info,
-                    rule_id: "ai-visibility/missing-author-schema".into(),
-                    file: page.rel_path.clone(),
-                    selector: "head".into(),
-                    message: "No author or publisher in JSON-LD — reduces AI citation authority".into(),
-                    help: "Add an Article or Person schema with \"author\": {\"@type\": \"Person\", \"name\": \"...\"}".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("ai-visibility/missing-author-schema","No author or publisher in JSON-LD — reduces AI citation authority")
+.with_severity(Severity::Low)
+.at(Location::file(page.rel_path.clone()).with_selector("head"))
+.with_help("Add an Article or Person schema with \"author\": {\"@type\": \"Person\", \"name\": \"...\"}"));
             }
 
             // === Dimension 3: Chunk Quality (RAG) ===
 
             let semantic_count = html.select(&ARTICLE_SEL).count();
             if semantic_count == 0 {
-                findings.push(Finding {
-                    level: Level::Info,
-                    rule_id: "ai-visibility/no-semantic-sections".into(),
-                    file: page.rel_path.clone(),
-                    selector: "body".into(),
-                    message: "No <article> or <section> elements found — semantic HTML improves AI chunking".into(),
-                    help: "Wrap main content in <article> or <section> elements for better RAG embedding.".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("ai-visibility/no-semantic-sections","No <article> or <section> elements found — semantic HTML improves AI chunking")
+.with_severity(Severity::Low)
+.at(Location::file(page.rel_path.clone()).with_selector("body"))
+.with_help("Wrap main content in <article> or <section> elements for better RAG embedding."));
             }
 
             let h2_count = html.select(&H2_SEL).count();
             let h3_count = html.select(&H3_SEL).count();
             if word_count > 600 && h2_count == 0 && h3_count == 0 {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "ai-visibility/no-subheadings".into(),
-                    file: page.rel_path.clone(),
-                    selector: "body".into(),
-                    message: format!(
+                findings.push(Finding::fail("ai-visibility/no-subheadings", format!(
                         "Page has {} words but no H2/H3 subheadings — limits AI content chunking",
                         word_count
-                    ),
-                    help: "Add H2/H3 headings to structure long content for better AI comprehension and RAG chunking.".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                    ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("body"))
+.with_help("Add H2/H3 headings to structure long content for better AI comprehension and RAG chunking."));
             }
 
             // === Dimension 5: AI Policy ===
@@ -239,17 +177,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     .is_some_and(|c| c.to_lowercase().contains("noindex"))
             });
             if is_noindex {
-                findings.push(Finding {
-                    level: Level::Info,
-                    rule_id: "ai-visibility/noindex-page".into(),
-                    file: page.rel_path.clone(),
-                    selector: "head".into(),
-                    message: "Page has noindex — AI crawlers may also skip this page".into(),
-                    help: "Remove noindex if you want AI systems to index and cite this page.".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("ai-visibility/noindex-page","Page has noindex — AI crawlers may also skip this page")
+.with_severity(Severity::Low)
+.at(Location::file(page.rel_path.clone()).with_selector("head"))
+.with_help("Remove noindex if you want AI systems to index and cite this page."));
             }
 
             findings
@@ -271,16 +202,14 @@ fn check_llms_links(index: &SiteIndex, path: &std::path::Path, content: &str) ->
         .filter_map(|captures| captures.get(1).map(|capture| capture.as_str()))
         .filter(|href| is_internal_llms_link(href, index))
         .filter(|href| !llms_link_exists(href, index))
-        .map(|href| Finding {
-            level: Level::Warning,
-            rule_id: "ai-visibility/llms-txt-broken-link".into(),
-            file: file.into(),
-            selector: "markdown link".into(),
-            message: format!("llms.txt links to a missing internal target: '{href}'"),
-            help: "Update the link or publish the referenced page or asset.".into(),
-            suggestion: None,
-            source_hint: None,
-            confidence: None,
+        .map(|href| {
+            Finding::fail(
+                "ai-visibility/llms-txt-broken-link",
+                format!("llms.txt links to a missing internal target: '{href}'"),
+            )
+            .with_severity(Severity::Medium)
+            .at(Location::file(file).with_selector("markdown link"))
+            .with_help("Update the link or publish the referenced page or asset.")
         })
         .collect()
 }

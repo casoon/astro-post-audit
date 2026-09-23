@@ -10,7 +10,7 @@ use walkdir::WalkDir;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     if !config.c2pa.enabled {
@@ -67,16 +67,16 @@ fn validate(
                 "c2pa/missing-required",
                 rel,
                 "The configured image asset could not be read for C2PA validation.",
-                Level::Warning,
+                Severity::Medium,
             )
         });
     };
     let reader = Reader::default().with_stream(format, file);
     let Ok(reader) = reader else {
-        return required.then(|| finding("c2pa/missing-required", rel, "No readable C2PA Content Credentials found for an asset configured as requiring them.", Level::Warning));
+        return required.then(|| finding("c2pa/missing-required", rel, "No readable C2PA Content Credentials found for an asset configured as requiring them.", Severity::Medium));
     };
     if reader.active_manifest().is_none() {
-        return required.then(|| finding("c2pa/missing-required", rel, "No embedded C2PA Content Credentials found for an asset configured as requiring them.", Level::Warning));
+        return required.then(|| finding("c2pa/missing-required", rel, "No embedded C2PA Content Credentials found for an asset configured as requiring them.", Severity::Medium));
     }
     finding_for_state(reader.validation_state(), rel, require_trusted)
 }
@@ -87,20 +87,23 @@ fn finding_for_state(state: ValidationState, rel: &str, require_trusted: bool) -
             "c2pa/invalid",
             rel,
             "Embedded C2PA Content Credentials could not be validated.",
-            Level::Warning,
+            Severity::Medium,
         )),
         ValidationState::Valid if require_trusted => Some(finding(
             "c2pa/untrusted",
             rel,
             "Embedded C2PA Content Credentials are cryptographically valid but signed by a certificate that does not chain to a trusted root.",
-            Level::Warning,
+            Severity::Medium,
         )),
         ValidationState::Valid | ValidationState::Trusted => None,
     }
 }
 
-fn finding(rule_id: &str, file: &str, message: &str, level: Level) -> Finding {
-    Finding::new(level, rule_id, file, "image asset", message, "Review the asset's provenance. Missing credentials do not prove that an image is AI-generated or non-compliant.", None)
+fn finding(rule_id: &str, file: &str, message: &str, schwere: Severity) -> Finding {
+    Finding::fail(rule_id, message)
+.with_severity(schwere)
+.at(Location::file(file).with_selector("image asset"))
+.with_help("Review the asset's provenance. Missing credentials do not prove that an image is AI-generated or non-compliant.")
 }
 
 #[cfg(test)]

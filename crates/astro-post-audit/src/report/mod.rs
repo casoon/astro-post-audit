@@ -1,7 +1,8 @@
 use anyhow::Result;
 use runemark::{
     ColorMode, Confidence as RunemarkConfidence, Console, DetailLevel, Finding as RunemarkFinding,
-    FindingGroup, Location, Metric, Report as RunemarkReport, ScopeNote, Tone, Verdict,
+    FindingGroup, Location as RunemarkLocation, Metric, Report as RunemarkReport, ScopeNote, Tone,
+    Verdict,
 };
 use serde::Serialize;
 use std::fmt::Write as FmtWrite;
@@ -9,61 +10,10 @@ use std::str::FromStr;
 
 use crate::overview::PageOverview;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Level {
-    Error,
-    Warning,
-    Info,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Confidence {
-    Medium,
-    Low,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct Finding {
-    pub level: Level,
-    pub rule_id: String,
-    pub file: String,
-    pub selector: String,
-    pub message: String,
-    pub help: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub suggestion: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_hint: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub confidence: Option<Confidence>,
-}
-
-impl Finding {
-    /// Creates a finding with its common optional fields initialized consistently.
-    pub(crate) fn new(
-        level: Level,
-        rule_id: impl Into<String>,
-        file: impl Into<String>,
-        selector: impl Into<String>,
-        message: impl Into<String>,
-        help: impl Into<String>,
-        confidence: Option<Confidence>,
-    ) -> Self {
-        Self {
-            level,
-            rule_id: rule_id.into(),
-            file: file.into(),
-            selector: selector.into(),
-            message: message.into(),
-            help: help.into(),
-            suggestion: None,
-            source_hint: None,
-            confidence,
-        }
-    }
-}
+/// Das Befundmodell kommt aus `a11y-core` und wird hier nur durchgereicht.
+/// Es ist über astro-post-audit, auditmysite und LiveAudit dasselbe — deshalb
+/// steht hier keine eigene Definition.
+pub use a11y_report::{Finding, Location, Outcome, Severity};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Summary {
@@ -78,12 +28,15 @@ pub struct Summary {
 impl Summary {
     pub fn from_findings(findings: &[Finding]) -> Self {
         Self {
-            errors: findings.iter().filter(|f| f.level == Level::Error).count(),
+            errors: findings.iter().filter(|f| is_error(f)).count(),
             warnings: findings
                 .iter()
-                .filter(|f| f.level == Level::Warning)
+                .filter(|f| f.severity == Severity::Medium)
                 .count(),
-            info: findings.iter().filter(|f| f.level == Level::Info).count(),
+            info: findings
+                .iter()
+                .filter(|f| f.severity == Severity::Low)
+                .count(),
             files_checked: 0, // set externally
             truncated: false,
         }
@@ -132,11 +85,45 @@ impl FromStr for Format {
     }
 }
 
-fn tone_for(level: &Level) -> Tone {
-    match level {
-        Level::Error => Tone::Error,
-        Level::Warning => Tone::Warning,
-        Level::Info => Tone::Info,
+/// Zählt als Fehler, was den Aufruf scheitern lässt.
+///
+/// Maßgeblich ist die **Schwere**, nicht das Outcome: Das Outcome sagt, wie
+/// sicher die Aussage ist, die Schwere, wie schwer das Problem wiegt. Ein nur
+/// heuristisch belegter Befund trägt nach der Zwei-Achsen-Entscheidung
+/// höchstens `Medium` und lässt den Build damit ohnehin nicht scheitern.
+pub fn is_error(f: &Finding) -> bool {
+    f.severity >= Severity::High
+}
+
+/// Die Datei eines Befunds. Alle Regeln dieses Werkzeugs verorten in Dateien;
+/// leer bleibt das Feld nur, wenn ein Befund gar keine Verortung trägt.
+pub fn datei_von(f: &Finding) -> &str {
+    f.location.file.as_deref().unwrap_or("")
+}
+
+fn outcome_wort(o: Outcome) -> &'static str {
+    match o {
+        Outcome::Fail => "fail",
+        Outcome::Review => "review",
+        Outcome::Pass => "pass",
+        Outcome::Untested => "untested",
+    }
+}
+
+fn severity_wort(s: Severity) -> &'static str {
+    match s {
+        Severity::Critical => "critical",
+        Severity::High => "high",
+        Severity::Medium => "medium",
+        Severity::Low => "low",
+    }
+}
+
+fn tone_for(severity: Severity) -> Tone {
+    match severity {
+        Severity::Critical | Severity::High => Tone::Error,
+        Severity::Medium => Tone::Warning,
+        Severity::Low => Tone::Info,
     }
 }
 
@@ -150,11 +137,12 @@ fn verdict_for(summary: &Summary) -> Verdict {
     }
 }
 
-fn runemark_confidence(confidence: &Option<Confidence>) -> Option<RunemarkConfidence> {
-    match confidence {
-        Some(Confidence::Medium) => Some(RunemarkConfidence::Medium),
-        Some(Confidence::Low) => Some(RunemarkConfidence::Low),
-        None => None,
+/// `Review` heißt: heuristisch belegt, braucht menschliche Bestätigung. Die
+/// Textausgabe kennzeichnet das weiterhin als eingeschränkte Gewissheit.
+fn runemark_confidence(outcome: Outcome) -> Option<RunemarkConfidence> {
+    match outcome {
+        Outcome::Review => Some(RunemarkConfidence::Medium),
+        _ => None,
     }
 }
 
@@ -257,29 +245,32 @@ impl Reporter {
         let mut by_file: std::collections::BTreeMap<&str, Vec<&Finding>> =
             std::collections::BTreeMap::new();
         for f in findings {
-            by_file.entry(&f.file).or_default().push(f);
+            by_file.entry(datei_von(f)).or_default().push(f);
         }
 
         for (file, file_findings) in by_file {
-            let source_hint = file_findings.first().and_then(|f| f.source_hint.as_deref());
+            let source_hint = file_findings
+                .first()
+                .and_then(|f| f.location.source_hint.as_deref());
             let title = source_hint
                 .map(|hint| format!("{file} (source: {hint}, heuristic)"))
                 .unwrap_or_else(|| file.to_string());
             let mut group = FindingGroup::new(title).with_advisory(
                 file_findings
                     .iter()
-                    .all(|finding| finding.level == Level::Info),
+                    .all(|finding| finding.severity == Severity::Low),
             );
             for f in file_findings {
                 let mut finding =
-                    RunemarkFinding::new(tone_for(&f.level), &f.message).with_rule_id(&f.rule_id);
-                if !f.selector.is_empty() {
-                    finding = finding.with_location(Location::Selector(f.selector.clone()));
+                    RunemarkFinding::new(tone_for(f.severity), &f.message).with_rule_id(&f.rule_id);
+                if let Some(selector) = f.location.selector.as_deref() {
+                    finding =
+                        finding.with_location(RunemarkLocation::Selector(selector.to_string()));
                 }
-                if !f.help.is_empty() {
-                    finding = finding.with_remedy(&f.help);
+                if let Some(help) = f.help.as_deref() {
+                    finding = finding.with_remedy(help);
                 }
-                if let Some(confidence) = runemark_confidence(&f.confidence) {
+                if let Some(confidence) = runemark_confidence(f.outcome) {
                     finding = finding.with_confidence(confidence);
                 }
                 group = group.add_finding(finding);
@@ -300,6 +291,14 @@ impl Reporter {
         #[derive(Serialize)]
         struct Report<'a> {
             findings: &'a [Finding],
+            /// Regeln, die dieser Host nicht bedienen konnte, samt Grund.
+            ///
+            /// Ohne dieses Feld hiesse „nicht geprueft" nach aussen dasselbe
+            /// wie „bestanden" -- genau der Unterschied, den das gemeinsame
+            /// Modell festhalten soll. Statisches HTML kennt keine berechneten
+            /// Stile, deshalb steht der Kontrast hier.
+            #[serde(skip_serializing_if = "Vec::is_empty")]
+            rule_runs: Vec<a11y_report::RuleRun>,
             summary: &'a Summary,
             #[serde(skip_serializing_if = "Option::is_none")]
             benchmark: Option<&'a BenchmarkData>,
@@ -307,6 +306,7 @@ impl Reporter {
 
         let report = Report {
             findings,
+            rule_runs: crate::checks::a11y_core::nicht_gelaufen(),
             summary,
             benchmark,
         };
@@ -330,26 +330,32 @@ impl Reporter {
 
         let escape = |s: &str| s.replace('|', "\\|");
 
-        for (level, heading) in &[
-            (Level::Error, "## Errors"),
-            (Level::Warning, "## Warnings"),
-            (Level::Info, "## Info"),
+        // Gruppiert nach Schwere; das Outcome steht als eigene Spalte daneben,
+        // damit „heuristisch vermutet" nicht mit „festgestellt" verschmilzt.
+        for (severity, heading) in &[
+            (Severity::Critical, "## Critical"),
+            (Severity::High, "## Errors"),
+            (Severity::Medium, "## Warnings"),
+            (Severity::Low, "## Info"),
         ] {
-            let level_findings: Vec<&Finding> =
-                findings.iter().filter(|f| f.level == *level).collect();
-            if level_findings.is_empty() {
+            let severity_findings: Vec<&Finding> = findings
+                .iter()
+                .filter(|f| f.severity == *severity)
+                .collect();
+            if severity_findings.is_empty() {
                 continue;
             }
             out.push('\n');
             out.push_str(heading);
             out.push_str("\n\n");
-            out.push_str("| File | Rule | Message |\n");
-            out.push_str("|------|------|----------|\n");
-            for f in &level_findings {
+            out.push_str("| File | Rule | Outcome | Message |\n");
+            out.push_str("|------|------|---------|----------|\n");
+            for f in &severity_findings {
                 out.push_str(&format!(
-                    "| {} | `{}` | {} |\n",
-                    escape(&f.file),
+                    "| {} | `{}` | {} | {} |\n",
+                    escape(datei_von(f)),
                     escape(&f.rule_id),
+                    outcome_wort(f.outcome),
                     escape(&f.message)
                 ));
             }
@@ -400,22 +406,23 @@ impl Reporter {
                 "<p style=\"color: #4ade80; font-weight: bold;\">✓ No issues found!</p>\n",
             );
         } else {
-            out.push_str("<table>\n<thead>\n<tr><th>Level</th><th>Rule ID</th><th>File</th><th>Selector</th><th>Message</th></tr>\n</thead>\n<tbody>\n");
+            out.push_str("<table>\n<thead>\n<tr><th>Severity</th><th>Outcome</th><th>Rule ID</th><th>File</th><th>Selector</th><th>Message</th></tr>\n</thead>\n<tbody>\n");
             for f in findings {
-                let badge_cls = match f.level {
-                    Level::Error => "badge-error",
-                    Level::Warning => "badge-warning",
-                    Level::Info => "badge-info",
-                };
-                let lvl_str = match f.level {
-                    Level::Error => "error",
-                    Level::Warning => "warning",
-                    Level::Info => "info",
+                let badge_cls = match f.severity {
+                    Severity::Critical | Severity::High => "badge-error",
+                    Severity::Medium => "badge-warning",
+                    Severity::Low => "badge-info",
                 };
                 let _ = writeln!(
                     out,
-                    "<tr><td><span class=\"badge {}\">{}</span></td><td><code>{}</code></td><td><code>{}</code></td><td><code>{}</code></td><td>{}</td></tr>",
-                    badge_cls, lvl_str, html_escape(&f.rule_id), html_escape(&f.file), html_escape(&f.selector), html_escape(&f.message)
+                    "<tr><td><span class=\"badge {}\">{}</span></td><td>{}</td><td><code>{}</code></td><td><code>{}</code></td><td><code>{}</code></td><td>{}</td></tr>",
+                    badge_cls,
+                    severity_wort(f.severity),
+                    outcome_wort(f.outcome),
+                    html_escape(&f.rule_id),
+                    html_escape(datei_von(f)),
+                    html_escape(f.location.selector.as_deref().unwrap_or("")),
+                    html_escape(&f.message)
                 );
             }
             out.push_str("</tbody>\n</table>\n");
@@ -442,7 +449,7 @@ impl Reporter {
                 let f = rule_map[id];
                 serde_json::json!({
                     "id": id,
-                    "shortDescription": { "text": f.help.as_str() }
+                    "shortDescription": { "text": f.help.as_deref().unwrap_or("") }
                 })
             })
             .collect();
@@ -450,20 +457,23 @@ impl Reporter {
         let sarif_results: Vec<serde_json::Value> = findings
             .iter()
             .map(|f| {
-                let level = match f.level {
-                    Level::Error => "error",
-                    Level::Warning => "warning",
-                    Level::Info => "note",
+                // SARIF kennt nur error/warning/note. Abgebildet wird die
+                // Schwere; das Outcome geht als Eigenschaft mit.
+                let level = match f.severity {
+                    Severity::Critical | Severity::High => "error",
+                    Severity::Medium => "warning",
+                    Severity::Low => "note",
                 };
                 serde_json::json!({
                     "ruleId": f.rule_id,
                     "ruleIndex": rule_index[f.rule_id.as_str()],
                     "level": level,
                     "message": { "text": f.message },
+                    "properties": { "outcome": outcome_wort(f.outcome) },
                     "locations": [{
                         "physicalLocation": {
                             "artifactLocation": {
-                                "uri": f.file,
+                                "uri": datei_von(f),
                                 "uriBaseId": "%SRCROOT%"
                             }
                         }

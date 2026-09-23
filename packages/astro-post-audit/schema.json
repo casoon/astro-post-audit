@@ -305,7 +305,7 @@
                 },
                 "content_style": {
                     "additionalProperties": false,
-                    "description": "Configurable heuristic checks for recurring \"reads like AI\" writing patterns\n(em-dash overuse, contrast-formula repetition, uniform sentence rhythm).\nDisabled by default — this is a stylistic signal (always `confidence: \"low\"`), not a correctness check.\nNew patterns can be added as config entries, no code change or new release needed.",
+                    "description": "Configurable heuristic checks for recurring \"reads like AI\" writing patterns\n(em-dash overuse, contrast-formula repetition, uniform sentence rhythm).\nDisabled by default — this is a stylistic signal, not a correctness check, so every finding comes back as `outcome: \"review\"`.\nNew patterns can be added as config entries, no code change or new release needed.",
                     "properties": {
                         "content_selector": {
                             "default": "article, main, .prose",

@@ -1,4 +1,4 @@
-pub mod a11y;
+pub mod a11y_core;
 pub mod ai_visibility;
 pub mod assets;
 pub mod c2pa;
@@ -10,7 +10,6 @@ pub mod css_architecture;
 pub mod external_links;
 pub mod fonts;
 pub mod golive;
-pub mod headings;
 pub mod hreflang;
 pub mod html_basics;
 pub mod html_validation;

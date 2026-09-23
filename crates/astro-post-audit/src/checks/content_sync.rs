@@ -5,7 +5,7 @@ use walkdir::WalkDir;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Confidence, Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 const CONTENT_EXTENSIONS: &[&str] = &["md", "mdx", "markdown", "mdoc"];
 
@@ -84,20 +84,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
         if !matched {
             let display = rel.to_string_lossy().replace('\\', "/");
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "content/missing-page".into(),
-                file: display.clone(),
-                selector: String::new(),
-                message: format!(
+            findings.push(Finding::review("content/missing-page", format!(
                     "Content item '{}' has no corresponding build page",
                     display
-                ),
-                help: "Check your slug mapping or filter criteria in getStaticPaths — this content was not rendered.".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: Some(Confidence::Low),
-            });
+                ))
+.with_severity(Severity::Medium)
+.at(Location::file(display.clone()))
+.with_help("Check your slug mapping or filter criteria in getStaticPaths — this content was not rendered."));
         }
     }
 

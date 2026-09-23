@@ -6,7 +6,7 @@ use url::Url;
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::normalize;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     let mut findings: Vec<Finding> = index
@@ -44,66 +44,49 @@ fn check_canonical(
     let canonicals = &page.canonical_hrefs;
 
     if canonicals.is_empty() {
-        findings.push(Finding {
-            level: Level::Error,
-            rule_id: "canonical/missing".into(),
-            file: page.rel_path.clone(),
-            selector: "head".into(),
-            message: "Missing canonical tag".into(),
-            help: "Set `site` in astro.config.mjs and render <link rel=\"canonical\" href={new URL(Astro.url.pathname, Astro.site)} /> in your BaseHead component".into(),
-            suggestion: Some("<link rel=\"canonical\" href=\"https://...\">".into()),
-            source_hint: None,
-            confidence: None,
-        });
+        findings.push(Finding::fail("canonical/missing","Missing canonical tag")
+.with_severity(Severity::High)
+.at(Location::file(page.rel_path.clone()).with_selector("head"))
+.with_help("Set `site` in astro.config.mjs and render <link rel=\"canonical\" href={new URL(Astro.url.pathname, Astro.site)} /> in your BaseHead component")
+.with_suggestion("<link rel=\"canonical\" href=\"https://...\">"));
         return;
     }
 
     if canonicals.len() > 1 {
-        findings.push(Finding {
-            level: Level::Error,
-            rule_id: "canonical/multiple".into(),
-            file: page.rel_path.clone(),
-            selector: "link[rel='canonical']".into(),
-            message: format!(
-                "Found {} canonical tags (expected exactly 1)",
-                canonicals.len()
-            ),
-            help: "Remove duplicate canonical tags, keep only one".into(),
-            suggestion: None,
-            source_hint: None,
-            confidence: None,
-        });
+        findings.push(
+            Finding::fail(
+                "canonical/multiple",
+                format!(
+                    "Found {} canonical tags (expected exactly 1)",
+                    canonicals.len()
+                ),
+            )
+            .with_severity(Severity::High)
+            .at(Location::file(page.rel_path.clone()).with_selector("link[rel='canonical']"))
+            .with_help("Remove duplicate canonical tags, keep only one"),
+        );
     }
 
     let href = canonicals[0].as_str();
     if href.trim().is_empty() {
-        findings.push(Finding {
-            level: Level::Error,
-            rule_id: "canonical/empty".into(),
-            file: page.rel_path.clone(),
-            selector: "link[rel='canonical']".into(),
-            message: "Canonical tag has empty href".into(),
-            help: "Set the href to the canonical URL of this page".into(),
-            suggestion: None,
-            source_hint: None,
-            confidence: None,
-        });
+        findings.push(
+            Finding::fail("canonical/empty", "Canonical tag has empty href")
+                .with_severity(Severity::High)
+                .at(Location::file(page.rel_path.clone()).with_selector("link[rel='canonical']"))
+                .with_help("Set the href to the canonical URL of this page"),
+        );
         return;
     }
 
     // Check if absolute
     if config.canonical.absolute && Url::parse(href).is_err() {
-        findings.push(Finding {
-            level: Level::Error,
-            rule_id: "canonical/not-absolute".into(),
-            file: page.rel_path.clone(),
-            selector: format!("link[rel='canonical'][href='{}']", href),
-            message: "Canonical URL is not absolute".into(),
-            help: "Use a full URL including protocol and domain".into(),
-            suggestion: None,
-            source_hint: None,
-            confidence: None,
-        });
+        findings.push(
+            Finding::fail("canonical/not-absolute", "Canonical URL is not absolute")
+                .with_severity(Severity::High)
+                .at(Location::file(page.rel_path.clone())
+                    .with_selector(format!("link[rel='canonical'][href='{}']", href)))
+                .with_help("Use a full URL including protocol and domain"),
+        );
         return;
     }
 
@@ -112,21 +95,20 @@ fn check_canonical(
         if let Some(ref base) = index.base_url {
             if let (Ok(base_parsed), Ok(href_parsed)) = (Url::parse(base), Url::parse(href)) {
                 if href_parsed.origin() != base_parsed.origin() {
-                    findings.push(Finding {
-                        level: Level::Error,
-                        rule_id: "canonical/cross-origin".into(),
-                        file: page.rel_path.clone(),
-                        selector: format!("link[rel='canonical'][href='{}']", href),
-                        message: format!(
-                            "Canonical URL points to different origin '{}' (expected '{}')",
-                            href_parsed.origin().ascii_serialization(),
-                            base_parsed.origin().ascii_serialization()
-                        ),
-                        help: "Canonical should point to the same origin as --site".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(
+                        Finding::fail(
+                            "canonical/cross-origin",
+                            format!(
+                                "Canonical URL points to different origin '{}' (expected '{}')",
+                                href_parsed.origin().ascii_serialization(),
+                                base_parsed.origin().ascii_serialization()
+                            ),
+                        )
+                        .with_severity(Severity::High)
+                        .at(Location::file(page.rel_path.clone())
+                            .with_selector(format!("link[rel='canonical'][href='{}']", href)))
+                        .with_help("Canonical should point to the same origin as --site"),
+                    );
                 }
             }
         }
@@ -138,20 +120,19 @@ fn check_canonical(
             let normalized_canonical = normalize::normalize_path(href, &config.url_normalization);
             let normalized_page = normalize::normalize_path(page_url, &config.url_normalization);
             if normalized_canonical != normalized_page {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "canonical/not-self".into(),
-                    file: page.rel_path.clone(),
-                    selector: format!("link[rel='canonical'][href='{}']", href),
-                    message: format!(
-                        "Canonical URL '{}' does not match page URL '{}'",
-                        href, page_url
-                    ),
-                    help: "If this page should self-canonicalize, update the canonical href".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(
+                    Finding::fail(
+                        "canonical/not-self",
+                        format!(
+                            "Canonical URL '{}' does not match page URL '{}'",
+                            href, page_url
+                        ),
+                    )
+                    .with_severity(Severity::Medium)
+                    .at(Location::file(page.rel_path.clone())
+                        .with_selector(format!("link[rel='canonical'][href='{}']", href)))
+                    .with_help("If this page should self-canonicalize, update the canonical href"),
+                );
             }
         }
     }
@@ -160,20 +141,19 @@ fn check_canonical(
     if let Ok(parsed) = Url::parse(href) {
         let target_path = normalize::normalize_path(parsed.path(), &config.url_normalization);
         if !index.route_exists(&target_path) {
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "canonical/target-missing".into(),
-                file: page.rel_path.clone(),
-                selector: format!("link[rel='canonical'][href='{}']", href),
-                message: format!(
-                    "Canonical URL '{}' target route '{}' not found in dist",
-                    href, target_path
-                ),
-                help: "Ensure the canonical URL points to an existing page".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: None,
-            });
+            findings.push(
+                Finding::fail(
+                    "canonical/target-missing",
+                    format!(
+                        "Canonical URL '{}' target route '{}' not found in dist",
+                        href, target_path
+                    ),
+                )
+                .with_severity(Severity::Medium)
+                .at(Location::file(page.rel_path.clone())
+                    .with_selector(format!("link[rel='canonical'][href='{}']", href)))
+                .with_help("Ensure the canonical URL points to an existing page"),
+            );
         }
     }
 }
@@ -181,29 +161,19 @@ fn check_canonical(
 fn check_robots(page: &crate::discovery::PageInfo, config: &Config, findings: &mut Vec<Finding>) {
     if page.noindex {
         if config.robots_meta.fail_if_noindex {
-            findings.push(Finding {
-                level: Level::Error,
-                rule_id: "robots/noindex".into(),
-                file: page.rel_path.clone(),
-                selector: "meta[name='robots']".into(),
-                message: "Page has noindex directive".into(),
-                help: "Remove noindex if this page should be indexed".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: None,
-            });
+            findings.push(
+                Finding::fail("robots/noindex", "Page has noindex directive")
+                    .with_severity(Severity::High)
+                    .at(Location::file(page.rel_path.clone()).with_selector("meta[name='robots']"))
+                    .with_help("Remove noindex if this page should be indexed"),
+            );
         } else if !config.robots_meta.allow_noindex {
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "robots/noindex".into(),
-                file: page.rel_path.clone(),
-                selector: "meta[name='robots']".into(),
-                message: "Page has noindex directive".into(),
-                help: "Remove noindex if this page should be indexed".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: None,
-            });
+            findings.push(
+                Finding::fail("robots/noindex", "Page has noindex directive")
+                    .with_severity(Severity::Medium)
+                    .at(Location::file(page.rel_path.clone()).with_selector("meta[name='robots']"))
+                    .with_help("Remove noindex if this page should be indexed"),
+            );
         }
     }
 }
@@ -232,22 +202,15 @@ fn check_canonical_clusters(index: &SiteIndex) -> Vec<Finding> {
                 } else {
                     format!("{} and {} more", others[..3].join(", "), others.len() - 3)
                 };
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "canonical/cluster".into(),
-                    file: page.to_string(),
-                    selector: format!("link[rel='canonical'][href='{}']", canonical),
-                    message: format!(
+                findings.push(Finding::fail("canonical/cluster", format!(
                         "{} pages share canonical URL '{}' (also: {})",
                         pages.len(),
                         canonical,
                         others_display
-                    ),
-                    help: "Multiple pages pointing to the same canonical may indicate a copy-paste error. If intentional (AMP, variants), disable with detect_clusters: false".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                    ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.to_string()).with_selector(format!("link[rel='canonical'][href='{}']", canonical)))
+.with_help("Multiple pages pointing to the same canonical may indicate a copy-paste error. If intentional (AMP, variants), disable with detect_clusters: false"));
             }
         }
     }

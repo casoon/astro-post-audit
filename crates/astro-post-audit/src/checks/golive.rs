@@ -3,7 +3,7 @@ use url::Url;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     if !config.go_live.enabled {
@@ -17,19 +17,15 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     ) {
         Some(o) => o,
         None => {
-            return vec![Finding {
-                level: Level::Error,
-                rule_id: "golive/config-missing-site".into(),
-                file: "astro.config.mjs".into(),
-                selector: "goLive".into(),
-                message: "go-live enabled but no expected site configured".into(),
-                help:
-                    "Set `site` in astro.config.mjs or `goLive.expectedSite` in postAudit() options"
-                        .into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: None,
-            }];
+            return vec![Finding::fail(
+                "golive/config-missing-site",
+                "go-live enabled but no expected site configured",
+            )
+            .with_severity(Severity::High)
+            .at(Location::file("astro.config.mjs").with_selector("goLive"))
+            .with_help(
+                "Set `site` in astro.config.mjs or `goLive.expectedSite` in postAudit() options",
+            )];
         }
     };
 
@@ -87,17 +83,15 @@ fn check_noindex(page: &crate::discovery::PageInfo, findings: &mut Vec<Finding>)
     for el in html.select(&sel) {
         let content = el.value().attr("content").unwrap_or("").to_lowercase();
         if content.contains("noindex") {
-            findings.push(Finding {
-                level: Level::Error,
-                rule_id: "golive/noindex".into(),
-                file: page.rel_path.clone(),
-                selector: selector_str.into(),
-                message: "Page has noindex directive — must be removed before going live".into(),
-                help: "Remove `noindex` from the robots meta tag or delete it entirely".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: None,
-            });
+            findings.push(
+                Finding::fail(
+                    "golive/noindex",
+                    "Page has noindex directive — must be removed before going live",
+                )
+                .with_severity(Severity::High)
+                .at(Location::file(page.rel_path.clone()).with_selector(selector_str))
+                .with_help("Remove `noindex` from the robots meta tag or delete it entirely"),
+            );
             return;
         }
     }
@@ -115,20 +109,19 @@ fn check_canonical_origin(
                 None => format!("{}://{}", url.scheme(), url.host_str().unwrap_or("")),
             };
             if actual_origin != expected_origin {
-                findings.push(Finding {
-                    level: Level::Error,
-                    rule_id: "golive/canonical-origin".into(),
-                    file: page.rel_path.clone(),
-                    selector: "link[rel='canonical']".into(),
-                    message: format!(
-                        "Canonical URL uses '{}' instead of expected production origin '{}'",
-                        actual_origin, expected_origin
-                    ),
-                    help: "Canonical URLs must point to the production origin".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(
+                    Finding::fail(
+                        "golive/canonical-origin",
+                        format!(
+                            "Canonical URL uses '{}' instead of expected production origin '{}'",
+                            actual_origin, expected_origin
+                        ),
+                    )
+                    .with_severity(Severity::High)
+                    .at(Location::file(page.rel_path.clone())
+                        .with_selector("link[rel='canonical']"))
+                    .with_help("Canonical URLs must point to the production origin"),
+                );
             }
         }
     }
@@ -151,20 +144,18 @@ fn check_og_origin(
                     None => format!("{}://{}", url.scheme(), url.host_str().unwrap_or("")),
                 };
                 if actual_origin != expected_origin {
-                    findings.push(Finding {
-                        level: Level::Error,
-                        rule_id: "golive/og-origin".into(),
-                        file: page.rel_path.clone(),
-                        selector: sel_str.clone(),
-                        message: format!(
-                            "{} uses '{}' instead of expected production origin '{}'",
-                            prop, actual_origin, expected_origin
-                        ),
-                        help: format!("Set {} to use the production origin", prop),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(
+                        Finding::fail(
+                            "golive/og-origin",
+                            format!(
+                                "{} uses '{}' instead of expected production origin '{}'",
+                                prop, actual_origin, expected_origin
+                            ),
+                        )
+                        .with_severity(Severity::High)
+                        .at(Location::file(page.rel_path.clone()).with_selector(sel_str.clone()))
+                        .with_help(format!("Set {} to use the production origin", prop)),
+                    );
                 }
             }
         }
@@ -196,17 +187,15 @@ fn check_forbidden_domains(
         let href = el.value().attr("href").unwrap_or("");
         if href.starts_with("http://") || href.starts_with("https://") {
             if let Some(domain) = is_forbidden(href, forbidden) {
-                findings.push(Finding {
-                    level: Level::Error,
-                    rule_id: "golive/forbidden-domain".into(),
-                    file: page.rel_path.clone(),
-                    selector: "a[href]".into(),
-                    message: format!("Link contains forbidden domain '{}': {}", domain, href),
-                    help: "Remove or replace links pointing to staging/dev domains".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(
+                    Finding::fail(
+                        "golive/forbidden-domain",
+                        format!("Link contains forbidden domain '{}': {}", domain, href),
+                    )
+                    .with_severity(Severity::High)
+                    .at(Location::file(page.rel_path.clone()).with_selector("a[href]"))
+                    .with_help("Remove or replace links pointing to staging/dev domains"),
+                );
             }
         }
     }
@@ -217,17 +206,15 @@ fn check_forbidden_domains(
         let src = el.value().attr("src").unwrap_or("");
         if src.starts_with("http://") || src.starts_with("https://") {
             if let Some(domain) = is_forbidden(src, forbidden) {
-                findings.push(Finding {
-                    level: Level::Error,
-                    rule_id: "golive/forbidden-domain".into(),
-                    file: page.rel_path.clone(),
-                    selector: "script[src]".into(),
-                    message: format!("Script src contains forbidden domain '{}': {}", domain, src),
-                    help: "Remove or replace scripts pointing to staging/dev domains".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(
+                    Finding::fail(
+                        "golive/forbidden-domain",
+                        format!("Script src contains forbidden domain '{}': {}", domain, src),
+                    )
+                    .with_severity(Severity::High)
+                    .at(Location::file(page.rel_path.clone()).with_selector("script[src]"))
+                    .with_help("Remove or replace scripts pointing to staging/dev domains"),
+                );
             }
         }
     }
@@ -235,20 +222,18 @@ fn check_forbidden_domains(
     // Check canonical href
     for href in &page.canonical_hrefs {
         if let Some(domain) = is_forbidden(href, forbidden) {
-            findings.push(Finding {
-                level: Level::Error,
-                rule_id: "golive/forbidden-domain".into(),
-                file: page.rel_path.clone(),
-                selector: "link[rel='canonical']".into(),
-                message: format!(
-                    "Canonical URL contains forbidden domain '{}': {}",
-                    domain, href
-                ),
-                help: "Update canonical URLs to use the production domain".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: None,
-            });
+            findings.push(
+                Finding::fail(
+                    "golive/forbidden-domain",
+                    format!(
+                        "Canonical URL contains forbidden domain '{}': {}",
+                        domain, href
+                    ),
+                )
+                .with_severity(Severity::High)
+                .at(Location::file(page.rel_path.clone()).with_selector("link[rel='canonical']"))
+                .with_help("Update canonical URLs to use the production domain"),
+            );
         }
     }
 }
@@ -271,38 +256,34 @@ fn check_sitemap_origins(
                 None => format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or("")),
             };
             if actual_origin != expected_origin {
-                findings.push(Finding {
-                    level: Level::Error,
-                    rule_id: "golive/sitemap-origin".into(),
-                    file: "sitemap.xml".into(),
-                    selector: "<loc>".into(),
-                    message: format!(
+                findings.push(
+                    Finding::fail(
+                        "golive/sitemap-origin",
+                        format!(
                         "Sitemap entry '{}' uses '{}' instead of expected production origin '{}'",
                         url, actual_origin, expected_origin
                     ),
-                    help: "Regenerate the sitemap with the production `site` URL".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                    )
+                    .with_severity(Severity::High)
+                    .at(Location::file("sitemap.xml").with_selector("<loc>"))
+                    .with_help("Regenerate the sitemap with the production `site` URL"),
+                );
             }
         }
         if !forbidden.is_empty() {
             if let Some(domain) = is_forbidden(url, forbidden) {
-                findings.push(Finding {
-                    level: Level::Error,
-                    rule_id: "golive/forbidden-domain".into(),
-                    file: "sitemap.xml".into(),
-                    selector: "<loc>".into(),
-                    message: format!(
-                        "Sitemap entry contains forbidden domain '{}': {}",
-                        domain, url
-                    ),
-                    help: "Regenerate the sitemap with the production `site` URL".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(
+                    Finding::fail(
+                        "golive/forbidden-domain",
+                        format!(
+                            "Sitemap entry contains forbidden domain '{}': {}",
+                            domain, url
+                        ),
+                    )
+                    .with_severity(Severity::High)
+                    .at(Location::file("sitemap.xml").with_selector("<loc>"))
+                    .with_help("Regenerate the sitemap with the production `site` URL"),
+                );
             }
         }
     }
@@ -329,17 +310,10 @@ fn check_robots_txt_blocked(index: &SiteIndex, findings: &mut Vec<Finding>) {
         } else if lower.starts_with("disallow:") && current_user_agent_is_all {
             let path = lower.trim_start_matches("disallow:").trim();
             if path == "/" {
-                findings.push(Finding {
-                    level: Level::Error,
-                    rule_id: "golive/robots-blocked".into(),
-                    file: "robots.txt".into(),
-                    selector: "Disallow: /".into(),
-                    message: "robots.txt globally blocks all crawlers with 'Disallow: /'".into(),
-                    help: "Remove 'Disallow: /' for the '*' user-agent before going live. Use specific path disallows if needed.".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("golive/robots-blocked","robots.txt globally blocks all crawlers with 'Disallow: /'")
+.with_severity(Severity::High)
+.at(Location::file("robots.txt").with_selector("Disallow: /"))
+.with_help("Remove 'Disallow: /' for the '*' user-agent before going live. Use specific path disallows if needed."));
                 return;
             }
         }

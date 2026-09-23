@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 static TARGET_BLANK_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("a[target='_blank']").expect("valid selector"));
@@ -29,20 +29,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     let rel = el.value().attr("rel").unwrap_or("");
                     if !rel.contains("noopener") && !rel.contains("noreferrer") {
                         let href = el.value().attr("href").unwrap_or("(no href)");
-                        findings.push(Finding {
-                            level: Level::Warning,
-                            rule_id: "security/target-blank-noopener".into(),
-                            file: page.rel_path.clone(),
-                            selector: format!("a[href='{}'][target='_blank']", href),
-                            message: format!(
+                        findings.push(Finding::fail("security/target-blank-noopener", format!(
                                 "Link with target=\"_blank\" missing rel=\"noopener\": '{}'",
                                 href
-                            ),
-                            help: "Add rel=\"noopener noreferrer\" to external links with target=\"_blank\"".into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                            ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("a[href='{}'][target='_blank']", href)))
+.with_help("Add rel=\"noopener noreferrer\" to external links with target=\"_blank\""));
                     }
                 }
             }
@@ -56,21 +49,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             if config.security.warn_inline_scripts {
                 let inline_count = html.select(&INLINE_SCRIPT_SEL).count();
                 if inline_count > 0 {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "security/inline-scripts".into(),
-                        file: page.rel_path.clone(),
-                        selector: "script".into(),
-                        message: format!(
+                    findings.push(Finding::fail("security/inline-scripts", format!(
                             "Found {} inline script(s) - may conflict with CSP",
                             inline_count
-                        ),
-                        help: "Move inline scripts to external files for better CSP compatibility"
-                            .into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                        ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("script"))
+.with_help("Move inline scripts to external files for better CSP compatibility"));
                 }
             }
 
@@ -103,17 +88,16 @@ fn check_mixed_content(
         for el in html.select(&sel) {
             if let Some(value) = el.value().attr(attr) {
                 if value.starts_with("http://") {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "security/mixed-content".into(),
-                        file: page.rel_path.clone(),
-                        selector: format!("{}='{}'", selector_str, value),
-                        message: format!("HTTP resource on potentially HTTPS page: '{}'", value),
-                        help: "Use HTTPS URLs or protocol-relative URLs for all resources".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(
+                        Finding::fail(
+                            "security/mixed-content",
+                            format!("HTTP resource on potentially HTTPS page: '{}'", value),
+                        )
+                        .with_severity(Severity::Medium)
+                        .at(Location::file(page.rel_path.clone())
+                            .with_selector(format!("{}='{}'", selector_str, value)))
+                        .with_help("Use HTTPS URLs or protocol-relative URLs for all resources"),
+                    );
                 }
             }
         }

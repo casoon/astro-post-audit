@@ -5,7 +5,7 @@ use scraper::Selector;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 static TITLE_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("title").expect("valid selector"));
@@ -106,21 +106,19 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             if pages.len() > 1 {
                 let truncated = truncate_str(title, 50);
                 for page in pages {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "content/duplicate-title".into(),
-                        file: page.clone(),
-                        selector: "title".into(),
-                        message: format!(
-                            "Duplicate title '{}' shared by {} pages",
-                            truncated,
-                            pages.len()
-                        ),
-                        help: "Each page should have a unique title tag".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(
+                        Finding::fail(
+                            "content/duplicate-title",
+                            format!(
+                                "Duplicate title '{}' shared by {} pages",
+                                truncated,
+                                pages.len()
+                            ),
+                        )
+                        .with_severity(Severity::Medium)
+                        .at(Location::file(page.clone()).with_selector("title"))
+                        .with_help("Each page should have a unique title tag"),
+                    );
                 }
             }
         }
@@ -131,21 +129,19 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             if pages.len() > 1 {
                 let truncated = truncate_str(desc, 50);
                 for page in pages {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "content/duplicate-description".into(),
-                        file: page.clone(),
-                        selector: "meta[name='description']".into(),
-                        message: format!(
-                            "Duplicate meta description '{}' shared by {} pages",
-                            truncated,
-                            pages.len()
-                        ),
-                        help: "Each page should have a unique meta description".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(
+                        Finding::fail(
+                            "content/duplicate-description",
+                            format!(
+                                "Duplicate meta description '{}' shared by {} pages",
+                                truncated,
+                                pages.len()
+                            ),
+                        )
+                        .with_severity(Severity::Medium)
+                        .at(Location::file(page.clone()).with_selector("meta[name='description']"))
+                        .with_help("Each page should have a unique meta description"),
+                    );
                 }
             }
         }
@@ -156,21 +152,19 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             if pages.len() > 1 {
                 let truncated = truncate_str(h1, 50);
                 for page in pages {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "content/duplicate-h1".into(),
-                        file: page.clone(),
-                        selector: "h1".into(),
-                        message: format!(
-                            "Duplicate H1 '{}' shared by {} pages",
-                            truncated,
-                            pages.len()
-                        ),
-                        help: "Each page should have a unique H1 heading".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(
+                        Finding::fail(
+                            "content/duplicate-h1",
+                            format!(
+                                "Duplicate H1 '{}' shared by {} pages",
+                                truncated,
+                                pages.len()
+                            ),
+                        )
+                        .with_severity(Severity::Medium)
+                        .at(Location::file(page.clone()).with_selector("h1"))
+                        .with_help("Each page should have a unique H1 heading"),
+                    );
                 }
             }
         }
@@ -180,20 +174,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         for pages in content_hashes.values() {
             if pages.len() > 1 {
                 for page in pages {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "content/duplicate-page".into(),
-                        file: page.clone(),
-                        selector: String::new(),
-                        message: format!(
+                    findings.push(Finding::fail("content/duplicate-page", format!(
                             "Identical HTML content shared by {} pages",
                             pages.len()
-                        ),
-                        help: "These pages have identical content - consider using canonical tags or redirects".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                        ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.clone()))
+.with_help("These pages have identical content - consider using canonical tags or redirects"));
                 }
             }
         }

@@ -7,7 +7,7 @@ use url::Url;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 static OG_TITLE_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("meta[property='og:title']").expect("valid selector"));
@@ -65,17 +65,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     .and_then(|el| el.value().attr("content"))
                     .is_some_and(|v| !v.trim().is_empty());
                 if !has {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "opengraph/title-missing".into(),
-                        file: page.rel_path.clone(),
-                        selector: "head".into(),
-                        message: "Missing og:title meta tag".into(),
-                        help: "Add <meta property=\"og:title\" content=\"...\">".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(Finding::fail("opengraph/title-missing","Missing og:title meta tag")
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("head"))
+.with_help("Add <meta property=\"og:title\" content=\"...\">"));
                 }
             }
 
@@ -86,17 +79,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     .and_then(|el| el.value().attr("content"))
                     .is_some_and(|v| !v.trim().is_empty());
                 if !has {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "opengraph/description-missing".into(),
-                        file: page.rel_path.clone(),
-                        selector: "head".into(),
-                        message: "Missing og:description meta tag".into(),
-                        help: "Add <meta property=\"og:description\" content=\"...\">".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(Finding::fail("opengraph/description-missing","Missing og:description meta tag")
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("head"))
+.with_help("Add <meta property=\"og:description\" content=\"...\">"));
                 }
             }
 
@@ -108,17 +94,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 .map(|v| v.trim().to_string());
 
             if og.require_og_image && og_image_content.is_none() {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "opengraph/image-missing".into(),
-                    file: page.rel_path.clone(),
-                    selector: "head".into(),
-                    message: "Missing og:image meta tag".into(),
-                    help: "Add <meta property=\"og:image\" content=\"https://...\">".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("opengraph/image-missing","Missing og:image meta tag")
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("head"))
+.with_help("Add <meta property=\"og:image\" content=\"https://...\">"));
             }
 
             if og.og_image_absolute_url {
@@ -127,20 +106,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         && !img_url.starts_with("https://")
                         && !img_url.starts_with("http://")
                     {
-                        findings.push(Finding {
-                            level: Level::Error,
-                            rule_id: "opengraph/image-not-absolute".into(),
-                            file: page.rel_path.clone(),
-                            selector: "meta[property='og:image']".into(),
-                            message: format!(
+                        findings.push(Finding::fail("opengraph/image-not-absolute", format!(
                                 "og:image URL is not absolute: \"{}\"",
                                 img_url
-                            ),
-                            help: "og:image must be an absolute URL (https://...) so social platforms can fetch it".into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                            ))
+.with_severity(Severity::High)
+.at(Location::file(page.rel_path.clone()).with_selector("meta[property='og:image']"))
+.with_help("og:image must be an absolute URL (https://...) so social platforms can fetch it"));
                     }
                 }
             }
@@ -157,20 +129,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         {
                             if !local_path.exists() {
                                 if og.check_image_exists {
-                                    findings.push(Finding {
-                                        level: Level::Error,
-                                        rule_id: "opengraph/image-broken".into(),
-                                        file: page.rel_path.clone(),
-                                        selector: "meta[property='og:image']".into(),
-                                        message: format!(
+                                    findings.push(Finding::fail("opengraph/image-broken", format!(
                                             "og:image '{}' does not exist in the build output",
                                             img_url
-                                        ),
-                                        help: "Fix the og:image path or add the missing image file.".into(),
-                                        suggestion: None,
-                                        source_hint: None,
-                                        confidence: None,
-                                    });
+                                        ))
+.with_severity(Severity::High)
+.at(Location::file(page.rel_path.clone()).with_selector("meta[property='og:image']"))
+.with_help("Fix the og:image path or add the missing image file."));
                                 }
                             } else {
                                 if og.check_image_dimensions {
@@ -178,21 +143,14 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                                         if dim.width < OG_IMAGE_REC_WIDTH
                                             || dim.height < OG_IMAGE_REC_HEIGHT
                                         {
-                                            findings.push(Finding {
-                                                level: Level::Warning,
-                                                rule_id: "opengraph/image-invalid-dimensions".into(),
-                                                file: page.rel_path.clone(),
-                                                selector: "meta[property='og:image']".into(),
-                                                message: format!(
+                                            findings.push(Finding::fail("opengraph/image-invalid-dimensions", format!(
                                                     "og:image is {}x{}, below the recommended {}x{}",
                                                     dim.width, dim.height,
                                                     OG_IMAGE_REC_WIDTH, OG_IMAGE_REC_HEIGHT
-                                                ),
-                                                help: "Use a 1200x630 image so social platforms render a large preview card.".into(),
-                                                suggestion: None,
-                                                source_hint: None,
-                                                confidence: None,
-                                            });
+                                                ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("meta[property='og:image']"))
+.with_help("Use a 1200x630 image so social platforms render a large preview card."));
                                         }
                                     }
                                 }
@@ -201,20 +159,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                                         .map(|m| m.len() / 1024)
                                         .unwrap_or(0);
                                     if size_kb > max_kb {
-                                        findings.push(Finding {
-                                            level: Level::Warning,
-                                            rule_id: "opengraph/image-too-large".into(),
-                                            file: page.rel_path.clone(),
-                                            selector: "meta[property='og:image']".into(),
-                                            message: format!(
+                                        findings.push(Finding::fail("opengraph/image-too-large", format!(
                                                 "og:image is {}KB (max: {}KB)",
                                                 size_kb, max_kb
-                                            ),
-                                            help: "Compress the social preview image to keep it small and fast to fetch.".into(),
-                                            suggestion: None,
-                                            source_hint: None,
-                                            confidence: None,
-                                        });
+                                            ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("meta[property='og:image']"))
+.with_help("Compress the social preview image to keep it small and fast to fetch."));
                                     }
                                 }
                             }
@@ -231,17 +182,11 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     .and_then(|el| el.value().attr("content"))
                     .is_some_and(|v| !v.trim().is_empty());
                 if !has {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "opengraph/type-missing".into(),
-                        file: page.rel_path.clone(),
-                        selector: "head".into(),
-                        message: "Missing og:type meta tag".into(),
-                        help: "Add <meta property=\"og:type\" content=\"website\"> (or \"article\", \"product\", etc.)".into(),
-                        suggestion: Some("<meta property=\"og:type\" content=\"website\">".into()),
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(Finding::fail("opengraph/type-missing","Missing og:type meta tag")
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("head"))
+.with_help("Add <meta property=\"og:type\" content=\"website\"> (or \"article\", \"product\", etc.)")
+.with_suggestion("<meta property=\"og:type\" content=\"website\">"));
                 }
             }
 
@@ -253,17 +198,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     .and_then(|el| el.value().attr("content"))
                     .is_some_and(|v| !v.trim().is_empty());
                 if !has {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "opengraph/url-missing".into(),
-                        file: page.rel_path.clone(),
-                        selector: "head".into(),
-                        message: "Missing og:url meta tag".into(),
-                        help: "Add <meta property=\"og:url\" content=\"https://...\"> with the canonical URL".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(Finding::fail("opengraph/url-missing","Missing og:url meta tag")
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("head"))
+.with_help("Add <meta property=\"og:url\" content=\"https://...\"> with the canonical URL"));
                 }
             }
 
@@ -275,37 +213,24 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 .map(|v| v.trim().to_string());
 
             if og.require_twitter_card && twitter_card_content.is_none() {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "opengraph/twitter-card-missing".into(),
-                    file: page.rel_path.clone(),
-                    selector: "head".into(),
-                    message: "Missing twitter:card meta tag".into(),
-                    help: "Add <meta name=\"twitter:card\" content=\"summary_large_image\">".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("opengraph/twitter-card-missing","Missing twitter:card meta tag")
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("head"))
+.with_help("Add <meta name=\"twitter:card\" content=\"summary_large_image\">"));
             }
 
             if og.twitter_card_valid_values {
                 if let Some(ref card_val) = twitter_card_content {
                     if !card_val.is_empty() && !VALID_TWITTER_CARD_VALUES.contains(&card_val.as_str()) {
-                        findings.push(Finding {
-                            level: Level::Error,
-                            rule_id: "opengraph/twitter-card-invalid".into(),
-                            file: page.rel_path.clone(),
-                            selector: "meta[name='twitter:card']".into(),
-                            message: format!(
+                        findings.push(Finding::fail("opengraph/twitter-card-invalid", format!(
                                 "Invalid twitter:card value \"{}\". Allowed: {}",
                                 card_val,
                                 VALID_TWITTER_CARD_VALUES.join(", ")
-                            ),
-                            help: "Use one of: summary, summary_large_image, app, player".into(),
-                            suggestion: Some("summary_large_image".into()),
-                            source_hint: None,
-                            confidence: None,
-                        });
+                            ))
+.with_severity(Severity::High)
+.at(Location::file(page.rel_path.clone()).with_selector("meta[name='twitter:card']"))
+.with_help("Use one of: summary, summary_large_image, app, player")
+.with_suggestion("summary_large_image"));
                     }
                 }
             }
@@ -318,17 +243,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     .and_then(|el| el.value().attr("content"))
                     .is_some_and(|v| !v.trim().is_empty());
                 if !has {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "opengraph/twitter-image-missing".into(),
-                        file: page.rel_path.clone(),
-                        selector: "head".into(),
-                        message: "Missing twitter:image meta tag".into(),
-                        help: "Add <meta name=\"twitter:image\" content=\"https://...\">".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(Finding::fail("opengraph/twitter-image-missing","Missing twitter:image meta tag")
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("head"))
+.with_help("Add <meta name=\"twitter:image\" content=\"https://...\">"));
                 }
             }
 
@@ -355,20 +273,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     let diff = og_len.abs_diff(title_len);
                     // Warn if length difference is >50% of the longer title
                     if max_len > 0 && diff * 2 > max_len {
-                        findings.push(Finding {
-                            level: Level::Warning,
-                            rule_id: "opengraph/title-inconsistent".into(),
-                            file: page.rel_path.clone(),
-                            selector: "meta[property='og:title']".into(),
-                            message: format!(
+                        findings.push(Finding::fail("opengraph/title-inconsistent", format!(
                                 "og:title ({} chars) and <title> ({} chars) differ significantly",
                                 og_len, title_len
-                            ),
-                            help: "Keep og:title and <title> similar for consistent sharing previews".into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                            ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("meta[property='og:title']"))
+.with_help("Keep og:title and <title> similar for consistent sharing previews"));
                     }
                 }
             }

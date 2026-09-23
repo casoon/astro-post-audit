@@ -12,7 +12,7 @@ use walkdir::WalkDir;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Confidence, Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 #[derive(Debug, Clone)]
 struct ClassUse {
@@ -170,7 +170,10 @@ fn inventory(uses: &[ClassUse]) -> Vec<Finding> {
         .map(|(name, n)| format!("{name} ({n})"))
         .collect::<Vec<_>>()
         .join(", ");
-    vec![Finding::new(Level::Info, "source-analysis/tailwind-inventory", "source", "static class attributes", format!("Tailwind inventory across {} static class list(s): {observed}", uses.len()), "Use the counts as evidence for design-system review; no utility is considered incorrect by itself.", Some(Confidence::Low))]
+    vec![Finding::review("source-analysis/tailwind-inventory", format!("Tailwind inventory across {} static class list(s): {observed}", uses.len()))
+.with_severity(Severity::Low)
+.at(Location::file("source").with_selector("static class attributes"))
+.with_help("Use the counts as evidence for design-system review; no utility is considered incorrect by itself.")]
 }
 
 fn family(token: &str) -> String {
@@ -199,7 +202,10 @@ fn duplicates(uses: &[ClassUse], minimum: usize) -> Vec<Finding> {
     grouped.into_iter().filter_map(|(signature, items)| {
         (items.len() >= minimum).then(|| {
             let locations = items.iter().take(3).map(|i| location(i)).collect::<Vec<_>>().join(", ");
-            let mut finding = Finding::new(Level::Info, "source-analysis/duplicate-signature", items[0].file.clone(), location(items[0]), format!("Static Tailwind signature occurs {} times: {signature}", items.len()), format!("Review the {} occurrences for intentional markup reuse; examples: {locations}.", items.len()), Some(Confidence::Low));
+            let mut finding = Finding::review("source-analysis/duplicate-signature", format!("Static Tailwind signature occurs {} times: {signature}", items.len()))
+.with_severity(Severity::Low)
+.at(Location::file(items[0].file.clone()).with_selector(location(items[0])))
+.with_help(format!("Review the {} occurrences for intentional markup reuse; examples: {locations}.", items.len()));
             finding.suggestion = Some("Consider a shared component only when the surrounding markup has the same purpose.".into());
             finding
         })
@@ -240,7 +246,10 @@ fn conflicts(uses: &[ClassUse]) -> Vec<Finding> {
             groups.entry(key).or_default().push(token);
         }
         let mut seen = BTreeSet::new();
-        item.tokens.iter().filter_map(move |token| (!seen.insert(token)).then_some(format!("duplicate `{token}`"))).chain(groups.into_values().filter(|tokens| tokens.iter().collect::<BTreeSet<_>>().len() > 1).map(|tokens| format!("mutually exclusive `{}`", tokens.join("`, `")))).map(move |detail| Finding::new(Level::Info, "source-analysis/utility-conflict", item.file.clone(), location(item), format!("Static class list contains {detail}"), "Review this same-variant utility list; partial-overlap utilities are intentionally not diagnosed.", Some(Confidence::Low)))
+        item.tokens.iter().filter_map(move |token| (!seen.insert(token)).then_some(format!("duplicate `{token}`"))).chain(groups.into_values().filter(|tokens| tokens.iter().collect::<BTreeSet<_>>().len() > 1).map(|tokens| format!("mutually exclusive `{}`", tokens.join("`, `")))).map(move |detail| Finding::review("source-analysis/utility-conflict", format!("Static class list contains {detail}"))
+.with_severity(Severity::Low)
+.at(Location::file(item.file.clone()).with_selector(location(item)))
+.with_help("Review this same-variant utility list; partial-overlap utilities are intentionally not diagnosed."))
     }).collect()
 }
 
@@ -300,7 +309,10 @@ fn complexity(root: &Path, config: &Config) -> Vec<Finding> {
         let props = Regex::new(r"(?s)(?:interface|type)\s+Props\s*(?:=)?\s*\{(.*?)\}").unwrap().captures(&source).map_or(0, |c| c[1].lines().filter(|line| line.contains(':')).count());
         let slots = Regex::new(r#"<slot\s+name=[\"'][^\"']+"#).unwrap().find_iter(&source).count();
         if lines <= config.source_analysis.max_component_lines && props <= config.source_analysis.max_component_props && slots <= config.source_analysis.max_component_slots { return None; }
-        Some(Finding::new(Level::Info, "source-analysis/component-complexity", file.clone(), file, format!("Astro component has {lines} lines, {props} declared Props member(s), and {slots} named slot(s)"), format!("Advisory thresholds: {} lines, {} props, {} slots. Review structure; no split is prescribed.", config.source_analysis.max_component_lines, config.source_analysis.max_component_props, config.source_analysis.max_component_slots), Some(Confidence::Low)))
+        Some(Finding::review("source-analysis/component-complexity", format!("Astro component has {lines} lines, {props} declared Props member(s), and {slots} named slot(s)"))
+.with_severity(Severity::Low)
+.at(Location::file(file.clone()).with_selector(file))
+.with_help(format!("Advisory thresholds: {} lines, {} props, {} slots. Review structure; no split is prescribed.", config.source_analysis.max_component_lines, config.source_analysis.max_component_props, config.source_analysis.max_component_slots)))
     }).collect()
 }
 

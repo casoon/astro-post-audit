@@ -3,7 +3,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::normalize;
-use crate::report::{Confidence, Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 /// Analyze Astro's static meta-refresh redirects (generated from `redirects` in
 /// `astro.config.mjs`): links pointing at redirect pages, redirect chains, and loops.
@@ -57,20 +57,19 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 continue;
             }
             let final_target = resolve_final(&route, &redirect_map);
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "links/redirect-target".into(),
-                file: page.rel_path.clone(),
-                selector: format!("a[href='{}']", href),
-                message: format!(
-                    "Internal link points to redirect page '{}' (final target: '{}')",
-                    route, final_target
-                ),
-                help: "Link directly to the final URL to avoid an unnecessary redirect hop.".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: Some(Confidence::Medium),
-            });
+            findings.push(
+                Finding::review(
+                    "links/redirect-target",
+                    format!(
+                        "Internal link points to redirect page '{}' (final target: '{}')",
+                        route, final_target
+                    ),
+                )
+                .with_severity(Severity::Medium)
+                .at(Location::file(page.rel_path.clone())
+                    .with_selector(format!("a[href='{}']", href)))
+                .with_help("Link directly to the final URL to avoid an unnecessary redirect hop."),
+            );
         }
     }
 
@@ -92,18 +91,15 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     let file = file_of.get(start).cloned().unwrap_or_else(|| start.clone());
                     let mut display = cycle_slice.to_vec();
                     display.push(next.clone());
-                    findings.push(Finding {
-                        level: Level::Error,
-                        rule_id: "redirects/loop".into(),
-                        file,
-                        selector: "meta[http-equiv='refresh']".into(),
-                        message: format!("Redirect loop detected: {}", display.join(" -> ")),
-                        help: "Break the cycle — a redirect loop makes the page unreachable."
-                            .into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(
+                        Finding::fail(
+                            "redirects/loop",
+                            format!("Redirect loop detected: {}", display.join(" -> ")),
+                        )
+                        .with_severity(Severity::High)
+                        .at(Location::file(file).with_selector("meta[http-equiv='refresh']"))
+                        .with_help("Break the cycle — a redirect loop makes the page unreachable."),
+                    );
                 }
                 break;
             }
@@ -115,21 +111,19 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         let is_head = !targets.contains(start);
         if is_head && path.len() > 2 {
             let file = file_of.get(start).cloned().unwrap_or_else(|| start.clone());
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "redirects/chain".into(),
-                file,
-                selector: "meta[http-equiv='refresh']".into(),
-                message: format!(
-                    "Redirect chain of length {}: {}",
-                    path.len() - 1,
-                    path.join(" -> ")
-                ),
-                help: "Point the first redirect straight at the final destination to remove intermediate hops.".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: Some(Confidence::Medium),
-            });
+            findings.push(
+                Finding::review(
+                    "redirects/chain",
+                    format!(
+                        "Redirect chain of length {}: {}",
+                        path.len() - 1,
+                        path.join(" -> ")
+                    ),
+                )
+                .with_severity(Severity::Medium)
+                .at(Location::file(file).with_selector("meta[http-equiv='refresh']"))
+                .with_help("Point the first redirect straight at the final destination to remove intermediate hops."),
+            );
         }
     }
 

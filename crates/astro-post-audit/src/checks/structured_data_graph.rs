@@ -7,7 +7,7 @@ use serde_json::Value;
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::normalize;
-use crate::report::{Confidence, Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 static SCRIPT_SEL: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("script[type='application/ld+json']").expect("valid selector")
@@ -60,61 +60,58 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
         let types: HashSet<String> = refs.iter().filter_map(|r| r.type_name.clone()).collect();
         if types.len() > 1 {
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "structured-data-graph/type-conflict".into(),
-                file: first_ref.file.clone(),
-                selector: "script[type='application/ld+json']".into(),
-                message: format!(
-                    "Entity '{}' appears with conflicting @type values across pages: {}",
-                    entity_id,
-                    {
-                        let mut sorted: Vec<_> = types.into_iter().collect();
-                        sorted.sort_unstable();
-                        sorted.join(", ")
-                    }
-                ),
-                help: "Use a consistent @type for the same @id entity across the site".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: Some(Confidence::Medium),
-            });
+            findings.push(
+                Finding::review(
+                    "structured-data-graph/type-conflict",
+                    format!(
+                        "Entity '{}' appears with conflicting @type values across pages: {}",
+                        entity_id,
+                        {
+                            let mut sorted: Vec<_> = types.into_iter().collect();
+                            sorted.sort_unstable();
+                            sorted.join(", ")
+                        }
+                    ),
+                )
+                .with_severity(Severity::Medium)
+                .at(Location::file(first_ref.file.clone())
+                    .with_selector("script[type='application/ld+json']"))
+                .with_help("Use a consistent @type for the same @id entity across the site"),
+            );
         }
 
         let names: HashSet<String> = refs.iter().filter_map(|r| r.name.clone()).collect();
         if names.len() > 1 {
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "structured-data-graph/name-conflict".into(),
-                file: first_ref.file.clone(),
-                selector: "script[type='application/ld+json']".into(),
-                message: format!(
-                    "Entity '{}' has inconsistent 'name' values across pages",
-                    entity_id
-                ),
-                help: "Keep core entity fields (name/url/type) consistent across pages".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: Some(Confidence::Medium),
-            });
+            findings.push(
+                Finding::review(
+                    "structured-data-graph/name-conflict",
+                    format!(
+                        "Entity '{}' has inconsistent 'name' values across pages",
+                        entity_id
+                    ),
+                )
+                .with_severity(Severity::Medium)
+                .at(Location::file(first_ref.file.clone())
+                    .with_selector("script[type='application/ld+json']"))
+                .with_help("Keep core entity fields (name/url/type) consistent across pages"),
+            );
         }
 
         let urls: HashSet<String> = refs.iter().filter_map(|r| r.url.clone()).collect();
         if urls.len() > 1 {
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "structured-data-graph/url-conflict".into(),
-                file: first_ref.file.clone(),
-                selector: "script[type='application/ld+json']".into(),
-                message: format!(
-                    "Entity '{}' has conflicting 'url' values across pages",
-                    entity_id
-                ),
-                help: "Use one canonical URL value for the same entity across pages".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: Some(Confidence::Medium),
-            });
+            findings.push(
+                Finding::review(
+                    "structured-data-graph/url-conflict",
+                    format!(
+                        "Entity '{}' has conflicting 'url' values across pages",
+                        entity_id
+                    ),
+                )
+                .with_severity(Severity::Medium)
+                .at(Location::file(first_ref.file.clone())
+                    .with_selector("script[type='application/ld+json']"))
+                .with_help("Use one canonical URL value for the same entity across pages"),
+            );
         }
     }
 
@@ -128,20 +125,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         if let Some(route) = normalize::resolve_href(entity_url, "/", index.base_url.as_deref()) {
             let norm = normalize::normalize_path(&route, &config.url_normalization);
             if !index.route_exists(&norm) {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "structured-data-graph/internal-url-missing".into(),
-                    file: snap.file.clone(),
-                    selector: "script[type='application/ld+json']".into(),
-                    message: format!(
+                findings.push(Finding::review("structured-data-graph/internal-url-missing", format!(
                         "Structured data entity '{}' references internal URL '{}' that is missing in dist",
                         snap.entity_id, entity_url
-                    ),
-                    help: "Point structured-data URLs to existing canonical pages".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: Some(Confidence::Medium),
-                });
+                    ))
+.with_severity(Severity::Medium)
+.at(Location::file(snap.file.clone()).with_selector("script[type='application/ld+json']"))
+.with_help("Point structured-data URLs to existing canonical pages"));
             }
         }
     }

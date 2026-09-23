@@ -7,7 +7,7 @@ use url::Url;
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::normalize;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 static HREFLANG_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("link[rel='alternate'][hreflang]").expect("valid selector"));
@@ -53,17 +53,16 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         if config.hreflang.require_x_default {
             let has_x_default = entries.iter().any(|(lang, _)| lang == "x-default");
             if !has_x_default {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "hreflang/no-x-default".into(),
-                    file: page.rel_path.clone(),
-                    selector: "link[rel='alternate'][hreflang]".into(),
-                    message: "Hreflang tags present but no x-default".into(),
-                    help: "Add <link rel=\"alternate\" hreflang=\"x-default\" href=\"...\">".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(
+                    Finding::fail(
+                        "hreflang/no-x-default",
+                        "Hreflang tags present but no x-default",
+                    )
+                    .with_severity(Severity::Medium)
+                    .at(Location::file(page.rel_path.clone())
+                        .with_selector("link[rel='alternate'][hreflang]"))
+                    .with_help("Add <link rel=\"alternate\" hreflang=\"x-default\" href=\"...\">"),
+                );
             }
         }
 
@@ -78,17 +77,16 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     .iter()
                     .any(|(_, href)| normalize_url_like(href, norm_cfg) == page_url_norm);
                 if !has_self {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "hreflang/no-self-reference".into(),
-                        file: page.rel_path.clone(),
-                        selector: "link[rel='alternate'][hreflang]".into(),
-                        message: "Hreflang tags don't include a self-reference".into(),
-                        help: "Include the current page URL in hreflang annotations".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(
+                        Finding::fail(
+                            "hreflang/no-self-reference",
+                            "Hreflang tags don't include a self-reference",
+                        )
+                        .with_severity(Severity::Medium)
+                        .at(Location::file(page.rel_path.clone())
+                            .with_selector("link[rel='alternate'][hreflang]"))
+                        .with_help("Include the current page URL in hreflang annotations"),
+                    );
                 }
             }
         }
@@ -108,22 +106,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     let normalized =
                         normalize::normalize_path(&resolved, &config.url_normalization);
                     if !index.route_exists(&normalized) {
-                        findings.push(Finding {
-                            level: Level::Warning,
-                            rule_id: "hreflang/target-missing".into(),
-                            file: page.rel_path.clone(),
-                            selector: format!("link[hreflang='{}'][href='{}']", lang, href),
-                            message: format!(
+                        findings.push(Finding::fail("hreflang/target-missing", format!(
                                 "Hreflang target '{}' (lang='{}') does not exist in the build",
                                 href, lang
-                            ),
-                            help:
-                                "Ensure the translated page is generated, or fix the hreflang href."
-                                    .into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                            ))
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector(format!("link[hreflang='{}'][href='{}']", lang, href)))
+.with_help("Ensure the translated page is generated, or fix the hreflang href."));
                     }
                 }
             }
@@ -164,20 +153,23 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                                 .find(|p| p.route == *source_route)
                                 .map(|p| p.rel_path.as_str())
                                 .unwrap_or("(unknown)");
-                            findings.push(Finding {
-                                level: Level::Warning,
-                                rule_id: "hreflang/no-reciprocal".into(),
-                                file: source_file.to_string(),
-                                selector: format!("link[hreflang='{}'][href='{}']", lang, href),
-                                message: format!(
-                                    "Hreflang target '{}' (lang='{}') doesn't link back",
-                                    href, lang
-                                ),
-                                help: "Add reciprocal hreflang link on the target page".into(),
-                                suggestion: None,
-                                source_hint: None,
-                                confidence: None,
-                            });
+                            findings.push(
+                                Finding::fail(
+                                    "hreflang/no-reciprocal",
+                                    format!(
+                                        "Hreflang target '{}' (lang='{}') doesn't link back",
+                                        href, lang
+                                    ),
+                                )
+                                .with_severity(Severity::Medium)
+                                .at(
+                                    Location::file(source_file.to_string()).with_selector(format!(
+                                        "link[hreflang='{}'][href='{}']",
+                                        lang, href
+                                    )),
+                                )
+                                .with_help("Add reciprocal hreflang link on the target page"),
+                            );
                         }
                     }
                 }

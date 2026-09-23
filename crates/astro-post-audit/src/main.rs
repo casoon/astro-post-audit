@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::process;
 use std::time::Instant;
 
+mod adapter;
 mod baseline;
 mod checks;
 mod config;
@@ -13,6 +14,7 @@ mod hints;
 mod normalize;
 mod overview;
 mod report;
+mod rule_ids;
 
 use config::Config;
 use discovery::SiteIndex;
@@ -182,9 +184,10 @@ fn run() -> Result<i32> {
     let registry: &[(&str, CheckFn)] = &[
         ("seo", checks::seo::check_all),
         ("links", checks::links::check_all),
-        ("a11y", checks::a11y::check_all),
+        // Der gemeinsame Regelbestand aus a11y-core, ueber dem Adapter.
+        // Loest die frueheren Module a11y und headings vollstaendig ab.
+        ("a11y_core", checks::a11y_core::check_all),
         ("html_basics", checks::html_basics::check_all),
-        ("headings", checks::headings::check_all),
         ("sitemap", checks::sitemap::check_all),
         ("robots_txt", checks::robots_txt::check_all),
         ("assets", checks::assets::check_all),
@@ -218,6 +221,19 @@ fn run() -> Result<i32> {
         ("source_analysis", checks::source_analysis::check_all),
     ];
 
+    // Die severity-Overrides kommen aus astro.config.mjs und koennen noch die
+    // alten Kennungen tragen. Einmal uebersetzt statt bei jedem Befund.
+    let severity_overrides: std::collections::HashMap<String, config::SeverityLevel> = config
+        .severity
+        .overrides
+        .iter()
+        .flat_map(|(kennung, stufe)| {
+            rule_ids::beide_kennungen(kennung, "severity config")
+                .into_iter()
+                .map(move |k| (k, stufe.clone()))
+        })
+        .collect();
+
     let total_checks = registry.len();
     if show_progress {
         eprintln!("  Auditing {} pages…", site_index.pages.len());
@@ -240,12 +256,12 @@ fn run() -> Result<i32> {
         if !config.severity.overrides.is_empty() {
             use config::SeverityLevel;
             new_findings.retain_mut(|f| {
-                if let Some(override_level) = config.severity.overrides.get(&f.rule_id) {
+                if let Some(override_level) = severity_overrides.get(&f.rule_id) {
                     match override_level {
                         SeverityLevel::Off => return false,
-                        SeverityLevel::Error => f.level = report::Level::Error,
-                        SeverityLevel::Warning => f.level = report::Level::Warning,
-                        SeverityLevel::Info => f.level = report::Level::Info,
+                        SeverityLevel::Error => f.severity = report::Severity::High,
+                        SeverityLevel::Warning => f.severity = report::Severity::Medium,
+                        SeverityLevel::Info => f.severity = report::Severity::Low,
                     }
                 }
                 true
@@ -271,10 +287,7 @@ fn run() -> Result<i32> {
                 elapsed_ms
             );
         }
-        error_count += new_findings
-            .iter()
-            .filter(|f| f.level == report::Level::Error)
-            .count();
+        error_count += new_findings.iter().filter(|f| report::is_error(f)).count();
         findings.extend(new_findings);
     }
     let _ = error_count;
@@ -291,10 +304,11 @@ fn run() -> Result<i32> {
             let mut hint_cache: std::collections::HashMap<String, Option<String>> =
                 std::collections::HashMap::new();
             for f in &mut findings {
+                let datei = report::datei_von(f).to_string();
                 let hint = hint_cache
-                    .entry(f.file.clone())
-                    .or_insert_with(|| hints::find_source(&f.file, root));
-                f.source_hint = hint.clone();
+                    .entry(datei.clone())
+                    .or_insert_with(|| hints::find_source(&datei, root));
+                f.location.source_hint = hint.clone();
             }
         }
     }
@@ -313,14 +327,11 @@ fn run() -> Result<i32> {
 
     // Enforce exact --max-errors cap: keep only the first N errors (plus all non-errors before them)
     let truncated = if let Some(max) = max_errors {
-        let total_errors = findings
-            .iter()
-            .filter(|f| f.level == report::Level::Error)
-            .count();
+        let total_errors = findings.iter().filter(|f| report::is_error(f)).count();
         if total_errors > max {
             let mut error_seen = 0usize;
             findings.retain(|f| {
-                if f.level == report::Level::Error {
+                if report::is_error(f) {
                     error_seen += 1;
                     error_seen <= max
                 } else {

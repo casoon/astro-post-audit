@@ -1,12 +1,12 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-use html_conform::Severity;
+use html_conform::Severity as ConformSeverity;
 use rayon::prelude::*;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Confidence, Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 const ASTRO_ISLAND_RUNTIME_STYLE: &str =
     "<style>astro-island,astro-slot,astro-static-slot{display:contents}</style>";
@@ -45,15 +45,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             let report = match html_conform::check(&validation_html) {
                 Ok(report) => report,
                 Err(error) => {
-                    return vec![Finding::new(
-                        Level::Error,
-                        "html/validator-error",
-                        page.rel_path.clone(),
-                        "",
-                        format!("HTML conformance validation failed: {error}"),
-                        "The HTML validator could not initialize. Reinstall or update astro-post-audit before trusting this audit result.",
-                        Some(Confidence::Medium),
-                    )];
+                    return vec![Finding::review("html/validator-error", format!("HTML conformance validation failed: {error}"))
+.with_severity(Severity::High)
+.at(Location::file(page.rel_path.clone()))
+.with_help("The HTML validator could not initialize. Reinstall or update astro-post-audit before trusting this audit result.")];
                 }
             };
             if report.findings.is_empty() {
@@ -62,8 +57,12 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             // Deduplicate identical (rule, message) pairs while preserving
             // first-seen order.
-            let mut order: Vec<(String, String, Level, Option<html_conform::SourceLocation>)> =
-                Vec::new();
+            let mut order: Vec<(
+                String,
+                String,
+                Severity,
+                Option<html_conform::SourceLocation>,
+            )> = Vec::new();
             let mut counts: HashMap<(String, String), usize> = HashMap::new();
             for finding in &report.findings {
                 let key = (finding.rule_id.clone(), finding.message.clone());
@@ -72,9 +71,9 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         finding.rule_id.clone(),
                         finding.message.clone(),
                         match finding.severity {
-                            Severity::Error => Level::Error,
-                            Severity::Warning => Level::Warning,
-                            Severity::Info => Level::Info,
+                            ConformSeverity::Error => Severity::High,
+                            ConformSeverity::Warning => Severity::Medium,
+                            ConformSeverity::Info => Severity::Low,
                         },
                         finding.location,
                     ));
@@ -85,7 +84,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             order
                 .into_iter()
                 .take(max_per_page)
-                .map(|(rule_id, message, level, location)| {
+                .map(|(rule_id, message, schwere, location)| {
                     let count = counts
                         .get(&(rule_id.clone(), message.clone()))
                         .copied()
@@ -98,19 +97,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     let location = location
                         .map(|location| format!(" at line {location}"))
                         .unwrap_or_default();
-                    Finding {
-                        level,
-                        rule_id: format!("html/{rule_id}"),
-                        file: page.rel_path.clone(),
-                        selector: String::new(),
-                        message: format!(
-                            "HTML conformance{location}: {message}{occurrences}"
-                        ),
-                        help: "Fix the markup issue reported by conformance validation (tree construction, content-model schema, ARIA constraints, or attribute microsyntax). Browsers often recover silently, but it can break hydration, accessibility, or interoperability.".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: Some(Confidence::Medium),
-                    }
+                    Finding::review(
+                        format!("html/{rule_id}"),
+                        format!("HTML conformance{location}: {message}{occurrences}"),
+                    )
+                    .with_severity(schwere)
+                    .at(Location::file(page.rel_path.clone()))
+                    .with_help("Fix the markup issue reported by conformance validation (tree construction, content-model schema, ARIA constraints, or attribute microsyntax). Browsers often recover silently, but it can break hydration, accessibility, or interoperability.")
                 })
                 .collect()
         })

@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 use crate::config::Config;
 use crate::discovery::{PageInfo, SiteIndex};
 use crate::normalize;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 static STYLE_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("style").expect("valid selector"));
@@ -34,36 +34,21 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     .iter()
                     .any(|css| has_font_face_without_display(css))
             {
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "fonts/missing-font-display".into(),
-                    file: page.rel_path.clone(),
-                    selector: "@font-face".into(),
-                    message: "An @font-face block is missing font-display (e.g., font-display: swap)"
-                        .into(),
-                    help: "Add font-display: swap (or optional) to avoid invisible text during font loading (FOIT).".into(),
-                    suggestion: Some("font-display: swap;".into()),
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("fonts/missing-font-display","An @font-face block is missing font-display (e.g., font-display: swap)")
+.with_severity(Severity::Medium)
+.at(Location::file(page.rel_path.clone()).with_selector("@font-face"))
+.with_help("Add font-display: swap (or optional) to avoid invisible text during font loading (FOIT).")
+.with_suggestion("font-display: swap;"));
             }
 
             if config.fonts.require_font_preload
                 && css_sources.iter().any(|css| has_self_hosted_font_face(css))
                 && html.select(&FONT_PRELOAD_SEL).next().is_none()
             {
-                findings.push(Finding {
-                    level: Level::Info,
-                    rule_id: "fonts/missing-preload".into(),
-                    file: page.rel_path.clone(),
-                    selector: "head".into(),
-                    message: "Page uses self-hosted webfonts but has no critical font preload in <head>"
-                        .into(),
-                    help: "Consider adding <link rel=\"preload\" href=\"/fonts/font.woff2\" as=\"font\" type=\"font/woff2\" crossorigin> for critical webfonts.".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(Finding::fail("fonts/missing-preload","Page uses self-hosted webfonts but has no critical font preload in <head>")
+.with_severity(Severity::Low)
+.at(Location::file(page.rel_path.clone()).with_selector("head"))
+.with_help("Consider adding <link rel=\"preload\" href=\"/fonts/font.woff2\" as=\"font\" type=\"font/woff2\" crossorigin> for critical webfonts."));
             }
 
             findings

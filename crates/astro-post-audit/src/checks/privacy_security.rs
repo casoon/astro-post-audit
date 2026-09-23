@@ -5,7 +5,7 @@ use url::Url;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Confidence, Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 const TRACKER_DOMAINS: &[&str] = &[
     "google-analytics.com",
@@ -74,76 +74,71 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         }
 
         if !third_party_domains.is_empty() {
-            findings.push(Finding {
-                level: Level::Info,
-                rule_id: "privacy-security/third-party-domains".into(),
-                file: page.rel_path.clone(),
-                selector: "head, body".into(),
-                message: format!(
-                    "Page loads resources from {} third-party domain(s): {}",
-                    third_party_domains.len(),
-                    join_limited(&third_party_domains, 4)
-                ),
-                help: "Review third-party dependencies for privacy and security impact".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: Some(Confidence::Medium),
-            });
+            findings.push(
+                Finding::review(
+                    "privacy-security/third-party-domains",
+                    format!(
+                        "Page loads resources from {} third-party domain(s): {}",
+                        third_party_domains.len(),
+                        join_limited(&third_party_domains, 4)
+                    ),
+                )
+                .with_severity(Severity::Low)
+                .at(Location::file(page.rel_path.clone()).with_selector("head, body"))
+                .with_help("Review third-party dependencies for privacy and security impact"),
+            );
         }
 
         for el in html.select(&EXTERNAL_SCRIPT_SEL) {
             if el.value().attr("integrity").is_none() {
                 let src = el.value().attr("src").unwrap_or("");
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "privacy-security/missing-sri-script".into(),
-                    file: page.rel_path.clone(),
-                    selector: format!("script[src='{}']", src),
-                    message: format!("External script '{}' has no SRI integrity attribute", src),
-                    help: "Add integrity + crossorigin for external scripts where possible".into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: Some(Confidence::Medium),
-                });
+                findings.push(
+                    Finding::review(
+                        "privacy-security/missing-sri-script",
+                        format!("External script '{}' has no SRI integrity attribute", src),
+                    )
+                    .with_severity(Severity::Medium)
+                    .at(Location::file(page.rel_path.clone())
+                        .with_selector(format!("script[src='{}']", src)))
+                    .with_help("Add integrity + crossorigin for external scripts where possible"),
+                );
             }
         }
         for el in html.select(&EXTERNAL_STYLE_SEL) {
             if el.value().attr("integrity").is_none() {
                 let href = el.value().attr("href").unwrap_or("");
-                findings.push(Finding {
-                    level: Level::Warning,
-                    rule_id: "privacy-security/missing-sri-stylesheet".into(),
-                    file: page.rel_path.clone(),
-                    selector: format!("link[rel='stylesheet'][href='{}']", href),
-                    message: format!(
-                        "External stylesheet '{}' has no SRI integrity attribute",
-                        href
+                findings.push(
+                    Finding::review(
+                        "privacy-security/missing-sri-stylesheet",
+                        format!(
+                            "External stylesheet '{}' has no SRI integrity attribute",
+                            href
+                        ),
+                    )
+                    .with_severity(Severity::Medium)
+                    .at(Location::file(page.rel_path.clone())
+                        .with_selector(format!("link[rel='stylesheet'][href='{}']", href)))
+                    .with_help(
+                        "Add integrity + crossorigin for external stylesheets where possible",
                     ),
-                    help: "Add integrity + crossorigin for external stylesheets where possible"
-                        .into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: Some(Confidence::Medium),
-                });
+                );
             }
         }
 
         let inline_script_count = html.select(&INLINE_SCRIPT_SEL).count();
         if inline_script_count > 0 {
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "privacy-security/csp-readiness-inline-script".into(),
-                file: page.rel_path.clone(),
-                selector: "script".into(),
-                message: format!(
-                    "Found {} inline script(s), which weakens strict CSP readiness",
-                    inline_script_count
-                ),
-                help: "Move inline scripts to external files or use CSP nonces/hashes".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: Some(Confidence::Medium),
-            });
+            findings.push(
+                Finding::review(
+                    "privacy-security/csp-readiness-inline-script",
+                    format!(
+                        "Found {} inline script(s), which weakens strict CSP readiness",
+                        inline_script_count
+                    ),
+                )
+                .with_severity(Severity::Medium)
+                .at(Location::file(page.rel_path.clone()).with_selector("script"))
+                .with_help("Move inline scripts to external files or use CSP nonces/hashes"),
+            );
         }
 
         let tracker_present = third_party_domains.iter().any(|d| {
@@ -152,19 +147,15 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 .any(|t| d == t || d.ends_with(&format!(".{}", t)))
         });
         if tracker_present && !has_consent_indicator(&html) {
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "privacy-security/missing-consent-indicator".into(),
-                file: page.rel_path.clone(),
-                selector: "body".into(),
-                message:
-                    "Tracking-related third-party domains detected without consent/CMP indicator"
-                        .into(),
-                help: "Ensure tracking scripts are gated behind a consent mechanism".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: Some(Confidence::Medium),
-            });
+            findings.push(
+                Finding::review(
+                    "privacy-security/missing-consent-indicator",
+                    "Tracking-related third-party domains detected without consent/CMP indicator",
+                )
+                .with_severity(Severity::Medium)
+                .at(Location::file(page.rel_path.clone()).with_selector("body"))
+                .with_help("Ensure tracking scripts are gated behind a consent mechanism"),
+            );
         }
     }
 
@@ -194,17 +185,12 @@ fn check_gdpr(
     let iframe_sel = Selector::parse("iframe[src]").unwrap();
 
     let mut push = |rule: &str, selector: String, message: String, help: &str| {
-        findings.push(Finding {
-            level: Level::Warning,
-            rule_id: rule.into(),
-            file: page.rel_path.clone(),
-            selector,
-            message,
-            help: help.into(),
-            suggestion: None,
-            source_hint: None,
-            confidence: Some(Confidence::Medium),
-        });
+        findings.push(
+            Finding::review(rule, message)
+                .with_severity(Severity::Medium)
+                .at(Location::file(page.rel_path.clone()).with_selector(selector))
+                .with_help(help),
+        );
     };
 
     // 1. Google Fonts + 4. CDNs + 5. external images: scan all resource URLs once.

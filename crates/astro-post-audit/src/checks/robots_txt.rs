@@ -2,7 +2,7 @@ use url::Url;
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
-use crate::report::{Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 /// AI citation bots — blocking them reduces AI search visibility.
 const AI_CITATION_BOTS: &[&str] = &[
@@ -24,17 +24,15 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
     if !robots_path.exists() {
         if config.robots_txt.require {
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "robots-txt/missing".into(),
-                file: "robots.txt".into(),
-                selector: String::new(),
-                message: "robots.txt not found in dist directory".into(),
-                help: "Add a robots.txt file to your public/ directory".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: None,
-            });
+            findings.push(
+                Finding::fail(
+                    "robots-txt/missing",
+                    "robots.txt not found in dist directory",
+                )
+                .with_severity(Severity::Medium)
+                .at(Location::file("robots.txt"))
+                .with_help("Add a robots.txt file to your public/ directory"),
+            );
         }
         return findings;
     }
@@ -51,17 +49,15 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             .any(|line| line.trim().to_lowercase().starts_with("sitemap:"));
 
         if !has_sitemap {
-            findings.push(Finding {
-                level: Level::Warning,
-                rule_id: "robots-txt/no-sitemap".into(),
-                file: "robots.txt".into(),
-                selector: String::new(),
-                message: "robots.txt does not contain a Sitemap directive".into(),
-                help: "Add 'Sitemap: https://example.com/sitemap.xml' to robots.txt".into(),
-                suggestion: None,
-                source_hint: None,
-                confidence: None,
-            });
+            findings.push(
+                Finding::fail(
+                    "robots-txt/no-sitemap",
+                    "robots.txt does not contain a Sitemap directive",
+                )
+                .with_severity(Severity::Medium)
+                .at(Location::file("robots.txt"))
+                .with_help("Add 'Sitemap: https://example.com/sitemap.xml' to robots.txt"),
+            );
         }
     }
 
@@ -77,18 +73,17 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             let has_allow_all = block.allows.iter().any(|a| a == "/");
 
             if is_global && has_disallow_all && !has_allow_all {
-                findings.push(Finding {
-                    level: Level::Error,
-                    rule_id: "robots-txt/disallow-all".into(),
-                    file: "robots.txt".into(),
-                    selector: String::new(),
-                    message: "robots.txt blocks all crawlers with 'Disallow: /'".into(),
-                    help: "Remove 'Disallow: /' for User-agent: * to allow search engine indexing"
-                        .into(),
-                    suggestion: None,
-                    source_hint: None,
-                    confidence: None,
-                });
+                findings.push(
+                    Finding::fail(
+                        "robots-txt/disallow-all",
+                        "robots.txt blocks all crawlers with 'Disallow: /'",
+                    )
+                    .with_severity(Severity::High)
+                    .at(Location::file("robots.txt"))
+                    .with_help(
+                        "Remove 'Disallow: /' for User-agent: * to allow search engine indexing",
+                    ),
+                );
                 break;
             }
         }
@@ -101,20 +96,18 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 let has_allow_all = block.allows.iter().any(|a| a == "/");
 
                 if is_bot && has_disallow_all && !has_allow_all {
-                    findings.push(Finding {
-                        level: Level::Error,
-                        rule_id: "robots-txt/disallow-search-bot".into(),
-                        file: "robots.txt".into(),
-                        selector: String::new(),
-                        message: format!("robots.txt blocks {} with 'Disallow: /'", bot),
-                        help: format!(
+                    findings.push(
+                        Finding::fail(
+                            "robots-txt/disallow-search-bot",
+                            format!("robots.txt blocks {} with 'Disallow: /'", bot),
+                        )
+                        .with_severity(Severity::High)
+                        .at(Location::file("robots.txt"))
+                        .with_help(format!(
                             "Remove 'Disallow: /' for {} to allow search engine indexing",
                             bot
-                        ),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                        )),
+                    );
                 }
             }
         }
@@ -129,20 +122,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 let val_str = rest.trim();
                 if let Ok(delay) = val_str.parse::<f64>() {
                     if delay > max as f64 {
-                        findings.push(Finding {
-                            level: Level::Warning,
-                            rule_id: "robots-txt/crawl-delay-high".into(),
-                            file: "robots.txt".into(),
-                            selector: String::new(),
-                            message: format!(
+                        findings.push(Finding::fail("robots-txt/crawl-delay-high", format!(
                                 "Crawl-delay of {} seconds is very high (max recommended: {})",
                                 delay, max
-                            ),
-                            help: "High crawl delays reduce how often search engines index your content. Use a value ≤ 10.".into(),
-                            suggestion: None,
-                            source_hint: None,
-                            confidence: None,
-                        });
+                            ))
+.with_severity(Severity::Medium)
+.at(Location::file("robots.txt"))
+.with_help("High crawl delays reduce how often search engines index your content. Use a value ≤ 10."));
                     }
                 }
             }
@@ -160,46 +146,32 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 let has_allow = block.allows.iter().any(|a| a == "/");
 
                 if is_citation_bot && has_disallow && !has_allow {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "robots-txt/ai-citation-bot-blocked".into(),
-                        file: "robots.txt".into(),
-                        selector: String::new(),
-                        message: format!(
+                    findings.push(Finding::fail("robots-txt/ai-citation-bot-blocked", format!(
                             "AI citation bot '{}' is blocked — reduces AI search visibility",
                             agent
-                        ),
-                        help: format!(
+                        ))
+.with_severity(Severity::Medium)
+.at(Location::file("robots.txt"))
+.with_help(format!(
                             "Remove 'Disallow: /' for {} to allow AI-powered search engines to cite your content",
                             agent
-                        ),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                        )));
                 }
 
                 let is_training_bot = AI_TRAINING_BOTS
                     .iter()
                     .any(|b| agent.eq_ignore_ascii_case(b));
                 if is_training_bot && !has_disallow {
-                    findings.push(Finding {
-                        level: Level::Info,
-                        rule_id: "robots-txt/ai-training-bot-allowed".into(),
-                        file: "robots.txt".into(),
-                        selector: String::new(),
-                        message: format!(
+                    findings.push(Finding::fail("robots-txt/ai-training-bot-allowed", format!(
                             "AI training bot '{}' is allowed — consider blocking if you don't want your content used for training",
                             agent
-                        ),
-                        help: format!(
+                        ))
+.with_severity(Severity::Low)
+.at(Location::file("robots.txt"))
+.with_help(format!(
                             "Add 'User-agent: {}\nDisallow: /' to block AI training crawlers",
                             agent
-                        ),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                        )));
                 }
             }
         }
@@ -213,20 +185,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         if config.robots_txt.check_noindex_contradiction {
             for page in &index.pages {
                 if page.noindex && path_is_disallowed(&disallows, &allows, &page.route) {
-                    findings.push(Finding {
-                        level: Level::Error,
-                        rule_id: "robots/blocked-noindex-contradiction".into(),
-                        file: page.rel_path.clone(),
-                        selector: "meta[name='robots']".into(),
-                        message: format!(
+                    findings.push(Finding::fail("robots/blocked-noindex-contradiction", format!(
                             "Page '{}' is Disallow'd in robots.txt but also has noindex",
                             page.route
-                        ),
-                        help: "Crawlers blocked by robots.txt cannot read the noindex tag, so the page may stay indexed. Allow crawling, or drop the noindex and remove internal links instead.".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                        ))
+.with_severity(Severity::High)
+.at(Location::file(page.rel_path.clone()).with_selector("meta[name='robots']"))
+.with_help("Crawlers blocked by robots.txt cannot read the noindex tag, so the page may stay indexed. Allow crawling, or drop the noindex and remove internal links instead."));
                 }
             }
         }
@@ -239,17 +204,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     .map(|u| u.path().to_string())
                     .unwrap_or_else(|| url.clone());
                 if path_is_disallowed(&disallows, &allows, &path) {
-                    findings.push(Finding {
-                        level: Level::Warning,
-                        rule_id: "sitemap/entry-blocked-by-robots".into(),
-                        file: "sitemap.xml".into(),
-                        selector: String::new(),
-                        message: format!("Sitemap URL '{}' is blocked by robots.txt", url),
-                        help: "A sitemap should only list crawlable URLs. Remove the entry or allow it in robots.txt.".into(),
-                        suggestion: None,
-                        source_hint: None,
-                        confidence: None,
-                    });
+                    findings.push(Finding::fail("sitemap/entry-blocked-by-robots", format!("Sitemap URL '{}' is blocked by robots.txt", url))
+.with_severity(Severity::Medium)
+.at(Location::file("sitemap.xml"))
+.with_help("A sitemap should only list crawlable URLs. Remove the entry or allow it in robots.txt."));
                 }
             }
         }

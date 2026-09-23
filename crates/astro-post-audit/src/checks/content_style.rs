@@ -5,7 +5,7 @@ use scraper::{ElementRef, Html, Selector};
 
 use crate::config::{self, Config, SeverityLevel, StyleRule, StyleRuleType};
 use crate::discovery::{PageInfo, SiteIndex};
-use crate::report::{Confidence, Finding, Level};
+use crate::report::{Finding, Location, Severity};
 
 struct CompiledRule<'a> {
     rule: &'a StyleRule,
@@ -253,18 +253,13 @@ fn language_mismatch_finding(
         return None;
     }
 
-    Some(Finding::new(
-        Level::Info,
-        "content-style/language-mismatch",
-        page.rel_path.clone(),
-        "html[lang]",
-        format!(
+    Some(Finding::review("content-style/language-mismatch", format!(
             "html lang declares {expected_name}, but {other_name} signal words dominate ({other_count} vs {expected_count}); examples: {}",
             examples.join(", ")
-        ),
-        "Confirm the page language manually, then align html lang or exclude mixed-language content from this heuristic.",
-        Some(Confidence::Low),
-    ))
+        ))
+.with_severity(Severity::Low)
+.at(Location::file(page.rel_path.clone()).with_selector("html[lang]"))
+.with_help("Confirm the page language manually, then align html lang or exclude mixed-language content from this heuristic."))
 }
 
 fn count_signal_words(text: &str, signals: &[&str]) -> (usize, Vec<String>) {
@@ -306,12 +301,14 @@ fn primary_language(page_language: Option<&str>) -> Option<String> {
     })
 }
 
-fn level_from_severity(level: &SeverityLevel) -> Level {
+/// Die Konfiguration in `astro.config.mjs` spricht weiter von error/warning/
+/// info — das ist die Oberflaeche zum Anwender. Intern wird daraus die Schwere.
+fn severity_from_config(level: &SeverityLevel) -> Severity {
     match level {
-        SeverityLevel::Error => Level::Error,
-        SeverityLevel::Warning => Level::Warning,
+        SeverityLevel::Error => Severity::High,
+        SeverityLevel::Warning => Severity::Medium,
         // Off is filtered out before evaluation; default to Info if it ever reaches here.
-        SeverityLevel::Info | SeverityLevel::Off => Level::Info,
+        SeverityLevel::Info | SeverityLevel::Off => Severity::Low,
     }
 }
 
@@ -407,20 +404,15 @@ fn build_finding(
     message: String,
     excerpt: Option<String>,
 ) -> Finding {
-    Finding::new(
-        level_from_severity(&rule.level),
-        format!("content-style/{}", rule.id),
-        page.rel_path.clone(),
-        content_selector,
-        match excerpt {
+    Finding::review(format!("content-style/{}", rule.id), match excerpt {
             Some(excerpt) => format!("{message} — Example: \"{excerpt}\""),
             None => message,
-        },
-        rule.help.clone().unwrap_or_else(|| {
+        })
+.with_severity(severity_from_config(&rule.level))
+.at(Location::file(page.rel_path.clone()).with_selector(content_selector))
+.with_help(rule.help.clone().unwrap_or_else(|| {
             "Heuristic content-style finding — confirm manually, then adjust wording or override the rule's threshold/severity in config.".into()
-        }),
-        Some(Confidence::Low),
-    )
+        }))
 }
 
 fn match_count_and_excerpt(regex: &Regex, text: &str) -> Option<(usize, String)> {
