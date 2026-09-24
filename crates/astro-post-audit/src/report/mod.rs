@@ -10,7 +10,7 @@ use std::str::FromStr;
 
 use crate::overview::PageOverview;
 
-/// Das Befundmodell kommt aus `a11y-core` und wird hier nur durchgereicht.
+/// Das Befundmodell kommt aus `a11y-report` und wird hier nur durchgereicht.
 /// Es ist über astro-post-audit, auditmysite und LiveAudit dasselbe — deshalb
 /// steht hier keine eigene Definition.
 pub use a11y_report::{Finding, Location, Outcome, Severity};

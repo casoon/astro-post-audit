@@ -16,7 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Gemeinsames Befundmodell ueber astro-post-audit, auditmysite und LiveAudit.
-# Der Vertrag liegt in a11y-core, nicht hier.
+# Der Vertrag liegt in barrierlab, nicht hier.
 a11y-report = "0.11.0"
 a11y-dom = "0.11.0"
 a11y-rules = "0.11.0"

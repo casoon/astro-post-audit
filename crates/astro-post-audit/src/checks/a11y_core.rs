@@ -2,7 +2,7 @@
 //!
 //! Dieses Modul enthält **keine eigene Regel**. Es fährt `a11y_rules` über
 //! jede Seite und hängt die Verortung an, die dieses Werkzeug braucht — Datei
-//! statt Knotenkennung. Fehlt eine Regel, gehört sie nach `a11y-core`; sie hier
+//! statt Knotenkennung. Fehlt eine Regel, gehört sie nach `a11y-rules` in barrierlab; sie hier
 //! zu ergänzen bräche die Zusicherung, dass ein Befund in der CLI, im Build und
 //! in der laufenden Seite gleich heißt.
 //!

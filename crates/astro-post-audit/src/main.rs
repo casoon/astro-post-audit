@@ -184,7 +184,7 @@ fn run() -> Result<i32> {
     let registry: &[(&str, CheckFn)] = &[
         ("seo", checks::seo::check_all),
         ("links", checks::links::check_all),
-        // Der gemeinsame Regelbestand aus a11y-core, ueber dem Adapter.
+        // Der gemeinsame Regelbestand aus a11y-rules, ueber dem Adapter.
         // Loest die frueheren Module a11y und headings vollstaendig ab.
         ("a11y_core", checks::a11y_core::check_all),
         ("html_basics", checks::html_basics::check_all),
