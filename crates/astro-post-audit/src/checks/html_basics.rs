@@ -4,7 +4,7 @@
 //! `html/viewport-missing` sind hier abgelöst — sie kommen jetzt als
 //! `document/lang-missing`, `document/title-missing`, `document/title-empty`
 //! und `zoom/viewport-missing` aus `a11y-rules`. Was bleibt, ist SEO:
-//! Meta-Description und Titellänge. Die gehören nicht nach `a11y-core` und
+//! Meta-Description und Titellänge. Die gehören nicht nach `a11y-rules` und
 //! behalten ihre Kennung.
 
 use rayon::prelude::*;
