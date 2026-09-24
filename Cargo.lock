@@ -228,6 +228,7 @@ dependencies = [
  "ureq",
  "url",
  "walkdir",
+ "web-checks",
 ]
 
 [[package]]
@@ -3781,6 +3782,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81941cd78d0c92026c33e5e01312845a4cb1e9af3407f9134b100dd03144103e"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "web-checks"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c51e735c1ff6469aae8b1130f8bdecdee29d15592da082d577481c348036a6c"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

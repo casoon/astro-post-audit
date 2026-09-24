@@ -3405,13 +3405,39 @@ fn robots_global_disallow_all() {
     assert_eq!(code, 1);
 }
 
+/// GPTBot sammelt Trainingsdaten; die Suche von OpenAI heisst OAI-SearchBot.
+/// Eine Sperre fuer GPTBot ist verbreitet und darf nicht als verlorene
+/// KI-Sichtbarkeit gemeldet werden. Bis zur Umstellung auf web-checks tat sie
+/// das — hier stand GPTBot in einer eigenen Citation-Liste.
+#[test]
+fn robots_gptbot_gesperrt_ist_kein_citation_befund() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    fs::write(
+        dir.path().join("robots.txt"),
+        "User-agent: *\nAllow: /\n\nUser-agent: GPTBot\nDisallow: /\n",
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"robots_txt":{"ai_bot_policy":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(
+        !findings
+            .iter()
+            .any(|f| f["rule_id"] == "robots-txt/ai-citation-bot-blocked"),
+        "Eine Sperre fuer GPTBot ist Trainingsschutz, kein Verlust an Zitierbarkeit"
+    );
+}
+
 #[test]
 fn robots_ai_citation_bot_blocked() {
     let dir = TempDir::new().unwrap();
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
     fs::write(
         dir.path().join("robots.txt"),
-        "User-agent: *\nAllow: /\n\nUser-agent: GPTBot\nDisallow: /\n",
+        "User-agent: *\nAllow: /\n\nUser-agent: PerplexityBot\nDisallow: /\n",
     )
     .unwrap();
     let (json, _) = run_audit_json(
