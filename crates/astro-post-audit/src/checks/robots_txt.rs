@@ -1,21 +1,9 @@
 use url::Url;
+use web_checks::robots::{self, BotClass, Group};
 
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::report::{Finding, Location, Severity};
-
-/// AI citation bots — blocking them reduces AI search visibility.
-const AI_CITATION_BOTS: &[&str] = &[
-    "ChatGPT-User",
-    "GPTBot",
-    "ClaudeBot",
-    "anthropic-ai",
-    "PerplexityBot",
-    "Bingbot",
-];
-
-/// AI training bots — many publishers deliberately block these.
-const AI_TRAINING_BOTS: &[&str] = &["CCBot", "Common Crawl", "CommonCrawl"];
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     let mut findings = Vec::new();
@@ -61,14 +49,16 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         }
     }
 
-    // Parse robots.txt into agent → directive pairs
-    let blocks = parse_robots_blocks(&content);
+    // Grammatik, Bot-Einordnung und Pfadauswertung kommen aus web-checks:
+    // dieselbe Auswertung, die auditmysite an der laufenden Seite benutzt.
+    let parsed = robots::parse(&content);
+    let blocks = &parsed.groups;
 
     // Check for global Disallow: / (all crawlers blocked)
     if config.robots_txt.check_disallow_all {
-        for block in &blocks {
-            let is_global = block.agents.iter().any(|a| a == "*");
-            let has_disallow_all = block.disallows.iter().any(|d| d == "/");
+        for block in blocks {
+            let is_global = block.bot_class == BotClass::Wildcard;
+            let has_disallow_all = block.disallows_all();
             // Only flag if there's no Allow: / or Allow entries that override
             let has_allow_all = block.allows.iter().any(|a| a == "/");
 
@@ -90,9 +80,9 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
         // Also check Googlebot/Bingbot specific blocks
         for bot in &["Googlebot", "Bingbot"] {
-            for block in &blocks {
-                let is_bot = block.agents.iter().any(|a| a.eq_ignore_ascii_case(bot));
-                let has_disallow_all = block.disallows.iter().any(|d| d == "/");
+            for block in blocks {
+                let is_bot = block.user_agent.eq_ignore_ascii_case(bot);
+                let has_disallow_all = block.disallows_all();
                 let has_allow_all = block.allows.iter().any(|a| a == "/");
 
                 if is_bot && has_disallow_all && !has_allow_all {
@@ -135,51 +125,47 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         }
     }
 
-    // AI bot policy
+    // AI bot policy. Die Einordnung kommt aus web-checks, nicht aus einer
+    // eigenen Liste: zwei Listen fuer dieselbe Frage waren schon
+    // widerspruechlich — GPTBot stand hier als Citation-Bot, waehrend
+    // auditmysite ihn als Trainings-Bot fuehrte.
     if config.robots_txt.ai_bot_policy {
-        for block in &blocks {
-            for agent in &block.agents {
-                let is_citation_bot = AI_CITATION_BOTS
-                    .iter()
-                    .any(|b| agent.eq_ignore_ascii_case(b));
-                let has_disallow = block.disallows.iter().any(|d| d == "/");
-                let has_allow = block.allows.iter().any(|a| a == "/");
+        for block in blocks {
+            let agent = &block.user_agent;
+            let has_disallow = block.disallows_all();
+            let has_allow = block.allows.iter().any(|a| a == "/");
 
-                if is_citation_bot && has_disallow && !has_allow {
-                    findings.push(Finding::fail("robots-txt/ai-citation-bot-blocked", format!(
-                            "AI citation bot '{}' is blocked — reduces AI search visibility",
-                            agent
-                        ))
+            if block.bot_class == BotClass::AiCitation && has_disallow && !has_allow {
+                findings.push(Finding::fail("robots-txt/ai-citation-bot-blocked", format!(
+                        "AI citation bot '{}' is blocked — reduces AI search visibility",
+                        agent
+                    ))
 .with_severity(Severity::Medium)
 .at(Location::file("robots.txt"))
 .with_help(format!(
-                            "Remove 'Disallow: /' for {} to allow AI-powered search engines to cite your content",
-                            agent
-                        )));
-                }
+                        "Remove 'Disallow: /' for {} to allow AI-powered search engines to cite your content",
+                        agent
+                    )));
+            }
 
-                let is_training_bot = AI_TRAINING_BOTS
-                    .iter()
-                    .any(|b| agent.eq_ignore_ascii_case(b));
-                if is_training_bot && !has_disallow {
-                    findings.push(Finding::fail("robots-txt/ai-training-bot-allowed", format!(
-                            "AI training bot '{}' is allowed — consider blocking if you don't want your content used for training",
-                            agent
-                        ))
+            if block.bot_class == BotClass::AiTraining && !has_disallow {
+                findings.push(Finding::fail("robots-txt/ai-training-bot-allowed", format!(
+                        "AI training bot '{}' is allowed — consider blocking if you don't want your content used for training",
+                        agent
+                    ))
 .with_severity(Severity::Low)
 .at(Location::file("robots.txt"))
 .with_help(format!(
-                            "Add 'User-agent: {}\nDisallow: /' to block AI training crawlers",
-                            agent
-                        )));
-                }
+                        "Add 'User-agent: {}\nDisallow: /' to block AI training crawlers",
+                        agent
+                    )));
             }
         }
     }
 
     // Contradiction checks need the rules that apply to the wildcard (*) user-agent group.
     if config.robots_txt.check_noindex_contradiction || config.robots_txt.check_sitemap_blocked {
-        let (disallows, allows) = wildcard_rules(&blocks);
+        let (disallows, allows) = wildcard_rules(blocks);
 
         // noindex page that is also Disallow'd: crawlers can't see the noindex tag.
         if config.robots_txt.check_noindex_contradiction {
@@ -217,137 +203,20 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 }
 
 /// Collect Disallow/Allow rules that apply to the wildcard (`*`) user-agent group.
-fn wildcard_rules(blocks: &[RobotsBlock]) -> (Vec<String>, Vec<String>) {
+///
+/// Es kann mehrere `*`-Gruppen geben; ihre Regeln gelten zusammen.
+fn wildcard_rules(groups: &[Group]) -> (Vec<String>, Vec<String>) {
     let mut disallows = Vec::new();
     let mut allows = Vec::new();
-    for block in blocks {
-        if block.agents.iter().any(|a| a == "*") {
-            disallows.extend(block.disallows.iter().cloned());
-            allows.extend(block.allows.iter().cloned());
+    for group in groups {
+        if group.bot_class == BotClass::Wildcard {
+            disallows.extend(group.disallows.iter().cloned());
+            allows.extend(group.allows.iter().cloned());
         }
     }
     (disallows, allows)
 }
 
-/// Determine whether `path` is disallowed, applying RFC 9309 longest-match
-/// precedence (the more specific rule wins; on equal specificity, Allow wins).
 fn path_is_disallowed(disallows: &[String], allows: &[String], path: &str) -> bool {
-    let best_disallow = disallows
-        .iter()
-        .filter_map(|r| rule_match_len(r, path))
-        .max();
-    let best_allow = allows.iter().filter_map(|r| rule_match_len(r, path)).max();
-    match (best_disallow, best_allow) {
-        (Some(d), Some(a)) => d > a,
-        (Some(_), None) => true,
-        _ => false,
-    }
-}
-
-/// If `pattern` matches `path`, return its specificity (count of literal,
-/// non-wildcard characters); otherwise None. Supports `*` wildcards and the
-/// `$` end-anchor. An empty pattern (`Disallow:`) never matches (allow-all).
-fn rule_match_len(pattern: &str, path: &str) -> Option<usize> {
-    if pattern.is_empty() {
-        return None;
-    }
-    let anchored = pattern.ends_with('$');
-    let pat = if anchored {
-        &pattern[..pattern.len() - 1]
-    } else {
-        pattern
-    };
-
-    let parts: Vec<&str> = pat.split('*').collect();
-    let mut pos = 0usize;
-    for (i, part) in parts.iter().enumerate() {
-        if part.is_empty() {
-            continue;
-        }
-        if i == 0 {
-            if !path[pos..].starts_with(part) {
-                return None;
-            }
-            pos += part.len();
-        } else {
-            let idx = path[pos..].find(part)?;
-            pos += idx + part.len();
-        }
-    }
-
-    // With `$`, the match must consume the whole path (unless the pattern ended
-    // with a `*`, in which case any suffix is allowed).
-    if anchored && !pat.ends_with('*') && pos != path.len() {
-        return None;
-    }
-
-    Some(pat.chars().filter(|&c| c != '*').count())
-}
-
-struct RobotsBlock {
-    agents: Vec<String>,
-    disallows: Vec<String>,
-    allows: Vec<String>,
-}
-
-fn parse_robots_blocks(content: &str) -> Vec<RobotsBlock> {
-    let mut blocks: Vec<RobotsBlock> = Vec::new();
-    let mut current_agents: Vec<String> = Vec::new();
-    let mut current_disallows: Vec<String> = Vec::new();
-    let mut current_allows: Vec<String> = Vec::new();
-    let mut in_block = false;
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            if in_block {
-                blocks.push(RobotsBlock {
-                    agents: std::mem::take(&mut current_agents),
-                    disallows: std::mem::take(&mut current_disallows),
-                    allows: std::mem::take(&mut current_allows),
-                });
-                in_block = false;
-            }
-            continue;
-        }
-
-        let lower = trimmed.to_lowercase();
-        if let Some(rest) = lower.strip_prefix("user-agent:") {
-            let agent_val = trimmed[trimmed.to_lowercase().find(':').unwrap() + 1..]
-                .trim()
-                .to_string();
-            if in_block && !current_disallows.is_empty() {
-                blocks.push(RobotsBlock {
-                    agents: std::mem::take(&mut current_agents),
-                    disallows: std::mem::take(&mut current_disallows),
-                    allows: std::mem::take(&mut current_allows),
-                });
-            }
-            let _ = rest;
-            current_agents.push(agent_val);
-            in_block = true;
-        } else if let Some(rest) = lower.strip_prefix("disallow:") {
-            let _ = rest;
-            let val = trimmed[trimmed.to_lowercase().find(':').unwrap() + 1..]
-                .trim()
-                .to_string();
-            current_disallows.push(val);
-        } else if let Some(rest) = lower.strip_prefix("allow:") {
-            let _ = rest;
-            let val = trimmed[trimmed.to_lowercase().find(':').unwrap() + 1..]
-                .trim()
-                .to_string();
-            current_allows.push(val);
-        }
-    }
-
-    if in_block {
-        blocks.push(RobotsBlock {
-            agents: current_agents,
-            disallows: current_disallows,
-            allows: current_allows,
-        });
-    }
-
-    blocks
+    robots::path_is_disallowed(disallows, allows, path)
 }
