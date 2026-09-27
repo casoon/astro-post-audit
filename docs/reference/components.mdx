@@ -1,0 +1,42 @@
+---
+title: How it is built
+sidebarLabel: Components
+description: The parts the package consists of, from the Astro integration to the shared rule crates, and where each is published.
+order: 3
+---
+
+## The Astro integration
+
+`@casoon/astro-post-audit` on [npm](https://www.npmjs.com/package/@casoon/astro-post-audit) is
+the only way to use the tool. It validates the options, resolves presets, `site` and paths, and
+passes the configuration as JSON on stdin to the audit binary. There are no CLI flags or config
+files for end users; everything lives in `astro.config.mjs`.
+
+## The audit binary
+
+A Rust program (`crates/astro-post-audit`) that discovers the HTML files in `dist/`, parses them
+in parallel and runs the check modules. The postinstall script downloads the prebuilt binary
+for the installed version from the GitHub release. The crate is also on
+[crates.io](https://crates.io/crates/astro-post-audit), but it is an implementation detail of
+the integration.
+
+## Shared crates
+
+| Crate | Used for |
+| --- | --- |
+| `a11y-rules`, `a11y-dom`, `a11y-report`, `accname` | Accessibility and document rules, the finding model and accessible-name computation, shared with auditmysite and LiveAudit |
+| `html-conform` | Offline HTML5 conformance validation, no JVM |
+| `web-checks` | robots.txt grammar and path matching |
+| `c2pa` | Local validation of C2PA Content Credentials |
+
+<Callout type="note">
+  Colour contrast is deliberately not checked. It needs computed styles, which static HTML does
+  not have; the JSON report lists those rules as <code>capability_missing</code>.
+</Callout>
+
+## Release artifacts
+
+Each `vX.Y.Z` tag builds binaries for `aarch64-apple-darwin`, `x86_64-unknown-linux-gnu`,
+`aarch64-unknown-linux-gnu`, `x86_64-pc-windows-msvc` and `aarch64-pc-windows-msvc`. The npm
+package and the crate are published manually by the maintainer, with the same version as the
+tag.

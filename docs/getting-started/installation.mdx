@@ -1,0 +1,59 @@
+---
+title: Installation
+description: astro-post-audit ships as one npm package. Its postinstall step downloads the prebuilt audit binary for your platform from the matching GitHub release.
+order: 1
+---
+
+<Tabs
+  label="Package manager"
+  tabs={[
+    { id: 'npm', label: 'npm' },
+    { id: 'pnpm', label: 'pnpm' },
+    { id: 'yarn', label: 'yarn' },
+  ]}
+>
+<div slot="npm">
+
+```sh
+npm i -D @casoon/astro-post-audit
+```
+
+</div>
+<div slot="pnpm">
+
+```sh
+pnpm add -D @casoon/astro-post-audit
+```
+
+</div>
+<div slot="yarn">
+
+```sh
+yarn add -D @casoon/astro-post-audit
+```
+
+</div>
+</Tabs>
+
+<Callout>
+  The postinstall script fetches the binary for the installed version from the GitHub release
+  <code>v&lt;version&gt;</code>. pnpm 10 skips dependency install scripts by default; add
+  the package to <code>onlyBuiltDependencies</code> so the download runs.
+</Callout>
+
+## Requirements
+
+| Requirement | Value |
+| --- | --- |
+| Node.js | `>=18` (`engines` in package.json) |
+| Astro | `^5.0.0`, `^6.0.0` or `^7.0.0` (peer dependency) |
+| Platforms | macOS arm64, Linux x64 and arm64, Windows x64 and arm64 |
+
+<Callout type="caution">
+  Intel macOS (<code>darwin-x64</code>) is no longer shipped since 0.7.0. The postinstall step
+  fails there with <code>Unsupported platform: darwin-x64</code>.
+</Callout>
+
+## Next steps
+
+Continue with the [Quickstart](../quickstart/) to register the integration and run a first audit.

@@ -1,0 +1,71 @@
+---
+title: Integration options
+sidebarLabel: Options
+description: Every top-level option of postAudit(). All are optional. Your editor autocompletes them from the shipped types, and the package exports a JSON Schema at @casoon/astro-post-audit/schema.
+order: 1
+---
+
+<ApiEntry
+  kind="function"
+  name="postAudit"
+  lang="ts"
+  signature={`import postAudit from '@casoon/astro-post-audit';
+
+postAudit(options?: PostAuditOptions): AstroIntegration`}
+>
+  Registers an <code>astro:build:done</code> hook that passes the options as JSON to the audit
+  binary and runs it against the build output.
+</ApiEntry>
+
+## Top-level options
+
+| Option | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `preset` | `'standard' \| 'strict' \| 'production' \| 'seo' \| 'accessibility' \| 'performance' \| 'relaxed' \| 'editorial'` | – | Predefined configuration applied before `rules`. See [Presets](../../guides/presets/). |
+| `mode` | `'fast' \| 'full'` | `'full'` | `'fast'` disables `rules.html_validation`. |
+| `strict` | `boolean` | `false` | Treat warnings as errors. |
+| `failOn` | `'errors' \| 'warnings' \| 'never'` | – | When to fail the build. Takes precedence over `throwOnError`. |
+| `throwOnError` | `boolean` | `false` | Fail the build on findings. Ignored when `failOn` is set. |
+| `maxErrors` | `number` | – | Truncate output after this many errors. |
+| `maxWarnings` | `number` | – | Fail when the warning count exceeds this number. |
+| `site` | `string` | Astro `site` | Base URL. |
+| `reports` | `{ json?, markdown?, sarif?, html? }` | – | Report files. See [Output and CI](../../guides/output-and-ci/). |
+| `output` | `string` | – | Legacy alias for `reports.json`. |
+| `baseline` | `string` | – | Baseline file; only new findings are reported. |
+| `writeBaseline` | `boolean` | `false` | Write the current findings as baseline and exit 0. |
+| `hints.sourceFiles` | `boolean` | `false` | Show likely source files next to `dist/` findings. |
+| `groups` | `{ seo?, a11y?, links?, performance?, privacy? }` | – | `true` enables a group, `'warn'` enables it as warnings. |
+| `goLive` | `{ enabled, expectedSite?, forbiddenDomains? }` | – | Production gate. See [Rolling out](../../guides/rollout/). |
+| `pageOverview` | `boolean` | `false` | Print a page properties table instead of running checks. |
+| `benchmark` | `boolean` | `false` | Per-check timing breakdown. |
+| `progress` | `boolean \| 'verbose'` | auto | Progress bar on stderr. |
+| `debug` | `boolean` | `false` | Verbose diagnostics on stderr. |
+| `aiVisibility` | `boolean` | `false` | Enable the AI visibility module. |
+| `uxHeuristics` | `boolean \| { maxLinksPerPage?, minCtaPerPage? }` | `false` | Enable UX heuristics (defaults 80 and 1). |
+| `contentStyle` | `boolean` | `false` | Enable content style heuristics. |
+| `disable` | `boolean` | `false` | Switch the integration off. |
+| `rules` | `RulesConfig` | – | Per-check configuration, see below. |
+
+## Rules
+
+`rules` configures each check module by its snake_case name, plus `filters` and `severity`:
+
+```js
+postAudit({
+  rules: {
+    filters: { exclude: ['404.html', 'drafts/**'] },
+    canonical: { self_reference: true },
+    headings: { no_skip: true },
+    external_links: { enabled: true, timeout_ms: 5000 },
+    severity: {
+      'html/title-too-long': 'off',
+      'images/alt-missing': 'error',
+    },
+  },
+});
+```
+
+`severity` sets single rule ids to `'error'`, `'warning'`, `'info'` or `'off'`. The complete
+list of fields with their defaults is in the
+[README](https://github.com/casoon/astro-post-audit#full-rules-reference) and in the shipped
+JSON Schema.

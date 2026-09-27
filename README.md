@@ -2,7 +2,9 @@
 
 Fast, offline post-build auditor for Astro sites — SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output, with 33 check modules covering structured data, performance, privacy, and more. Static analysis only: no browser, and no network calls unless opt-in external-link checking is enabled — runs in <1s on typical sites. Recent releases added per-route CSS payload analysis, static Astro/Tailwind source analysis, offline HTML5 conformance validation, and C2PA Content Credentials verification.
 
-**Website:** [astro-post-audit.casoon.de](https://astro-post-audit.casoon.de/en/)
+**Product page:** [astro-post-audit.casoon.de](https://astro-post-audit.casoon.de/en/)
+
+**Website and documentation:** [casoon.github.io/astro-post-audit](https://casoon.github.io/astro-post-audit/)
 
 ## What's new in 0.7.0
 

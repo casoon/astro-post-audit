@@ -1,0 +1,17 @@
+[1;91m✖[0m astro-post-audit
+
+  [2mErrors: [0m[1;91m1[0m   [2mWarnings: [0m[1;93m2[0m   [2mInfo: [0m[36m3[0m   [2mFiles: [0m[2m4[0m
+
+● [1;96mlong-title.html[0m [2m(6)[0m
+  - [1;91mThe document has no main landmark.[0m [2m[landmarks/main-missing][0m
+    [2mRemedy: Landmarks structure the page for everyone who cannot see it.[0m
+  - [36mThe document has no navigation landmark.[0m [2m[landmarks/navigation-missing][0m [2m(medium confidence)[0m
+    [2mRemedy: Landmarks structure the page for everyone who cannot see it.[0m
+  - [36mThe document has no banner landmark.[0m [2m[landmarks/banner-missing][0m [2m(medium confidence)[0m
+    [2mRemedy: Landmarks structure the page for everyone who cannot see it.[0m
+  - [36mThe document has no contentinfo landmark.[0m [2m[landmarks/contentinfo-missing][0m [2m(medium confidence)[0m
+    [2mRemedy: Landmarks structure the page for everyone who cannot see it.[0m
+  - [1;93mTitle is 143 chars (recommended max: 60)[0m [2m[html/title-too-long][0m at [36m`title`[0m
+    [2mRemedy: Shorten the title for better display in search results[0m
+  - [1;93mMeta description is 242 chars (recommended max: 160)[0m [2m[html/meta-description-too-long][0m at [36m`meta[name='description']`[0m
+    [2mRemedy: Shorten the description for better display in search results[0m

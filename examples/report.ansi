@@ -1,0 +1,52 @@
+[1;91m✖[0m astro-post-audit
+
+  [2mErrors: [0m[1;91m14[0m   [2mWarnings: [0m[1;93m2[0m   [2mInfo: [0m[36m4[0m   [2mFiles: [0m[2m1[0m
+
+  [1;96mTop issue rules:[0m
+       3x  [2mlinks/broken[0m
+       1x  [2mbuttons/name-missing[0m
+       1x  [2mcanonical/missing[0m
+       1x  [2mdocument/lang-missing[0m
+       1x  [2mdocument/title-empty[0m
+
+● [1;96mindex.html[0m [2m(20)[0m
+  - [1;91mMissing canonical tag[0m [2m[canonical/missing][0m at [36m`head`[0m
+    [2mRemedy: Set `site` in astro.config.mjs and render <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} /> in your BaseHead component[0m
+  - [1;91mBroken internal link '/broken-page/' -> '/broken-page/' (not found in dist)[0m [2m[links/broken][0m at [36m`a[href='/broken-page/']`[0m
+    [2mRemedy: Verify the route in `src/pages/` or your Content Collection slug. If the target was renamed, update the href.[0m
+  - [1;91mInternal link contains query parameters: '/about/?ref=nav'[0m [2m[links/query-params][0m at [36m`a[href='/about/?ref=nav']`[0m
+    [2mRemedy: Remove query parameters from internal links to avoid duplicate content signals[0m
+  - [1;91mBroken internal link '/about/?ref=nav' -> '/about/' (not found in dist)[0m [2m[links/broken][0m at [36m`a[href='/about/?ref=nav']`[0m
+    [2mRemedy: Verify the route in `src/pages/` or your Content Collection slug. If the target was renamed, update the href.[0m
+  - [1;91mBroken internal link '/contact/' -> '/contact/' (not found in dist)[0m [2m[links/broken][0m at [36m`a[href='/contact/']`[0m
+    [2mRemedy: Verify the route in `src/pages/` or your Content Collection slug. If the target was renamed, update the href.[0m
+  - [1;91mThe <html> element has no lang attribute.[0m [2m[document/lang-missing][0m
+    [2mRemedy: The <html> element needs a valid lang attribute.[0m
+  - [1;91mThe <title> element is empty.[0m [2m[document/title-empty][0m
+    [2mRemedy: Every page needs a meaningful <title>.[0m
+  - [1;91mThe document has no viewport declaration.[0m [2m[zoom/viewport-missing][0m
+    [2mRemedy: A viewport must be present and must not prevent zooming.[0m
+  - [1;93mThe document has no h1 heading.[0m [2m[headings/h1-missing][0m
+    [2mRemedy: Headings form the outline; do not skip levels.[0m
+  - [1;91mThe image has no alt attribute.[0m [2m[images/alt-missing][0m
+    [2mRemedy: Informative images need descriptive alt text.[0m
+  - [1;91mThe input has no label.[0m [2m[forms/label-missing][0m
+    [2mRemedy: Every input needs an associated label.[0m
+  - [1;91mThe document has no main landmark.[0m [2m[landmarks/main-missing][0m
+    [2mRemedy: Landmarks structure the page for everyone who cannot see it.[0m
+  - [36mThe document has no navigation landmark.[0m [2m[landmarks/navigation-missing][0m [2m(medium confidence)[0m
+    [2mRemedy: Landmarks structure the page for everyone who cannot see it.[0m
+  - [36mThe document has no banner landmark.[0m [2m[landmarks/banner-missing][0m [2m(medium confidence)[0m
+    [2mRemedy: Landmarks structure the page for everyone who cannot see it.[0m
+  - [36mThe document has no contentinfo landmark.[0m [2m[landmarks/contentinfo-missing][0m [2m(medium confidence)[0m
+    [2mRemedy: Landmarks structure the page for everyone who cannot see it.[0m
+  - [1;91mThe link has no accessible name.[0m [2m[links/name-missing][0m
+    [2mRemedy: Every link needs a name that describes its target.[0m
+  - [1;91mThe button has no accessible name.[0m [2m[buttons/name-missing][0m
+    [2mRemedy: Every button needs a name that describes what it does.[0m
+  - [1;93mThe link text "mehr" says nothing about its target.[0m [2m[links/generic-name][0m [2m(medium confidence)[0m
+    [2mRemedy: Link text should say where it leads without the surrounding sentence.[0m
+  - [1;91mImage missing width and height attribute (causes CLS): src='/photo.jpg'[0m [2m[images/missing-dimensions][0m at [36m`img[src='/photo.jpg']`[0m
+    [2mRemedy: Add explicit width and height attributes to prevent Cumulative Layout Shift. Use <Image> from astro:assets to get them automatically.[0m
+  - [36mImage has no srcset (no responsive image markup): src='/photo.jpg'[0m [2m[images/missing-srcset][0m at [36m`img[src='/photo.jpg']`[0m
+    [2mRemedy: Use <Image> or <Picture> from astro:assets to generate responsive srcset automatically.[0m

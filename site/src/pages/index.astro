@@ -1,0 +1,100 @@
+---
+import {
+  Badge,
+  Badges,
+  BuildOutput,
+  CodeBlock,
+  Facts,
+  Features,
+  Hero,
+  Install,
+  Quickstart,
+  Terminal,
+} from '@casoon/pages-theme/components';
+import Base from '@casoon/pages-theme/layouts/Base.astro';
+import { capture } from '../showcase';
+
+const astroConfig = `import { defineConfig } from 'astro/config';
+import sitemap from '@astrojs/sitemap';
+import postAudit from '@casoon/astro-post-audit';
+
+export default defineConfig({
+  site: 'https://example.com',
+  integrations: [
+    sitemap(),
+    // after sitemap(): the audit checks the generated sitemap
+    postAudit({ preset: 'standard', failOn: 'errors' }),
+  ],
+});`;
+---
+
+<Base>
+  <Hero
+    title="Audit what you actually ship."
+    lead="astro-post-audit runs after every astro build and checks the finished dist/ output: SEO signals, broken internal links and lightweight WCAG heuristics. Static analysis in a Rust binary, no browser, no network calls unless you enable external link checks."
+  >
+    <Install
+      commands={[
+        { label: 'npm', command: 'npm i -D @casoon/astro-post-audit' },
+        { label: 'pnpm', command: 'pnpm add -D @casoon/astro-post-audit' },
+        { label: 'yarn', command: 'yarn add -D @casoon/astro-post-audit' },
+      ]}
+    />
+    <Badges>
+      <Badge>MIT</Badge>
+      <Badge>npm 0.7.0</Badge>
+      <Badge>Astro 5, 6, 7</Badge>
+      <Badge>Node 18+</Badge>
+    </Badges>
+    <Terminal slot="output" title="audit · tests/fixtures/bad" dots ansi={capture('report.ansi')} />
+  </Hero>
+
+  <Facts
+    items={[
+      { value: '32', label: 'checks per run, listed by progress: verbose' },
+      { value: '8', label: 'presets, from relaxed to production' },
+      { value: '4', label: 'report formats: JSON, Markdown, SARIF, HTML' },
+      { value: '5', label: 'platforms with prebuilt binaries' },
+    ]}
+  />
+
+  <Features
+    items={[
+      {
+        title: 'Checks the output, not the source',
+        body: 'Canonicals, sitemap, robots.txt, hreflang, Open Graph and JSON-LD are read from the generated files, so the audit sees what search engines and visitors get.',
+      },
+      {
+        title: 'Shared accessibility rules',
+        body: 'Accessibility and document rules come from a11y-core, the same crates behind auditmysite and LiveAudit, so a finding has one id everywhere. Contrast is reported as not testable instead of passed.',
+      },
+      {
+        title: 'Remedies in Astro terms',
+        body: 'Each finding names the rule, the element and a fix that points to BaseHead, astro:assets, Astro.site or your Content Collections.',
+      },
+      {
+        title: 'Rolls out gradually',
+        body: 'Presets, per-rule severity, a baseline that reports only new findings, and a go-live gate that catches staging domains and noindex before production.',
+      },
+    ]}
+  />
+
+  <BuildOutput
+    heading="Captured from the test fixtures"
+    caption="A baseline recorded for a clean site, then one page added: the report lists only the new page. Every output on this site is a real run of the audit binary against the fixtures in tests/fixtures, captured with examples/capture.sh."
+    file="examples/diff.ansi"
+  >
+    <Terminal ansi={capture('diff.ansi')} />
+  </BuildOutput>
+
+  <Quickstart
+    lead="Install, register the integration, build. The product page at astro-post-audit.casoon.de has a short tour."
+    steps={[
+      'Install <code>@casoon/astro-post-audit</code> as a dev dependency.',
+      'Add <code>postAudit()</code> to the integrations in <code>astro.config.mjs</code>, after <code>sitemap()</code>.',
+      'Run <code>astro build</code>. The report follows the build; <code>failOn</code> decides whether findings fail it.',
+    ]}
+  >
+    <CodeBlock code={astroConfig} lang="js" title="astro.config.mjs" label="JavaScript" />
+  </Quickstart>
+</Base>
