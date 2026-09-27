@@ -47,7 +47,7 @@ const examples_ = [
   {
     slug: 'baseline',
     title: 'Only new findings with a baseline',
-    file: 'diff.ansi',
+    file: 'baseline.ansi',
     input: {
       code: read(fixtures, '../../tests/fixtures/edge-cases/long-title.html'),
       lang: 'html',

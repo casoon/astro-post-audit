@@ -41,7 +41,7 @@ cp -R "$fixtures/good" "$tmp/dist"
 printf '{%s,"progress":false,"baseline":"%s","write_baseline":true}' "$site" "$tmp/baseline.json" \
   | "$bin" "$tmp/dist" --config-stdin >/dev/null 2>&1
 cp "$fixtures/edge-cases/long-title.html" "$tmp/dist/long-title.html"
-capture diff.ansi "$tmp/dist" "{$site,\"progress\":false,\"baseline\":\"$tmp/baseline.json\"}"
+capture baseline.ansi "$tmp/dist" "{$site,\"progress\":false,\"baseline\":\"$tmp/baseline.json\"}"
 
 # progress: 'verbose' prints one line per check on stderr.
 capture progress.ansi "$fixtures/edge-cases" "{$site,\"progress_verbose\":true}" stderr

@@ -82,9 +82,9 @@ export default defineConfig({
   <BuildOutput
     heading="Captured from the test fixtures"
     caption="A baseline recorded for a clean site, then one page added: the report lists only the new page. Every output on this site is a real run of the audit binary against the fixtures in tests/fixtures, captured with examples/capture.sh."
-    file="examples/diff.ansi"
+    file="examples/baseline.ansi"
   >
-    <Terminal ansi={capture('diff.ansi')} />
+    <Terminal ansi={capture('baseline.ansi')} />
   </BuildOutput>
 
   <Quickstart
