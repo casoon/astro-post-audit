@@ -6,6 +6,8 @@ reconstructed from the git history and the README release notes.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-28
+
 ### Added
 
 - `color` option (`'auto'`, `'always'`, `'never'`) for the text report and progress output, so a
@@ -13,19 +15,6 @@ reconstructed from the git history and the README release notes.
 
 ### Changed
 
-- `progress: 'verbose'` prints its per-check lines through runemark instead of raw stderr output.
-- runemark updated from 0.1.1 to 0.9.0.
-
-- robots.txt is evaluated by the shared `web-checks` crate instead of a local copy.
-- Title and meta description length come from `web-checks` 0.3 and count **characters**, not
-  bytes: before, every umlaut counted twice, so a 60-character German title could be reported as
-  too long. Whitespace is collapsed as in the browser before counting.
-- OpenGraph / Twitter Card presence, `twitter:card` values and the absolute-`og:image` rule come
-  from `web-checks` (shared with auditmysite). `opengraph/image-missing` and
-  `opengraph/twitter-card-missing` now also fire when the tag exists with empty `content`, like
-  the other presence checks already did.
-- `a11y-*` crates updated to 0.11.0; accessibility finding texts now come in English from
-  `a11y-rules`.
 - Structured data is evaluated by `web-checks` 0.4 (`structured_data`), shared with auditmysite.
   The rule tables follow Google's structured-data docs, so finding counts change:
   - **No longer reported:** Article/BlogPosting/NewsArticle `headline`, Organization/Person
@@ -44,6 +33,19 @@ reconstructed from the git history and the README release notes.
     `@graph`; top-level arrays are expanded instead of reported as missing context; every `@type`
     entry is assessed, full IRIs included; `structured-data/duplicate-type` counts blocks, not
     repeats inside one block.
+- Title and meta description length come from `web-checks` 0.3 and count **characters**, not
+  bytes: before, every umlaut counted twice, so a 60-character German title could be reported as
+  too long. Whitespace is collapsed as in the browser before counting.
+- OpenGraph / Twitter Card presence, `twitter:card` values and the absolute-`og:image` rule come
+  from `web-checks` (shared with auditmysite). `opengraph/image-missing` and
+  `opengraph/twitter-card-missing` now also fire when the tag exists with empty `content`, like
+  the other presence checks already did.
+- robots.txt is evaluated by the shared `web-checks` crate instead of a local copy.
+- `a11y-*` crates updated to 0.12.0. Accessibility finding texts now come in English from
+  `a11y-rules`, and a duplicate `id` is only reported when an IDREF (e.g. `aria-describedby`,
+  `for`) points to it, since WCAG 2.2 removed 4.1.1.
+- `progress: 'verbose'` prints its per-check lines through runemark instead of raw stderr output.
+- runemark updated from 0.1.1 to 0.9.0.
 
 ## [0.7.0] - 2026-09-23
 
