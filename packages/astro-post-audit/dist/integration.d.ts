@@ -557,6 +557,13 @@ export interface PostAuditOptions {
      */
     progress?: boolean | 'verbose';
     /**
+     * Colour policy for the text report and progress output.
+     * `'auto'` styles only an interactive terminal and honours `NO_COLOR`;
+     * `'always'` forces ANSI colour and Unicode symbols, e.g. for piped build
+     * logs that are still shown in a colour-capable terminal. @default 'auto'
+     */
+    color?: 'auto' | 'always' | 'never';
+    /**
      * Verbose diagnostics on stderr: the resolved config (after preset merge),
      * discovery stats (files found / excluded by filters / parsed, sitemap status),
      * and per-check finding counts + timings. Never touches the report on stdout.

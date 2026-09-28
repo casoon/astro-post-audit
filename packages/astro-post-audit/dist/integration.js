@@ -298,6 +298,8 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                 else if (options.progress !== undefined) {
                     stdinConfig.progress = options.progress;
                 }
+                if (options.color)
+                    stdinConfig.color = options.color;
                 if (options.debug !== undefined)
                     stdinConfig.debug = options.debug;
                 if (options.maxWarnings != null)

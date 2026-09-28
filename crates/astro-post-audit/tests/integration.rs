@@ -4915,3 +4915,55 @@ fn severity_override_mit_alter_kennung_greift_weiterhin() {
         .any(|f| f["rule_id"] == "a11y/img-alt" || f["rule_id"] == "images/alt-missing");
     assert!(!vorhanden, "off unter der alten Kennung muss abschalten");
 }
+
+// ==========================================================================
+// Terminal output: colour policy and verbose progress (#56)
+// ==========================================================================
+
+#[test]
+fn color_always_styles_piped_report() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+
+    let (stdout, _, _) = run_audit(dir.path(), r#"{"color":"always"}"#);
+    assert!(
+        stdout.contains("\x1b["),
+        "expected ANSI styles, got:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("[OK]"),
+        "expected Unicode symbols, got:\n{stdout}"
+    );
+}
+
+#[test]
+fn color_auto_stays_plain_when_piped() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+
+    let (stdout, _, _) = run_audit(dir.path(), "{}");
+    assert!(
+        !stdout.contains("\x1b["),
+        "expected no ANSI styles, got:\n{stdout}"
+    );
+}
+
+#[test]
+fn verbose_progress_uses_runemark_lifecycle() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+
+    let (_, stderr, _) = run_audit(dir.path(), r#"{"progress_verbose":true}"#);
+    assert!(
+        stderr.starts_with("Auditing 1 pages (0/"),
+        "unexpected start line:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("html_basics"),
+        "missing per-check line:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("[INFO] Checks complete"),
+        "missing finish line:\n{stderr}"
+    );
+}

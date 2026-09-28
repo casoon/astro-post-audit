@@ -19,6 +19,7 @@ mod rule_ids;
 use config::Config;
 use discovery::SiteIndex;
 use report::{Finding, Reporter, Summary};
+use runemark::{ColorMode, Console, PlainProgress, ProgressSink, Tone, Verdict};
 
 #[derive(Parser, Debug)]
 #[command(name = "astro-post-audit")]
@@ -164,12 +165,12 @@ fn run() -> Result<i32> {
         && config
             .progress
             .unwrap_or_else(|| std::io::stderr().is_terminal());
-    let show_progress = show_bar || show_verbose;
+    let color = ColorMode::from(config.color);
 
     // Page properties overview mode (informational, exits before checks)
     if config.page_overview {
         let ov = overview::collect(&site_index);
-        let reporter = Reporter::new(format);
+        let reporter = Reporter::new(format, color);
         reporter.print_overview(&ov)?;
         return Ok(0);
     }
@@ -235,11 +236,17 @@ fn run() -> Result<i32> {
         .collect();
 
     let total_checks = registry.len();
-    if show_progress {
+    // The per-check lines go through runemark, like the report on stdout, so
+    // a verbose run speaks one presentation style.
+    let verbose_progress =
+        show_verbose.then(|| PlainProgress::new(Console::stderr(color), std::io::stderr()));
+    if let Some(progress) = &verbose_progress {
+        progress.start(
+            total_checks as u64,
+            &format!("Auditing {} pages", site_index.pages.len()),
+        );
+    } else if show_bar {
         eprintln!("  Auditing {} pages…", site_index.pages.len());
-        if show_verbose {
-            eprintln!();
-        }
     }
 
     for (idx, &(name, check_fn)) in registry.iter().enumerate() {
@@ -273,9 +280,13 @@ fn run() -> Result<i32> {
                 duration_ms: elapsed_ms,
             });
         }
-        if show_verbose {
+        if let Some(progress) = &verbose_progress {
             let n = new_findings.len();
-            eprintln!("    {name:<24}  {n:>5} finding(s)   {elapsed_ms:>5}ms");
+            let tone = if n == 0 { Tone::Muted } else { Tone::Warning };
+            progress.notice(
+                tone,
+                &format!("  {name:<24}  {n:>5} finding(s)   {elapsed_ms:>5}ms"),
+            );
         }
         if debug {
             eprintln!(
@@ -291,6 +302,10 @@ fn run() -> Result<i32> {
         findings.extend(new_findings);
     }
     let _ = error_count;
+
+    if let Some(progress) = &verbose_progress {
+        progress.finish(Verdict::Info, "Checks complete");
+    }
 
     if show_bar {
         // Keep the completed bar visible instead of erasing it.
@@ -369,7 +384,7 @@ fn run() -> Result<i32> {
         None
     };
 
-    let reporter = Reporter::new(format);
+    let reporter = Reporter::new(format, color);
     reporter.print(&findings, &summary, benchmark_data.as_ref())?;
 
     // Write extra report files (all formats from a single audit run)
@@ -378,7 +393,7 @@ fn run() -> Result<i32> {
             .format
             .parse::<report::Format>()
             .map_err(|e| anyhow::anyhow!("extra_reports: {e}"))?;
-        let extra_reporter = Reporter::new(fmt);
+        let extra_reporter = Reporter::new(fmt, color);
         let content =
             extra_reporter.render_to_string(&findings, &summary, benchmark_data.as_ref())?;
         std::fs::write(&extra.path, content)?;

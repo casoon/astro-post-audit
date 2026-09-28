@@ -27,6 +27,28 @@ pub enum Mode {
     Full,
 }
 
+/// Colour policy for terminal output. `auto` styles only an interactive
+/// terminal (and honours `NO_COLOR`); `always` forces ANSI and Unicode symbols
+/// for piped logs that are still rendered in a colour-capable terminal.
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ColorChoice {
+    #[default]
+    Auto,
+    Always,
+    Never,
+}
+
+impl From<ColorChoice> for runemark::ColorMode {
+    fn from(choice: ColorChoice) -> Self {
+        match choice {
+            ColorChoice::Auto => runemark::ColorMode::Auto,
+            ColorChoice::Always => runemark::ColorMode::Always,
+            ColorChoice::Never => runemark::ColorMode::Never,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -52,6 +74,8 @@ pub struct Config {
     pub progress: Option<bool>,
     /// Show each check as a line on stderr as it completes, with findings count and timing.
     pub progress_verbose: bool,
+    /// Colour policy for the text report and progress output on the terminal.
+    pub color: ColorChoice,
     /// Emit verbose diagnostics on stderr: resolved config, discovery stats, per-check counts.
     pub debug: bool,
     pub site: SiteConfig,

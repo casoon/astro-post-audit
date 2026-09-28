@@ -6,7 +6,15 @@ reconstructed from the git history and the README release notes.
 
 ## [Unreleased]
 
+### Added
+
+- `color` option (`'auto'`, `'always'`, `'never'`) for the text report and progress output, so a
+  piped build log can still get colour and Unicode symbols (#56).
+
 ### Changed
+
+- `progress: 'verbose'` prints its per-check lines through runemark instead of raw stderr output.
+- runemark updated from 0.1.1 to 0.9.0.
 
 - robots.txt is evaluated by the shared `web-checks` crate instead of a local copy.
 - Title and meta description length come from `web-checks` 0.3 and count **characters**, not

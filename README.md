@@ -395,6 +395,7 @@ postAudit({
 | `pageOverview` | `boolean` | `false` | Print a page properties table (title, description, canonical, OG, H1, lang, JSON-LD) instead of running checks. |
 | `benchmark` | `boolean` | `false` | Print per-check timing breakdown. |
 | `progress` | `boolean` | auto | Live progress bar on stderr while checks run. Auto-on in an interactive terminal, silent in CI. Set `true`/`false` to force. |
+| `color` | `'auto' \| 'always' \| 'never'` | `'auto'` | Colour for the text report and progress output. `auto` styles only an interactive terminal and honours `NO_COLOR`; `always` forces colour and Unicode symbols for piped logs shown in a colour-capable terminal. |
 | `debug` | `boolean` | `false` | Verbose diagnostics on stderr (resolved config, discovery stats, per-check counts/timings). Never touches the stdout report; replaces the progress bar. See [Diagnostics](#diagnostics). |
 | `aiVisibility` | `boolean` | `false` | Enable AI visibility checks (LLM-readability, citability, chunk quality). See [AI visibility](#ai-visibility). |
 | `uxHeuristics` | `boolean \| { maxLinksPerPage?: number, minCtaPerPage?: number }` | `false` | Enable UX heuristic checks (CTAs, generic link text, trust signals). See [UX heuristics](#ux-heuristics). |
