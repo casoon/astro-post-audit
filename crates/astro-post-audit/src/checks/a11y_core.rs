@@ -185,7 +185,7 @@ mod tests {
                  <img src="logo.png">
                  <input type="text" id="dup">
                  <span id="dup"></span>
-                 <a href="/a"></a>
+                 <a href="/a" aria-describedby="dup"></a>
                </body></html>"#,
         );
         for erwartet in [

@@ -995,12 +995,13 @@ fn edge_case_no_doctype() {
 #[test]
 fn strict_mode_warnings_become_errors() {
     let dir = TempDir::new().unwrap();
-    // Eine Seite mit genau einem Warnbefund: doppelte ID (medium). Zwei h1
-    // taugen dafuer nicht mehr -- der Kern stuft headings/h1-multiple als
-    // low ein, weil mehrere h1 in HTML zulaessig sind.
+    // Eine Seite mit genau einem Warnbefund: doppelte ID (medium), auf die ein
+    // aria-describedby zeigt -- ohne Verweis waere sie seit a11y-rules 0.12
+    // kein Befund. Zwei h1 taugen dafuer nicht -- der Kern stuft
+    // headings/h1-multiple als low ein, weil mehrere h1 in HTML zulaessig sind.
     fs::write(
         dir.path().join("index.html"),
-        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><div id="x">A</div><div id="x">B</div></main><footer><a href="/">Home</a></footer></body></html>"#,
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1 aria-describedby="x">Test</h1><div id="x">A</div><div id="x">B</div></main><footer><a href="/">Home</a></footer></body></html>"#,
     ).unwrap();
     // Without strict: exit 0 (only warnings)
     let (_, _, code_normal) = run_audit(
@@ -3069,7 +3070,10 @@ fn a11y_landmark_footer_inside_div_no_false_positive() {
 // ==========================================================================
 
 #[test]
-fn a11y_duplicate_id_detected() {
+fn a11y_unreferenced_duplicate_id_is_not_reported() {
+    // WCAG 2.2 hat 4.1.1 gestrichen: Seit a11y-rules 0.12 ist eine doppelte ID
+    // nur noch ein Befund, wenn ein IDREF auf sie zeigt (siehe
+    // a11y_duplicate_id_aria_ref). Ohne Verweis bleibt der Bericht leer.
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("index.html"),
@@ -3078,12 +3082,9 @@ fn a11y_duplicate_id_detected() {
     let (json, code) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     let findings = json["findings"].as_array().unwrap();
     assert!(
-        findings.iter().any(|f| f["rule_id"] == "ids/duplicate"),
-        "Duplicate id should be reported"
+        !findings.iter().any(|f| f["rule_id"] == "ids/duplicate"),
+        "An unreferenced duplicate id is no longer a finding"
     );
-    // Der Kern stuft ids/duplicate als medium ein, nicht als high: WCAG 4.1.1
-    // ist in 2.2 zurueckgezogen. Damit faellt der Exit-Code auf 0. Wer das
-    // anders haelt, setzt severity in astro.config.mjs.
     assert_eq!(code, 0);
 }
 
@@ -3100,8 +3101,9 @@ fn a11y_duplicate_id_aria_ref() {
         findings.iter().any(|f| f["rule_id"] == "ids/duplicate"),
         "Duplicate id referenced by ARIA should be reported"
     );
-    // Der Kern fuehrt keine eigene Kennung fuer per ARIA referenzierte IDs --
-    // eine doppelte ID ist eine doppelte ID. Siehe oben zur Einstufung.
+    // Genau dieser Fall ist seit a11y-rules 0.12 ein Befund (4.1.2). Der Kern
+    // stuft ihn als medium ein, damit faellt der Exit-Code auf 0. Wer das
+    // anders haelt, setzt severity in astro.config.mjs.
     assert_eq!(code, 0);
 }
 
