@@ -4840,7 +4840,7 @@ fn html_format_renders_html_to_stdout() {
 }
 
 // ==========================================================================
-// Migration der Regelkennungen auf a11y-core
+// Migration der Regelkennungen auf a11y-rules
 // ==========================================================================
 
 /// Eine Baseline, die noch die alte Kennung trägt, unterdrückt den Befund

@@ -14,7 +14,7 @@
 //!
 //! **Nicht übersetzt** werden `html/meta-description-missing`,
 //! `html/meta-description-too-long` und `html/title-too-long`. Das sind
-//! SEO-Regeln, keine Barrierefreiheit; sie gehören nicht in `a11y-core` und
+//! SEO-Regeln, keine Barrierefreiheit; sie gehören nicht in `a11y-rules` und
 //! behalten ihre Kennung.
 
 use std::collections::HashSet;
