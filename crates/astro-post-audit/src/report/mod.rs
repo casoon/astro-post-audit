@@ -148,11 +148,12 @@ fn runemark_confidence(outcome: Outcome) -> Option<RunemarkConfidence> {
 
 pub struct Reporter {
     format: Format,
+    color: ColorMode,
 }
 
 impl Reporter {
-    pub fn new(format: Format) -> Self {
-        Self { format }
+    pub fn new(format: Format, color: ColorMode) -> Self {
+        Self { format, color }
     }
 
     pub fn print(
@@ -217,7 +218,7 @@ impl Reporter {
     }
 
     fn print_text(&self, findings: &[Finding], summary: &Summary) -> Result<()> {
-        let console = Console::stdout(ColorMode::Auto);
+        let console = Console::stdout(self.color);
         let mut report = if findings.is_empty() {
             RunemarkReport::new("All checks passed!", Verdict::Passed)
         } else {
@@ -501,7 +502,7 @@ impl Reporter {
     }
 
     fn print_benchmark_text(&self, b: &BenchmarkData) -> Result<()> {
-        let console = Console::stdout(ColorMode::Auto);
+        let console = Console::stdout(self.color);
         println!(
             "  {} {} ({} pages)",
             console.paint(Tone::Title, "Benchmark"),
@@ -541,7 +542,7 @@ impl Reporter {
 
     fn print_overview_text(&self, overview: &PageOverview) -> Result<()> {
         let stats = &overview.stats;
-        let console = Console::stdout(ColorMode::Auto);
+        let console = Console::stdout(self.color);
 
         println!(
             "\n{}",

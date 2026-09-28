@@ -1231,6 +1231,16 @@
             "description": "Print per-check timing benchmarks in the output.",
             "type": "boolean"
         },
+        "color": {
+            "default": "'auto'",
+            "description": "Colour policy for the text report and progress output.\n`'auto'` styles only an interactive terminal and honours `NO_COLOR`;\n`'always'` forces ANSI colour and Unicode symbols, e.g. for piped build\nlogs that are still shown in a colour-capable terminal.",
+            "enum": [
+                "always",
+                "auto",
+                "never"
+            ],
+            "type": "string"
+        },
         "contentStyle": {
             "default": false,
             "description": "Enable content style checks — heuristics for recurring \"reads like AI\" writing\npatterns (em-dash overuse, contrast-formula repetition, chatbot leftovers).\nPass `true` to enable with defaults, or use `rules.content_style` for fine-grained control.",

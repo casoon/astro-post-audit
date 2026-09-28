@@ -2810,9 +2810,12 @@ dependencies = [
 
 [[package]]
 name = "runemark"
-version = "0.1.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec1b987e9cf427794c2eed20ca30339f8b66b67bd477613788747115b02a29c6"
+checksum = "b6f49b5865f135ce65790ffbee27dac4a5a5efb4ef1fc28ed5958e4ff45be37d"
+dependencies = [
+ "unicode-width 0.2.2",
+]
 
 [[package]]
 name = "rustc-demangle"
