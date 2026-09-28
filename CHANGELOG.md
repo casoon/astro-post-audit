@@ -9,6 +9,13 @@ reconstructed from the git history and the README release notes.
 ### Changed
 
 - robots.txt is evaluated by the shared `web-checks` crate instead of a local copy.
+- Title and meta description length come from `web-checks` 0.3 and count **characters**, not
+  bytes: before, every umlaut counted twice, so a 60-character German title could be reported as
+  too long. Whitespace is collapsed as in the browser before counting.
+- OpenGraph / Twitter Card presence, `twitter:card` values and the absolute-`og:image` rule come
+  from `web-checks` (shared with auditmysite). `opengraph/image-missing` and
+  `opengraph/twitter-card-missing` now also fire when the tag exists with empty `content`, like
+  the other presence checks already did.
 - `a11y-*` crates updated to 0.11.0; accessibility finding texts now come in English from
   `a11y-rules`.
 
