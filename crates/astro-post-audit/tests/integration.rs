@@ -1957,7 +1957,10 @@ fn structured_data_top_level_array_and_breadcrumb_item_name() {
         .filter_map(|f| f["rule_id"].as_str())
         .filter(|id| id.starts_with("structured-data/"))
         .collect();
-    assert!(ids.is_empty(), "unexpected structured-data findings: {ids:?}");
+    assert!(
+        ids.is_empty(),
+        "unexpected structured-data findings: {ids:?}"
+    );
 }
 
 #[test]
