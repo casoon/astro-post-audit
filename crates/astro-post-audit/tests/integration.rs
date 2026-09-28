@@ -235,6 +235,26 @@ fn html_basics_title_too_long() {
     assert_eq!(code, 0, "title-too-long is a warning, not error");
 }
 
+/// Gezählt wird in Zeichen (web-checks 0.3): 60 Zeichen mit Umlauten sind 70
+/// Bytes und waren vorher „zu lang".
+#[test]
+fn html_basics_title_length_counts_characters() {
+    let dir = TempDir::new().unwrap();
+    let title = format!("{}{}", "ä".repeat(10), "a".repeat(50));
+    fs::write(
+        dir.path().join("index.html"),
+        format!(
+            r#"<!DOCTYPE html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{}</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1></main><footer><a href="/">Home</a></footer></body></html>"#,
+            title
+        ),
+    ).unwrap();
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    let findings = json["findings"].as_array().unwrap();
+    assert!(!findings
+        .iter()
+        .any(|f| f["rule_id"] == "html/title-too-long"));
+}
+
 #[test]
 fn html_basics_viewport_missing() {
     let dir = TempDir::new().unwrap();

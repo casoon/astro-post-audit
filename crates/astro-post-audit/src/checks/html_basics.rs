@@ -45,15 +45,13 @@ fn check_title_length(
     let Some(max) = config.html_basics.title_max_length else {
         return;
     };
-    if trimmed.len() > max {
+    // Zeichen, nicht Bytes: web_checks::meta zählt wie der Browser.
+    let len = web_checks::meta::length(trimmed);
+    if len > max {
         findings.push(
             Finding::fail(
                 "html/title-too-long",
-                format!(
-                    "Title is {} chars (recommended max: {})",
-                    trimmed.len(),
-                    max
-                ),
+                format!("Title is {} chars (recommended max: {})", len, max),
             )
             .with_severity(Severity::Medium)
             .at(Location::file(page.rel_path.clone()).with_selector("title"))
@@ -89,14 +87,14 @@ fn check_meta_description(
                 }
             } else if let Some(max) = config.html_basics.meta_description_max_length {
                 // Length check runs independently, even if description is not required
-                if trimmed.len() > max {
+                let len = web_checks::meta::length(trimmed);
+                if len > max {
                     findings.push(
                         Finding::fail(
                             "html/meta-description-too-long",
                             format!(
                                 "Meta description is {} chars (recommended max: {})",
-                                trimmed.len(),
-                                max
+                                len, max
                             ),
                         )
                         .with_severity(Severity::Medium)

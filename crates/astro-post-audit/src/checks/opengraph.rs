@@ -8,6 +8,7 @@ use url::Url;
 use crate::config::Config;
 use crate::discovery::SiteIndex;
 use crate::report::{Finding, Location, Severity};
+use web_checks::social;
 
 static OG_TITLE_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("meta[property='og:title']").expect("valid selector"));
@@ -25,8 +26,6 @@ static TWITTER_IMAGE_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("meta[name='twitter:image']").expect("valid selector"));
 static TITLE_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("title").expect("valid selector"));
-
-const VALID_TWITTER_CARD_VALUES: &[&str] = &["summary", "summary_large_image", "app", "player"];
 
 /// Recommended Open Graph image dimensions (Facebook/Twitter large card).
 const OG_IMAGE_REC_WIDTH: usize = 1200;
@@ -59,11 +58,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             let html = page.parse_html();
 
             if og.require_og_title {
-                let has = html
+                let has = social::is_present(html
                     .select(&OG_TITLE_SEL)
                     .next()
-                    .and_then(|el| el.value().attr("content"))
-                    .is_some_and(|v| !v.trim().is_empty());
+                    .and_then(|el| el.value().attr("content")));
                 if !has {
                     findings.push(Finding::fail("opengraph/title-missing","Missing og:title meta tag")
 .with_severity(Severity::Medium)
@@ -73,11 +71,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             }
 
             if og.require_og_description {
-                let has = html
+                let has = social::is_present(html
                     .select(&OG_DESC_SEL)
                     .next()
-                    .and_then(|el| el.value().attr("content"))
-                    .is_some_and(|v| !v.trim().is_empty());
+                    .and_then(|el| el.value().attr("content")));
                 if !has {
                     findings.push(Finding::fail("opengraph/description-missing","Missing og:description meta tag")
 .with_severity(Severity::Medium)
@@ -93,7 +90,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 .and_then(|el| el.value().attr("content"))
                 .map(|v| v.trim().to_string());
 
-            if og.require_og_image && og_image_content.is_none() {
+            if og.require_og_image && !social::is_present(og_image_content.as_deref()) {
                 findings.push(Finding::fail("opengraph/image-missing","Missing og:image meta tag")
 .with_severity(Severity::Medium)
 .at(Location::file(page.rel_path.clone()).with_selector("head"))
@@ -102,10 +99,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             if og.og_image_absolute_url {
                 if let Some(ref img_url) = og_image_content {
-                    if !img_url.is_empty()
-                        && !img_url.starts_with("https://")
-                        && !img_url.starts_with("http://")
-                    {
+                    if !img_url.is_empty() && !social::is_absolute_url(img_url) {
                         findings.push(Finding::fail("opengraph/image-not-absolute", format!(
                                 "og:image URL is not absolute: \"{}\"",
                                 img_url
@@ -176,11 +170,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             // og:type
             if og.require_og_type {
-                let has = html
+                let has = social::is_present(html
                     .select(&OG_TYPE_SEL)
                     .next()
-                    .and_then(|el| el.value().attr("content"))
-                    .is_some_and(|v| !v.trim().is_empty());
+                    .and_then(|el| el.value().attr("content")));
                 if !has {
                     findings.push(Finding::fail("opengraph/type-missing","Missing og:type meta tag")
 .with_severity(Severity::Medium)
@@ -192,11 +185,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             // og:url
             if og.require_og_url {
-                let has = html
+                let has = social::is_present(html
                     .select(&OG_URL_SEL)
                     .next()
-                    .and_then(|el| el.value().attr("content"))
-                    .is_some_and(|v| !v.trim().is_empty());
+                    .and_then(|el| el.value().attr("content")));
                 if !has {
                     findings.push(Finding::fail("opengraph/url-missing","Missing og:url meta tag")
 .with_severity(Severity::Medium)
@@ -212,7 +204,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 .and_then(|el| el.value().attr("content"))
                 .map(|v| v.trim().to_string());
 
-            if og.require_twitter_card && twitter_card_content.is_none() {
+            if og.require_twitter_card && !social::is_present(twitter_card_content.as_deref()) {
                 findings.push(Finding::fail("opengraph/twitter-card-missing","Missing twitter:card meta tag")
 .with_severity(Severity::Medium)
 .at(Location::file(page.rel_path.clone()).with_selector("head"))
@@ -221,11 +213,11 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             if og.twitter_card_valid_values {
                 if let Some(ref card_val) = twitter_card_content {
-                    if !card_val.is_empty() && !VALID_TWITTER_CARD_VALUES.contains(&card_val.as_str()) {
+                    if !card_val.is_empty() && !social::is_valid_twitter_card(card_val) {
                         findings.push(Finding::fail("opengraph/twitter-card-invalid", format!(
                                 "Invalid twitter:card value \"{}\". Allowed: {}",
                                 card_val,
-                                VALID_TWITTER_CARD_VALUES.join(", ")
+                                social::TWITTER_CARD_TYPES.join(", ")
                             ))
 .with_severity(Severity::High)
 .at(Location::file(page.rel_path.clone()).with_selector("meta[name='twitter:card']"))
@@ -237,11 +229,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             // twitter:image
             if og.require_twitter_image {
-                let has = html
+                let has = social::is_present(html
                     .select(&TWITTER_IMAGE_SEL)
                     .next()
-                    .and_then(|el| el.value().attr("content"))
-                    .is_some_and(|v| !v.trim().is_empty());
+                    .and_then(|el| el.value().attr("content")));
                 if !has {
                     findings.push(Finding::fail("opengraph/twitter-image-missing","Missing twitter:image meta tag")
 .with_severity(Severity::Medium)

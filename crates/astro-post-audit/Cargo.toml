@@ -42,7 +42,7 @@ ego-tree = "0.10"
 
 # HTML5 conformance validation (html_validation check) — vnu-comparable, no JVM
 html-conform = "0.2"
-web-checks = "0.1"
+web-checks = "0.3"
 
 # Regex-based content style rules (content_style check)
 regex = "1"
