@@ -6,6 +6,18 @@ Fast, offline post-build auditor for Astro sites — SEO signals, internal link 
 
 **Website and documentation:** [casoon.github.io/astro-post-audit](https://casoon.github.io/astro-post-audit/)
 
+## What's new in 0.8.0
+
+Several checks now come from the shared `web-checks` and `a11y-rules` crates, so finding counts change on upgrade — see the [CHANGELOG](CHANGELOG.md) for details.
+
+| Area | What | Rule IDs | How to enable |
+|------|------|----------|---------------|
+| Structured data | JSON-LD is evaluated by `web-checks` 0.4, whose rule tables follow Google's structured-data docs. Article `headline`, Organization/Person `name` and WebSite `name`/`url` are no longer required; Event, Recipe, VideoObject, JobPosting, SoftwareApplication, ProfilePage, ItemList and Product now have their required properties checked. Empty values count as missing | `structured-data/missing-property`, new `structured-data/invalid-structure`; `news-article-missing-publisher` High → Medium, `local-business-missing-address` Low → Medium | `structured_data.check_json_ld` |
+| Title and description length | Counted in characters instead of bytes, with whitespace collapsed as in the browser — umlauts no longer count twice | `html/title-too-long`, `html/meta-description-too-long` | Automatic |
+| Open Graph / Twitter Card | Presence and `twitter:card` checks from `web-checks`; a tag with empty `content` now counts as missing | `opengraph/image-missing`, `opengraph/twitter-card-missing` | Automatic |
+| Duplicate ids | Only reported when an IDREF (`aria-describedby`, `for`, …) points to the id — WCAG 2.2 removed 4.1.1 | `ids/duplicate` | Automatic |
+| Terminal output | New `color: 'auto' \| 'always' \| 'never'` keeps colour and Unicode symbols in piped build logs; `progress: 'verbose'` now renders through runemark | — | `color: 'always'` |
+
 ## What's new in 0.7.0
 
 This release changes rule ids, the report model, and the set of shipped platforms. Read the breaking changes before upgrading.
