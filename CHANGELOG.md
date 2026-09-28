@@ -26,6 +26,24 @@ reconstructed from the git history and the README release notes.
   the other presence checks already did.
 - `a11y-*` crates updated to 0.11.0; accessibility finding texts now come in English from
   `a11y-rules`.
+- Structured data is evaluated by `web-checks` 0.4 (`structured_data`), shared with auditmysite.
+  The rule tables follow Google's structured-data docs, so finding counts change:
+  - **No longer reported:** Article/BlogPosting/NewsArticle `headline`, Organization/Person
+    `name` and WebSite `name`/`url` as `structured-data/missing-property` (Google lists no required
+    properties for these types).
+  - **Now reported:** missing required properties of Event, Recipe, VideoObject, JobPosting,
+    SoftwareApplication, ProfilePage, ItemList and Product (`name` plus one of
+    `offers`/`review`/`aggregateRating`) as `structured-data/missing-property`; BreadcrumbList with
+    fewer than 2 items or without `item` on a non-last entry; `structured-data/invalid-structure`
+    for a non-object root, a non-array `@graph` or an empty array/`@graph`.
+  - **Severity changed:** `structured-data/news-article-missing-publisher` High → Medium
+    (recommended, not required); `structured-data/local-business-missing-address` Low → Medium
+    (required by Google).
+  - **Behaviour:** empty values (`""`, `null`, `[]`, `{}`) count as missing; `@context` must be
+    exactly `http(s)://schema.org` (also as array entry or `@vocab`) and is inherited into
+    `@graph`; top-level arrays are expanded instead of reported as missing context; every `@type`
+    entry is assessed, full IRIs included; `structured-data/duplicate-type` counts blocks, not
+    repeats inside one block.
 
 ## [0.7.0] - 2026-09-23
 
