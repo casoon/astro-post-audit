@@ -16,7 +16,8 @@ binary, offline and without a browser.
 - **Links:** broken internal links, fragments, orphan pages, redirect chains, and opt-in
   external link checks.
 - **Accessibility:** image alt text, link and button names, form labels, landmarks, duplicate
-  ids, ARIA roles, heading hierarchy. The rules come from the shared a11y-core crates.
+  ids, ARIA roles, heading hierarchy. The rules come from the shared `a11y-rules` crates,
+  developed in barrierlab.
 - **Opt-in modules:** HTML5 conformance, AI visibility, UX heuristics, content style, source
   analysis, CSS architecture, C2PA provenance, GDPR transfers.
 
