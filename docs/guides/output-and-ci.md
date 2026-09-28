@@ -59,3 +59,6 @@ Both diagnostics write to stderr, so report output on stdout stays clean.
 - `debug: true`: resolved configuration, discovery counts and per-check finding counts and
   timings. Replaces the progress bar.
 - `benchmark: true`: per-check timing breakdown.
+- `color`: `'auto'` (default) styles only an interactive terminal and honours `NO_COLOR`.
+  `'always'` keeps colour and Unicode symbols in piped build logs that a colour-capable
+  terminal still renders; `'never'` turns styling off.
