@@ -1896,7 +1896,7 @@ fn structured_data_missing_required_property() {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Test</title>
   <link rel="canonical" href="https://example.com/">
-  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article"}</script>
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Product", "offers": {"@type": "Offer", "price": "10", "priceCurrency": "EUR"}}</script>
 </head>
 <body><h1>Test</h1></body>
 </html>"#,
@@ -1911,8 +1911,55 @@ fn structured_data_missing_required_property() {
         findings
             .iter()
             .any(|f| f["rule_id"] == "structured-data/missing-property"
-                && f["message"].as_str().unwrap_or("").contains("headline")),
-        "Should warn about missing 'headline' for Article type"
+                && f["message"].as_str().unwrap_or("").contains("'name'")),
+        "Should warn about missing 'name' for Product type"
+    );
+}
+
+/// web-checks 0.4 (Google's tables): Article has no required properties, so a
+/// missing `headline` is no longer a `missing-property` finding.
+#[test]
+fn structured_data_article_headline_is_not_required() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"><script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article"}</script></head><body><h1>Test</h1></body></html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(!findings
+        .iter()
+        .any(|f| f["rule_id"] == "structured-data/missing-property"));
+}
+
+/// web-checks 0.4: a top-level array is expanded into its nodes instead of
+/// counting as a missing @context, and a breadcrumb name may come from
+/// `item.name`.
+#[test]
+fn structured_data_top_level_array_and_breadcrumb_item_name() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"><script type="application/ld+json">[{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "item": {"@id": "https://example.com/", "name": "Home"}}, {"@type": "ListItem", "position": 2, "name": "Page"}]}]</script></head><body><h1>Test</h1></body></html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    let ids: Vec<&str> = findings
+        .iter()
+        .filter_map(|f| f["rule_id"].as_str())
+        .filter(|id| id.starts_with("structured-data/"))
+        .collect();
+    assert!(
+        ids.is_empty(),
+        "unexpected structured-data findings: {ids:?}"
     );
 }
 
