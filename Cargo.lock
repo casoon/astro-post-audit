@@ -222,6 +222,7 @@ dependencies = [
  "scraper",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "terminal_size",
  "thiserror 2.0.20",

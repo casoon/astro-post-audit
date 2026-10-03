@@ -645,6 +645,11 @@
                     "additionalProperties": false,
                     "description": "Native HTML5 conformance validation via html-conform (vnu-comparable, offline).",
                     "properties": {
+                        "cache": {
+                            "default": true,
+                            "description": "Reuse validation results for pages whose HTML is unchanged since the last build. The cache lives in\n`node_modules/.cache/astro-post-audit/`; without it (e.g. a fresh CI checkout) every page is validated.",
+                            "type": "boolean"
+                        },
                         "enabled": {
                             "default": false,
                             "description": "Report HTML5 conformance findings (tree construction, content-model schema, ARIA, attribute microsyntaxes, table integrity).",

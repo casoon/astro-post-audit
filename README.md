@@ -758,6 +758,7 @@ rules: {
   html_validation: {
     enabled: false,                     // Report HTML5 conformance findings
     max_per_page: 20,                   // Cap distinct findings reported per page
+    cache: true,                        // Reuse results for pages whose HTML is unchanged
   },
 
   // Override severity per rule ID
@@ -802,6 +803,8 @@ rules: {
 ### HTML5 conformance validation
 
 Enable `rules.html_validation.enabled` for offline content-model, parser, ARIA, attribute, and table validation. Astro's generated client-island runtime style (`astro-island,astro-slot,astro-static-slot{display:contents}`) is ignored automatically; other `<style>` elements in body content remain findings. Under the [current HTML standard](https://html.spec.whatwg.org/multipage/semantics.html#the-style-element), `<style>` is metadata content and belongs in `<head>` (or a `<noscript>` in `<head>`), even when it is the first child of a body-level container. In Astro and MDX, use Astro's normal component-scoped `<style>` handling instead of emitting a raw body-level `<style>` tag.
+
+Validation is the most expensive check on large sites, so results are cached per page in `node_modules/.cache/astro-post-audit/html-validation.json`, keyed by a hash of the page's HTML and the plugin version. An incremental build only validates the pages whose HTML changed; a layout change or a plugin update validates everything again. The cache stores the validator's raw output, so changing `max_per_page` or `severity` takes effect without a rerun. Without a persisted cache (e.g. a fresh CI checkout) every page is validated, as before. Set `rules.html_validation.cache: false` to switch it off; `debug: true` prints how many pages were validated and how many came from the cache.
 
 `html/assertion.roles.unnecessary-list` reports an explicit `role="list"` on `<ul>`/`<ol>` as redundant according to ARIA-in-HTML. If the role is intentional to retain VoiceOver/Safari list semantics when CSS removes list markers, keep the workaround and tune only that finding:
 

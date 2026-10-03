@@ -4124,6 +4124,63 @@ fn content_sync_missing_page() {
 // ==========================================================================
 
 #[test]
+fn html_validation_cache_reuses_results_and_prunes() {
+    let dir = TempDir::new().unwrap();
+    let cache_dir = TempDir::new().unwrap();
+    let cache = cache_dir.path().join("nested/html-validation.json");
+    let page = |id: &str| {
+        format!(
+            r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>T</title></head><body><main><h1 id="{id}" id="x">T</h1></main></body></html>"#
+        )
+    };
+    fs::write(dir.path().join("index.html"), page("a")).unwrap();
+    fs::write(dir.path().join("other.html"), page("b")).unwrap();
+    let config = format!(
+        r#"{{"html_validation":{{"enabled":true,"cache_path":{}}}}}"#,
+        serde_json::to_string(cache.to_str().unwrap()).unwrap()
+    );
+    let html_ids = |json: &serde_json::Value| {
+        let mut ids: Vec<String> = json["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|f| f["rule_id"].as_str().unwrap().starts_with("html/parser"))
+            .map(|f| format!("{} {}", f["location"]["file"], f["message"]))
+            .collect();
+        ids.sort();
+        ids
+    };
+    let entries = || {
+        let cache: serde_json::Value = serde_json::from_slice(&fs::read(&cache).unwrap()).unwrap();
+        cache["entries"].as_object().unwrap().len()
+    };
+
+    let (cold, _) = run_audit_json(dir.path(), &config);
+    assert!(!html_ids(&cold).is_empty());
+    assert_eq!(entries(), 2);
+
+    let (warm, _) = run_audit_json(dir.path(), &config);
+    assert_eq!(html_ids(&cold), html_ids(&warm));
+
+    // A removed page drops out of the cache.
+    fs::remove_file(dir.path().join("other.html")).unwrap();
+    run_audit_json(dir.path(), &config);
+    assert_eq!(entries(), 1);
+
+    // A corrupt cache is treated as empty, not as a failure.
+    fs::write(&cache, "{not json").unwrap();
+    let (json, _) = run_audit_json(dir.path(), &config);
+    assert!(!html_ids(&json).is_empty());
+    assert_eq!(entries(), 1);
+
+    // cache: false neither reads nor writes.
+    fs::remove_file(&cache).unwrap();
+    let off = config.replace(r#""enabled":true"#, r#""enabled":true,"cache":false"#);
+    run_audit_json(dir.path(), &off);
+    assert!(!cache.exists());
+}
+
+#[test]
 fn html_validation_reports_conformance_error_with_location() {
     let dir = TempDir::new().unwrap();
     // Duplicate attribute reliably triggers an HTML5 parser finding.

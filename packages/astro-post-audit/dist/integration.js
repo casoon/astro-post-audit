@@ -281,6 +281,13 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                 };
                 if (site)
                     stdinConfig.site = { base_url: site };
+                // The binary only caches when it gets a path; it is unused unless html_validation runs.
+                if (rootDir && resolvedRules.html_validation?.cache !== false) {
+                    stdinConfig.html_validation = {
+                        ...(stdinConfig.html_validation ?? {}),
+                        cache_path: resolve(rootDir, "node_modules/.cache/astro-post-audit/html-validation.json"),
+                    };
+                }
                 if (options.preset)
                     stdinConfig.preset = options.preset;
                 if (options.mode)

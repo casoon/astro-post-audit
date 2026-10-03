@@ -665,6 +665,10 @@ pub struct HtmlValidationConfig {
     pub enabled: bool,
     /// Maximum distinct findings reported per page. @default 20
     pub max_per_page: Option<usize>,
+    /// Reuse results for pages whose HTML is unchanged since the last run. @default true
+    pub cache: bool,
+    /// Cache file, set by the Astro integration. Without it nothing is cached.
+    pub cache_path: Option<String>,
 }
 
 impl Default for HtmlValidationConfig {
@@ -672,6 +676,8 @@ impl Default for HtmlValidationConfig {
         Self {
             enabled: false,
             max_per_page: Some(20),
+            cache: true,
+            cache_path: None,
         }
     }
 }
