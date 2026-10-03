@@ -31,11 +31,11 @@ impl Summary {
             errors: findings.iter().filter(|f| is_error(f)).count(),
             warnings: findings
                 .iter()
-                .filter(|f| stufe(f) == Severity::Medium)
+                .filter(|f| f.severity == Severity::Medium)
                 .count(),
             info: findings
                 .iter()
-                .filter(|f| stufe(f) == Severity::Low)
+                .filter(|f| f.severity == Severity::Low)
                 .count(),
             files_checked: 0, // set externally
             truncated: false,
@@ -85,25 +85,18 @@ impl FromStr for Format {
     }
 }
 
-/// Die Stufe, nach der ein Befund zählt und angezeigt wird.
+/// Zählt als Fehler, was den Aufruf scheitern lässt.
 ///
 /// Maßgeblich ist die **Schwere**, nicht das Outcome: Das Outcome sagt, wie
-/// sicher die Aussage ist, die Schwere, wie schwer das Problem wiegt.
-/// Ausnahme ist `Untested` (die `manual/*`-Checkliste): Dort ist nichts
-/// gefunden, nur etwas von Hand zu prüfen — das zählt als Hinweis.
-pub fn stufe(f: &Finding) -> Severity {
-    if f.outcome == Outcome::Untested {
-        Severity::Low
-    } else {
-        f.severity
-    }
-}
-
-/// Zählt als Fehler, was den Aufruf scheitern lässt.
+/// sicher die Aussage ist, die Schwere, wie schwer das Problem wiegt. Ein nur
+/// heuristisch belegter Befund trägt nach der Zwei-Achsen-Entscheidung
+/// höchstens `Medium` und lässt den Build damit ohnehin nicht scheitern.
 pub fn is_error(f: &Finding) -> bool {
-    stufe(f) >= Severity::High
+    f.severity >= Severity::High
 }
 
+/// Die Datei eines Befunds. Alle Regeln dieses Werkzeugs verorten in Dateien;
+/// leer bleibt das Feld nur, wenn ein Befund gar keine Verortung trägt.
 pub fn datei_von(f: &Finding) -> &str {
     f.location.file.as_deref().unwrap_or("")
 }
@@ -266,11 +259,11 @@ impl Reporter {
             let mut group = FindingGroup::new(title).with_advisory(
                 file_findings
                     .iter()
-                    .all(|finding| stufe(finding) == Severity::Low),
+                    .all(|finding| finding.severity == Severity::Low),
             );
             for f in file_findings {
                 let mut finding =
-                    RunemarkFinding::new(tone_for(stufe(f)), &f.message).with_rule_id(&f.rule_id);
+                    RunemarkFinding::new(tone_for(f.severity), &f.message).with_rule_id(&f.rule_id);
                 if let Some(selector) = f.location.selector.as_deref() {
                     finding =
                         finding.with_location(RunemarkLocation::Selector(selector.to_string()));
@@ -346,8 +339,10 @@ impl Reporter {
             (Severity::Medium, "## Warnings"),
             (Severity::Low, "## Info"),
         ] {
-            let severity_findings: Vec<&Finding> =
-                findings.iter().filter(|f| stufe(f) == *severity).collect();
+            let severity_findings: Vec<&Finding> = findings
+                .iter()
+                .filter(|f| f.severity == *severity)
+                .collect();
             if severity_findings.is_empty() {
                 continue;
             }
@@ -414,7 +409,7 @@ impl Reporter {
         } else {
             out.push_str("<table>\n<thead>\n<tr><th>Severity</th><th>Outcome</th><th>Rule ID</th><th>File</th><th>Selector</th><th>Message</th></tr>\n</thead>\n<tbody>\n");
             for f in findings {
-                let badge_cls = match stufe(f) {
+                let badge_cls = match f.severity {
                     Severity::Critical | Severity::High => "badge-error",
                     Severity::Medium => "badge-warning",
                     Severity::Low => "badge-info",
@@ -465,7 +460,7 @@ impl Reporter {
             .map(|f| {
                 // SARIF kennt nur error/warning/note. Abgebildet wird die
                 // Schwere; das Outcome geht als Eigenschaft mit.
-                let level = match stufe(f) {
+                let level = match f.severity {
                     Severity::Critical | Severity::High => "error",
                     Severity::Medium => "warning",
                     Severity::Low => "note",

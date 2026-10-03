@@ -567,7 +567,7 @@ rules: {
     check_duplicate_ids: true,          // Error on a duplicate id that an IDREF points at
     check_aria_roles: true,             // Validate role= values against WAI-ARIA spec
     check_alt_quality: true,            // Warn on filename/placeholder/too-short alt text
-    manual_checklist: false,            // List manual/* items to check by hand (never fails the build)
+    manual_checklist: false,            // List manual/* items to check by hand (counted by severity)
   },
 
   // Asset checks
@@ -1081,7 +1081,7 @@ Findings with outcome `review` are heuristic and need a human to confirm them; t
 if one doesn't apply to your site. The `manual/*` checklist — criteria no machine
 can decide, such as whether alt texts fit their context — is off by default.
 Enable it with `rules.a11y.manual_checklist: true`; its items carry outcome
-`untested` and never count as errors or warnings.
+`untested` and count by severity like any finding, so tune them with `severity`.
 
 ### Report files
 

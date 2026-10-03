@@ -156,7 +156,7 @@
                         },
                         "manual_checklist": {
                             "default": false,
-                            "description": "List the `manual/*` checklist items: criteria no machine can decide, once per page where they apply. They never count as errors or warnings.",
+                            "description": "List the `manual/*` checklist items: criteria no machine can decide, once per page where they apply. They count by severity like any finding.",
                             "type": "boolean"
                         },
                         "require_skip_link": {

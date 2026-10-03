@@ -452,7 +452,7 @@ fn a11y_form_label_wrapped_input_ok() {
 }
 
 #[test]
-fn a11y_manual_checklist_is_opt_in_and_never_fails() {
+fn a11y_manual_checklist_is_opt_in() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("index.html"),
@@ -463,15 +463,16 @@ fn a11y_manual_checklist_is_opt_in_and_never_fails() {
     let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     assert!(!json["findings"].as_array().unwrap().iter().any(is_manual));
 
-    let (json, code) = run_audit_json(
+    let (json, _) = run_audit_json(
         dir.path(),
-        r#"{"site":{"base_url":"https://example.com"},"a11y":{"manual_checklist":true},"strict":true}"#,
+        r#"{"site":{"base_url":"https://example.com"},"a11y":{"manual_checklist":true}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     assert!(findings.iter().any(is_manual), "{findings:?}");
-    assert_eq!(json["summary"]["errors"].as_u64(), Some(0));
-    assert_eq!(json["summary"]["warnings"].as_u64(), Some(0));
-    assert_eq!(code, 0);
+    assert!(findings
+        .iter()
+        .filter(|f| is_manual(f))
+        .all(|f| f["outcome"] == "untested"));
 }
 
 #[test]

@@ -9,8 +9,8 @@ reconstructed from the git history and the README release notes.
 ### Added
 
 - `rules.a11y.manual_checklist` (default `false`) lists the `manual/*` checklist items from
-  `a11y-rules`. They carry outcome `untested` and never count as errors or warnings, in any
-  report format.
+  `a11y-rules`, once per page where they apply, with outcome `untested`. Like any finding they
+  count by severity — items with severity `high` fail the build; tune them with `severity`.
 
 ### Changed
 

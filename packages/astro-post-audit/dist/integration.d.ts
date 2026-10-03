@@ -205,7 +205,7 @@ export interface RulesConfig {
         check_aria_roles?: boolean;
         /** Flag low-quality `alt` text (file names, placeholder words like "image"/"logo", too short). @default true */
         check_alt_quality?: boolean;
-        /** List the `manual/*` checklist items: criteria no machine can decide, once per page where they apply. They never count as errors or warnings. @default false */
+        /** List the `manual/*` checklist items: criteria no machine can decide, once per page where they apply. They count by severity like any finding. @default false */
         manual_checklist?: boolean;
     };
     /** Asset reference and size checks. */
