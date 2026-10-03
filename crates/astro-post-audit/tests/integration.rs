@@ -3822,6 +3822,72 @@ fn hreflang_target_missing() {
     );
 }
 
+fn hreflang_ids(links: &str, rules: &str) -> Vec<String> {
+    let dir = TempDir::new().unwrap();
+    fs::create_dir_all(dir.path().join("en")).unwrap();
+    for (path, lang) in [("index.html", "de"), ("en/index.html", "en")] {
+        fs::write(
+            dir.path().join(path),
+            format!(r#"<!DOCTYPE html><html lang="{lang}"><head><meta charset="utf-8"><title>T</title>{links}</head><body><main><h1>T</h1></main></body></html>"#),
+        )
+        .unwrap();
+    }
+    let (json, _) = run_audit_json(
+        dir.path(),
+        &format!(
+            r#"{{"site":{{"base_url":"https://example.com"}},"hreflang":{{"check_hreflang":true,{rules}}}}}"#
+        ),
+    );
+    json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["location"]["file"] == "index.html")
+        .map(|f| f["rule_id"].as_str().unwrap().to_string())
+        .filter(|id| id.starts_with("hreflang/"))
+        .collect()
+}
+
+#[test]
+fn hreflang_reciprocal_links() {
+    let rules = r#""require_reciprocal":true"#;
+    // Both pages carry the same pair: de → /, en → /en/.
+    let both = hreflang_ids(
+        r#"<link rel="alternate" hreflang="de" href="/"><link rel="alternate" hreflang="en" href="/en/">"#,
+        rules,
+    );
+    assert!(both.is_empty(), "{both:?}");
+
+    // Both pages only name /en/: / points to /en/, which never points back.
+    let one_way = hreflang_ids(r#"<link rel="alternate" hreflang="en" href="/en/">"#, rules);
+    assert_eq!(one_way, ["hreflang/no-reciprocal"]);
+}
+
+#[test]
+fn hreflang_invalid_code_reported_by_default() {
+    let ids = hreflang_ids(
+        r#"<link rel="alternate" hreflang="de_DE" href="/"><link rel="alternate" hreflang="zh-Hant-TW" href="/en/">"#,
+        r#""require_x_default":false"#,
+    );
+    assert_eq!(ids, ["hreflang/invalid-code"]);
+}
+
+#[test]
+fn hreflang_relative_self_reference_counts_but_x_default_does_not() {
+    let rules = r#""require_self_reference":true,"require_x_default":true"#;
+    let relative = hreflang_ids(
+        r#"<link rel="alternate" hreflang="de" href="/"><link rel="alternate" hreflang="X-Default" href="/">"#,
+        rules,
+    );
+    assert!(relative.is_empty(), "{relative:?}");
+
+    let only_x_default = hreflang_ids(
+        r#"<link rel="alternate" hreflang="en" href="/en/"><link rel="alternate" hreflang="x-default" href="/">"#,
+        rules,
+    );
+    assert_eq!(only_x_default, ["hreflang/no-self-reference"]);
+}
+
 // ==========================================================================
 // robots.txt contradictions (#36)
 // ==========================================================================

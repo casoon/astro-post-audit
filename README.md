@@ -190,7 +190,7 @@ postAudit({
 
 ### Multilingual site (hreflang)
 
-The `standard` preset already includes hreflang (self-reference, x-default, reciprocal). Only exclusions and `failOn` need to be set.
+The `standard` preset already includes hreflang (valid codes, self-reference, x-default, reciprocal). Code validation and the self-reference come from the shared [`web-checks`](https://crates.io/crates/web-checks) crate: `x-default` does not count as a page's reference to itself — every language version must name itself under its own code. Only exclusions and `failOn` need to be set.
 
 ```js
 postAudit({
@@ -612,6 +612,7 @@ rules: {
     require_self_reference: false,      // Must include self-referencing entry
     require_reciprocal: false,          // Links must be reciprocal (A→B and B→A)
     require_target_exists: false,       // Warn when an internal hreflang target is missing
+    require_valid_code: true,           // Warn on values like "de_DE" or "deutsch"
   },
 
   // Security
