@@ -67,6 +67,14 @@
                         true,
                         "warn"
                     ]
+                },
+                "viz_alternatives": {
+                    "description": "Check pages that use the display-mode convention (`figure[data-viz]`, `html[data-display]`):\nevery chart has a text layer, a still image and a caption, and a display-mode toggle exists.\nPages without the convention produce no findings.",
+                    "enum": [
+                        false,
+                        true,
+                        "warn"
+                    ]
                 }
             },
             "type": "object"
@@ -162,6 +170,11 @@
                         "require_skip_link": {
                             "default": false,
                             "description": "Require a skip navigation link (e.g. `<a href=\"#main-content\">`).",
+                            "type": "boolean"
+                        },
+                        "viz_alternatives": {
+                            "default": false,
+                            "description": "Run the display-mode convention rules (`viz/*`, `display/*`); see `groups.viz_alternatives`.",
                             "type": "boolean"
                         },
                         "warn_generic_link_text": {

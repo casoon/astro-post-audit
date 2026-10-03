@@ -55,6 +55,9 @@ fn eingeschaltet(rule_id: &str, config: &Config) -> bool {
         // Die Checkliste ist kein Urteil, sondern eine Aufgabe für Menschen --
         // auf jeder Seite wiederholt wäre sie im Build-Log Rauschen.
         id if id.starts_with("manual/") => a.manual_checklist,
+        // Die Darstellungskonvention ist eine Hausregel, keine Norm -- nur
+        // auf Wunsch (`groups.viz_alternatives`).
+        id if id.starts_with("viz/") || id.starts_with("display/") => a.viz_alternatives,
         // Was frueher in html_basics lag und jetzt aus dem Kern kommt. Die
         // Schalter heissen weiter wie vorher -- sie sind die Oberflaeche.
         "document/lang-missing" | "document/lang-invalid" => config.html_basics.lang_attr_required,

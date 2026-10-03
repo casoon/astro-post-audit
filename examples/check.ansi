@@ -1,7 +1,17 @@
 [36mℹ[0m astro-post-audit
 
-  [2mErrors: [0m[1;91m0[0m   [2mWarnings: [0m[1;93m0[0m   [2mInfo: [0m[36m1[0m   [2mFiles: [0m[2m3[0m
+  [2mErrors: [0m[1;91m0[0m   [2mWarnings: [0m[1;93m0[0m   [2mInfo: [0m[36m4[0m   [2mFiles: [0m[2m3[0m
 
-● [1;96mindex.html[0m [2m(1)[0m [36m[advisory][0m
+● [1;96mabout/index.html[0m [2m(1)[0m [36m[advisory][0m
+  - [36mThe page has navigation but neither a breadcrumb trail nor a link marked aria-current="page". Check that users can tell where they are in the site.[0m [2m[navigation/location-missing][0m [2m(medium confidence)[0m
+    [2mRemedy: Show users where they are: a breadcrumb trail or aria-current="page" in the navigation.[0m
+
+● [1;96mblog/index.html[0m [2m(1)[0m [36m[advisory][0m
+  - [36mThe page has navigation but neither a breadcrumb trail nor a link marked aria-current="page". Check that users can tell where they are in the site.[0m [2m[navigation/location-missing][0m [2m(medium confidence)[0m
+    [2mRemedy: Show users where they are: a breadcrumb trail or aria-current="page" in the navigation.[0m
+
+● [1;96mindex.html[0m [2m(2)[0m [36m[advisory][0m
+  - [36mThe page has navigation but neither a breadcrumb trail nor a link marked aria-current="page". Check that users can tell where they are in the site.[0m [2m[navigation/location-missing][0m [2m(medium confidence)[0m
+    [2mRemedy: Show users where they are: a breadcrumb trail or aria-current="page" in the navigation.[0m
   - [36mImage has no srcset (no responsive image markup): src='/hero.jpg'[0m [2m[images/missing-srcset][0m at [36m`img[src='/hero.jpg']`[0m
     [2mRemedy: Use <Image> or <Picture> from astro:assets to generate responsive srcset automatically.[0m

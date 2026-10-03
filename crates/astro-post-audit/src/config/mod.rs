@@ -265,6 +265,8 @@ pub struct A11yConfig {
     pub check_alt_quality: bool,
     /// List the `manual/*` checklist items (criteria only a human can judge). @default false
     pub manual_checklist: bool,
+    /// Run the display-mode convention rules (`viz/*`, `display/*`). @default false
+    pub viz_alternatives: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -924,6 +926,7 @@ impl Default for A11yConfig {
             check_aria_roles: true,
             check_alt_quality: true,
             manual_checklist: false,
+            viz_alternatives: false,
         }
     }
 }

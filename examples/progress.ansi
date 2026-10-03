@@ -1,7 +1,7 @@
 Auditing 14 pages (0/32)
 [1;93m  seo                           5 finding(s)       0ms[0m
 [1;93m  links                         5 finding(s)       0ms[0m
-[1;93m  a11y_core                   106 finding(s)       1ms[0m
+[1;93m  a11y_core                   106 finding(s)       0ms[0m
 [1;93m  html_basics                   2 finding(s)       0ms[0m
 [2m  sitemap                       0 finding(s)       0ms[0m
 [2m  robots_txt                    0 finding(s)       0ms[0m

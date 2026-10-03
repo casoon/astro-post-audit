@@ -452,6 +452,30 @@ fn a11y_form_label_wrapped_input_ok() {
 }
 
 #[test]
+fn a11y_viz_alternatives_is_opt_in() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>T</title></head><body><main><h1>T</h1><figure data-viz><canvas width="10" height="10"></canvas></figure></main></body></html>"#,
+    ).unwrap();
+    let viz_ids = |json: &serde_json::Value| -> Vec<String> {
+        json["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| f["rule_id"].as_str().unwrap().to_string())
+            .filter(|id| id.starts_with("viz/") || id.starts_with("display/"))
+            .collect()
+    };
+
+    let (json, _) = run_audit_json(dir.path(), "{}");
+    assert!(viz_ids(&json).is_empty(), "{:?}", viz_ids(&json));
+
+    let (json, _) = run_audit_json(dir.path(), r#"{"a11y":{"viz_alternatives":true}}"#);
+    assert!(viz_ids(&json).contains(&"viz/text-missing".to_string()));
+}
+
+#[test]
 fn a11y_manual_checklist_is_opt_in() {
     let dir = TempDir::new().unwrap();
     fs::write(
@@ -1441,7 +1465,7 @@ fn text_output_format_structure() {
     write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
     let (stdout, _, code) = run_audit(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
     assert_eq!(code, 0);
-    assert!(stdout.contains("All checks passed") || stdout.contains("Summary"));
+    assert!(stdout.contains("All checks passed") || stdout.contains("Errors: 0"));
 }
 
 #[test]

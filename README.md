@@ -403,7 +403,7 @@ postAudit({
 | `baseline` | `string` | — | Path to a baseline file. Only new findings since the baseline are reported. |
 | `writeBaseline` | `boolean` | `false` | Write current findings as the new baseline and exit 0. Run once to adopt the plugin on a site with existing issues. |
 | `hints.sourceFiles` | `boolean` | `false` | Show likely source file paths (e.g. `src/content/blog/post.mdx`) next to `dist/` findings. Heuristic — may not always match. |
-| `groups` | `GroupsConfig` | — | Enable rule groups: `seo`, `a11y`, `links`, `performance`, `privacy`. `true` enables the group, `"warn"` enables but downgrades all findings to warnings. |
+| `groups` | `GroupsConfig` | — | Enable rule groups: `seo`, `a11y`, `links`, `performance`, `privacy`, `viz_alternatives`. `true` enables the group, `"warn"` enables but downgrades all findings to warnings. See [Display-mode convention](#display-mode-convention) for `viz_alternatives`. |
 | `goLive` | `GoLiveConfig` | — | Production readiness gate. See [Go-live gate](#go-live-gate). |
 | `pageOverview` | `boolean` | `false` | Print a page properties table (title, description, canonical, OG, H1, lang, JSON-LD) instead of running checks. |
 | `benchmark` | `boolean` | `false` | Print per-check timing breakdown. |
@@ -568,6 +568,7 @@ rules: {
     check_aria_roles: true,             // Validate role= values against WAI-ARIA spec
     check_alt_quality: true,            // Warn on filename/placeholder/too-short alt text
     manual_checklist: false,            // List manual/* items to check by hand (counted by severity)
+    viz_alternatives: false,            // Display-mode convention rules (viz/*, display/*)
   },
 
   // Asset checks
@@ -1082,6 +1083,23 @@ if one doesn't apply to your site. The `manual/*` checklist — criteria no mach
 can decide, such as whether alt texts fit their context — is off by default.
 Enable it with `rules.a11y.manual_checklist: true`; its items carry outcome
 `untested` and count by severity like any finding, so tune them with `severity`.
+
+### Display-mode convention
+
+Sites that follow barrierlab's [display-mode convention](https://github.com/casoon/barrierlab/blob/main/docs/a11y/concepts/darstellungsmodi.md)
+(`figure[data-viz]` with text, still and live layers; `html[data-display]` with a toggle) can
+have it checked with `groups: { viz_alternatives: true }` (or `rules.a11y.viz_alternatives: true`).
+Pages that don't use the convention produce no findings.
+
+| Rule ID | Severity | Checks |
+|---------|----------|--------|
+| `viz/text-missing` | High | A `figure[data-viz]` has no non-empty text layer |
+| `viz/caption-missing` | Low | A `figure[data-viz]` has no `<figcaption>` |
+| `viz/static-missing` | Medium | A live visualisation has no still image |
+| `viz/table-missing` | Low (review) | A chart has no data table |
+| `display/text-hidden` | High | The text layer is hidden from assistive technology |
+| `display/toggle-missing` | Medium | The page uses display modes but offers no toggle |
+| `display/init-missing` | Low (review) | No sign that `data-display` is set before first paint |
 
 ### Report files
 

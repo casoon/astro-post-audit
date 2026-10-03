@@ -8,22 +8,35 @@ reconstructed from the git history and the README release notes.
 
 ### Added
 
+- Rule group `viz_alternatives` (`groups: { viz_alternatives: true }`, or
+  `rules.a11y.viz_alternatives`) checks barrierlab's display-mode convention: `viz/*` for
+  `figure[data-viz]` (text layer, still image, caption, data table) and `display/*` for
+  `html[data-display]` (toggle, early init, hidden text layer). Off by default; pages without the
+  convention produce no findings (#69).
 - `rules.a11y.manual_checklist` (default `false`) lists the `manual/*` checklist items from
   `a11y-rules`, once per page where they apply, with outcome `untested`. Like any finding they
   count by severity — items with severity `high` fail the build; tune them with `severity`.
 
 ### Changed
 
-- Accessibility rules come from `a11y-rules` 0.17 (was 0.12), HTML validation from
+- Accessibility rules come from `a11y-rules` 0.18 (was 0.12), HTML validation from
   `html-conform` 0.3.1 (was 0.2). Finding counts change on upgrade — fewer false positives
   (hidden subtrees are skipped, lists, `listbox`, `name` next to RDFa `property`, skip-link
-  detection by target), and new rule ids from the auditmysite migration (B1–B4): ARIA
+  detection by target), and new rule ids from the auditmysite migration (B1–B7): ARIA
   attributes (`aria/*`), accessible names (`names/*`, `dialog/*`, `summary/*`, `status/*`,
   `label-in-name/*`), forms (`forms/*`, `context/*`, `auth/*`), landmarks and structure
   (`landmarks/not-unique`, `landmarks/not-top-level`, `landmarks/banner-duplicate`,
   `landmarks/contentinfo-duplicate`, `landmarks/content-outside`, `headings/none`,
   `keyboard/focusable-no-role`, `keyboard/interactive-not-focusable`,
-  `dialog/focusable-missing`, `patterns/accordion-controls-missing`). New `landmarks/*` ids
+  `dialog/focusable-missing`, `patterns/accordion-controls-missing`), links and pointer
+  (`keyboard/click-handler-not-focusable`, `links/used-as-button`,
+  `navigation/location-missing`), images and media (`images/area-alt-missing`,
+  `images/input-alt-missing`, `objects/alt-missing`, `images/server-side-map`,
+  `media/audio-autoplay`, `frames/name-missing`), tables, document and language
+  (`tables/header-without-data`, `tables/data-undetermined`, `tables/headers-attr-invalid`,
+  `document/lang-mismatch`, `language/*`, `timing/meta-refresh`,
+  `headings/section-without-heading`, `aria/role-redundant`, `names/title-only`,
+  `patterns/tooltip-unreferenced`). New `landmarks/*` ids
   follow `rules.a11y.check_landmarks`; the others run by default and can be switched off
   per id with `severity`.
 - The JSON report's `rule_runs` now also lists the other rules that need rendering (focus
@@ -31,6 +44,8 @@ reconstructed from the git history and the README release notes.
 
 ### Fixed
 
+- `groups.seo` and `groups.a11y` with `'warn'` used pre-0.7 rule ids, which triggered legacy-id
+  warnings the user never wrote; they now use the current ids.
 - `golive/*` findings can no longer be downgraded or switched off with `severity`, as
   documented.
 - Docs: `outputMarkdown` and `progress: 'verbose'` documented, check count (32), the

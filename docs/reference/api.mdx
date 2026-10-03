@@ -35,7 +35,7 @@ postAudit(options?: PostAuditOptions): AstroIntegration`}
 | `baseline` | `string` | – | Baseline file; only new findings are reported. |
 | `writeBaseline` | `boolean` | `false` | Write the current findings as baseline and exit 0. |
 | `hints.sourceFiles` | `boolean` | `false` | Show likely source files next to `dist/` findings. |
-| `groups` | `{ seo?, a11y?, links?, performance?, privacy? }` | – | `true` enables a group, `'warn'` enables it as warnings. |
+| `groups` | `{ seo?, a11y?, links?, performance?, privacy?, viz_alternatives? }` | – | `true` enables a group, `'warn'` enables it as warnings. `viz_alternatives` checks the display-mode convention (`figure[data-viz]`, `html[data-display]`). |
 | `goLive` | `{ enabled, expectedSite?, forbiddenDomains? }` | – | Production gate. See [Rolling out](../../guides/rollout/). |
 | `pageOverview` | `boolean` | `false` | Print a page properties table instead of running checks. |
 | `benchmark` | `boolean` | `false` | Per-check timing breakdown. |

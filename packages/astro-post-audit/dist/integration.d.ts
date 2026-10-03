@@ -207,6 +207,8 @@ export interface RulesConfig {
         check_alt_quality?: boolean;
         /** List the `manual/*` checklist items: criteria no machine can decide, once per page where they apply. They count by severity like any finding. @default false */
         manual_checklist?: boolean;
+        /** Run the display-mode convention rules (`viz/*`, `display/*`); see `groups.viz_alternatives`. @default false */
+        viz_alternatives?: boolean;
     };
     /** Asset reference and size checks. */
     assets?: {
@@ -497,6 +499,12 @@ export interface GroupsConfig {
     performance?: GroupValue;
     /** Enable privacy/security rules (third-party domains, SRI, inline scripts). */
     privacy?: GroupValue;
+    /**
+     * Check pages that use the display-mode convention (`figure[data-viz]`, `html[data-display]`):
+     * every chart has a text layer, a still image and a caption, and a display-mode toggle exists.
+     * Pages without the convention produce no findings.
+     */
+    viz_alternatives?: GroupValue;
 }
 export interface ReportsConfig {
     /** Write a JSON report to this file path (relative to project root). */
