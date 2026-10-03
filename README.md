@@ -6,6 +6,19 @@ Fast, offline post-build auditor for Astro sites — SEO signals, internal link 
 
 **Website and documentation:** [casoon.github.io/astro-post-audit](https://casoon.github.io/astro-post-audit/)
 
+## What's new in 0.9.0
+
+The accessibility rules now cover the full static rule set migrated from auditmysite, so finding counts change on upgrade — see the [CHANGELOG](CHANGELOG.md) for every new rule id.
+
+| Area | What | Rule IDs | How to enable |
+|------|------|----------|---------------|
+| Accessibility rules | `a11y-rules` 0.18 (was 0.12): ARIA attributes, accessible names, forms, landmarks, links, images and media, tables, language. Fewer false positives (hidden subtrees skipped, skip link found by target) | `aria/*`, `names/*`, `forms/*`, `landmarks/*`, `tables/*`, `language/*`, … | Automatic; switch single ids off with `severity` |
+| Manual checklist | Criteria only a human can judge, once per page where they apply, outcome `untested`, counted by severity | `manual/*` | `rules.a11y.manual_checklist: true` |
+| Display-mode convention | Checks `figure[data-viz]` (text layer, still image, caption, data table) and `html[data-display]` (toggle, early init). Pages without the convention produce no findings | `viz/*`, `display/*` | `groups: { viz_alternatives: true }`. See [Display-mode convention](#display-mode-convention) |
+| HTML validation cache | Results cached per page by content hash; incremental builds only validate changed pages. `html-conform` 0.3.1 | `html/*` | On by default; `rules.html_validation.cache: false` |
+| hreflang | Codes, `x-default` and self-reference from `web-checks` 0.5. Invalid codes are reported; `x-default` no longer counts as self-reference; relative self-references now count | new `hreflang/invalid-code`, `hreflang/no-self-reference` | `rules.hreflang.check_hreflang` |
+| Go-live gate | `golive/*` findings can no longer be downgraded with `severity`, as documented | `golive/*` | — |
+
 ## What's new in 0.8.0
 
 Several checks now come from the shared `web-checks` and `a11y-rules` crates, so finding counts change on upgrade — see the [CHANGELOG](CHANGELOG.md) for details.
