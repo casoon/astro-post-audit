@@ -82,15 +82,35 @@ const outputKind = example.output.kind ?? 'terminal';
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+    container-type: inline-size;
   }
+  /* Side by side, the output sets the height of the row and a longer input scrolls inside it,
+     so a large data set does not stretch the page. Stacked, the input gets a fixed cap. */
   .input {
     min-width: 0;
+    height: 0;
+    min-height: 100%;
     border-right: 1px solid var(--border);
     background: var(--code-bg);
   }
   .input :global(pre.astro-code) {
+    box-sizing: border-box;
     height: 100%;
+    max-height: none;
+    margin: 0;
+    overflow: auto;
     font-size: 12.5px;
+  }
+  @container (max-width: 579px) {
+    .input {
+      height: auto;
+      min-height: 0;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+    .input :global(pre.astro-code) {
+      max-height: 24rem;
+    }
   }
   .output {
     min-width: 0;

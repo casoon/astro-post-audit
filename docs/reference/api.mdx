@@ -31,6 +31,7 @@ postAudit(options?: PostAuditOptions): AstroIntegration`}
 | `site` | `string` | Astro `site` | Base URL. |
 | `reports` | `{ json?, markdown?, sarif?, html? }` | – | Report files. See [Output and CI](../../guides/output-and-ci/). |
 | `output` | `string` | – | Legacy alias for `reports.json`. |
+| `outputMarkdown` | `string` | – | Legacy alias for `reports.markdown`. |
 | `baseline` | `string` | – | Baseline file; only new findings are reported. |
 | `writeBaseline` | `boolean` | `false` | Write the current findings as baseline and exit 0. |
 | `hints.sourceFiles` | `boolean` | `false` | Show likely source files next to `dist/` findings. |
