@@ -23,6 +23,17 @@ reconstructed from the git history and the README release notes.
 
 ### Changed
 
+- hreflang checks use `web-checks` 0.5 (shared with auditmysite):
+  - **New:** `hreflang/invalid-code` for values that are not a language code (ISO 639, optional
+    script and region) or `x-default`, e.g. `de_DE` or `deutsch`. On by default when
+    `check_hreflang` is on; `hreflang.require_valid_code: false` switches it off.
+  - **Changed:** `x-default` no longer counts as a page's self-reference, so a page that names
+    itself only as `x-default` now gets `hreflang/no-self-reference`. `x-default` is matched
+    case-insensitively.
+  - **Fixed:** relative `href` values are resolved against the page URL, so a relative
+    self-reference (`href="/"`) counts. Query strings are kept when comparing URLs, so
+    `?lang=de` versions are no longer mistaken for the page itself.
+
 - Accessibility rules come from `a11y-rules` 0.18 (was 0.12), HTML validation from
   `html-conform` 0.3.1 (was 0.2). Finding counts change on upgrade — fewer false positives
   (hidden subtrees are skipped, lists, `listbox`, `name` next to RDFa `property`, skip-link

@@ -596,6 +596,11 @@
                             "description": "Warn when an internal hreflang target does not exist in the build.",
                             "type": "boolean"
                         },
+                        "require_valid_code": {
+                            "default": true,
+                            "description": "Warn on `hreflang` values that are not a language code (ISO 639, optional script and region, e.g. `de`, `de-AT`, `zh-Hant-TW`) or `x-default`.",
+                            "type": "boolean"
+                        },
                         "require_x_default": {
                             "default": false,
                             "description": "Require an `x-default` hreflang entry.",

@@ -327,7 +327,7 @@ pub struct StructuredDataConfig {
     pub detect_duplicate_types: bool,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct HreflangConfig {
     pub check_hreflang: bool,
@@ -336,6 +336,21 @@ pub struct HreflangConfig {
     pub require_reciprocal: bool,
     /// Warn when an internal hreflang target does not exist in the build. @default false
     pub require_target_exists: bool,
+    /// Warn on hreflang values that are not a language code (ISO 639, optional script and region) or x-default. @default true
+    pub require_valid_code: bool,
+}
+
+impl Default for HreflangConfig {
+    fn default() -> Self {
+        Self {
+            check_hreflang: false,
+            require_x_default: false,
+            require_self_reference: false,
+            require_reciprocal: false,
+            require_target_exists: false,
+            require_valid_code: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
