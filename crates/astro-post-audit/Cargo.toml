@@ -17,10 +17,10 @@ path = "src/main.rs"
 [dependencies]
 # Gemeinsames Befundmodell ueber astro-post-audit, auditmysite und LiveAudit.
 # Der Vertrag liegt in barrierlab, nicht hier.
-a11y-report = "0.18.0"
-a11y-dom = "0.18.0"
-a11y-rules = "0.18.0"
-accname = "0.18.0"
+a11y-report = "0.19.1"
+a11y-dom = "0.19.1"
+a11y-rules = "0.19.1"
+accname = "0.19.1"
 
 # CLI
 clap = { version = "4", features = ["derive"] }

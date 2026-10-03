@@ -8,6 +8,7 @@ reconstructed from the git history and the README release notes.
 
 ### Fixed
 
+- Update the shared accessibility crates to 0.19.1: quiz radios and checkboxes no longer request format instructions, search controls no longer request personal autocomplete, and language detection respects marked descendants (#75–#77).
 - Accessibility findings include unique CSS selectors in text, JSON, Markdown and SARIF reports (#80).
 - Missing-srcset hints only flag images wider than 1,000 px, or assets above 100 KiB when width is unknown (#79).
 - The navigation-location remedy explains that the home/logo link can indicate the current home page (#78).

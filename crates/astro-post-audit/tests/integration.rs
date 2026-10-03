@@ -5245,3 +5245,43 @@ fn a11y_findings_identify_exact_elements_in_every_report_format() {
         );
     }
 }
+
+#[test]
+fn published_a11y_rules_avoid_quiz_search_and_marked_language_false_positives() {
+    let dir = TempDir::new().unwrap();
+    let german = "Die Daten und die Informationen sind für die Menschen und werden mit den Quellen auf der Seite als Grundlage für die weiteren Untersuchungen bereitgestellt.";
+    fs::write(dir.path().join("index.html"), format!(r#"<!doctype html><html lang="en"><head><title>Test</title></head><body><main><h1>Test</h1>
+        <label><input id="quiz-radio" type="radio">Das Datum einer wichtigen Erfindung</label>
+        <label><input id="quiz-checkbox" type="checkbox">The date of an important invention</label>
+        <label><input id="real-date" type="text" autocomplete="bday">Date of birth</label>
+        <input id="search" type="search" aria-label="Country">
+        <div role="search"><input id="search-region" type="text" aria-label="Country"></div>
+        <input id="combobox" type="text" role="combobox" aria-label="Country">
+        <input id="personal" type="text" aria-label="Country">
+        <ul><li id="marked"><cite lang="de">{german}</cite> · licence: CC BY 4.0 · retrieved 29 September 2026</li>
+        <li id="unmarked"><cite>{german}</cite></li></ul>
+        </main></body></html>"#)).unwrap();
+    let (json, _) = run_audit_json(dir.path(), "{}");
+    let html =
+        scraper::Html::parse_document(&fs::read_to_string(dir.path().join("index.html")).unwrap());
+    for (rule, expected) in [
+        ("forms/instructions-missing", "real-date"),
+        ("forms/purpose-missing", "personal"),
+        ("language/part-unmarked", "unmarked"),
+    ] {
+        let findings: Vec<_> = json["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|f| f["rule_id"] == rule)
+            .collect();
+        assert_eq!(findings.len(), 1, "{rule}: {findings:?}");
+        let selector =
+            scraper::Selector::parse(findings[0]["location"]["selector"].as_str().unwrap())
+                .unwrap();
+        assert_eq!(
+            html.select(&selector).next().unwrap().value().attr("id"),
+            Some(expected)
+        );
+    }
+}
