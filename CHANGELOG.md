@@ -6,6 +6,12 @@ reconstructed from the git history and the README release notes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Accessibility findings include unique CSS selectors in text, JSON, Markdown and SARIF reports (#80).
+- Missing-srcset hints only flag images wider than 1,000 px, or assets above 100 KiB when width is unknown (#79).
+- The navigation-location remedy explains that the home/logo link can indicate the current home page (#78).
+
 ## [0.9.0] - 2026-10-03
 
 ### Added

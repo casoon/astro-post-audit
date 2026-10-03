@@ -349,15 +349,16 @@ impl Reporter {
             out.push('\n');
             out.push_str(heading);
             out.push_str("\n\n");
-            out.push_str("| File | Rule | Outcome | Message |\n");
-            out.push_str("|------|------|---------|----------|\n");
+            out.push_str("| File | Rule | Outcome | Message | Selector |\n");
+            out.push_str("|------|------|---------|----------|----------|\n");
             for f in &severity_findings {
                 out.push_str(&format!(
-                    "| {} | `{}` | {} | {} |\n",
+                    "| {} | `{}` | {} | {} | {} |\n",
                     escape(datei_von(f)),
                     escape(&f.rule_id),
                     outcome_wort(f.outcome),
-                    escape(&f.message)
+                    escape(&f.message),
+                    escape(f.location.selector.as_deref().unwrap_or(""))
                 ));
             }
         }
@@ -470,7 +471,7 @@ impl Reporter {
                     "ruleIndex": rule_index[f.rule_id.as_str()],
                     "level": level,
                     "message": { "text": f.message },
-                    "properties": { "outcome": outcome_wort(f.outcome) },
+                    "properties": { "outcome": outcome_wort(f.outcome), "selector": f.location.selector },
                     "locations": [{
                         "physicalLocation": {
                             "artifactLocation": {
@@ -689,4 +690,29 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
+}
+
+#[cfg(test)]
+mod location_tests {
+    use super::*;
+
+    #[test]
+    fn selector_is_preserved_in_machine_and_markdown_reports() {
+        let selector = ":root > :nth-child(2) > :nth-child(1)";
+        let findings = vec![Finding::fail("forms/label-missing", "Missing label")
+            .at(Location::file("index.html").with_selector(selector))];
+        let reporter = Reporter::new(Format::Markdown, ColorMode::Never);
+        let summary = Summary::from_findings(&findings);
+        assert!(reporter
+            .render_markdown(&findings, &summary)
+            .contains(selector));
+        let json = serde_json::to_value(&findings).unwrap();
+        assert_eq!(json[0]["location"]["selector"], selector);
+        let sarif: serde_json::Value =
+            serde_json::from_str(&reporter.render_sarif(&findings).unwrap()).unwrap();
+        assert_eq!(
+            sarif["runs"][0]["results"][0]["properties"]["selector"],
+            selector
+        );
+    }
 }

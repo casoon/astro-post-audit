@@ -5203,3 +5203,45 @@ fn verbose_progress_uses_runemark_lifecycle() {
         "missing finish line:\n{stderr}"
     );
 }
+
+#[test]
+fn a11y_findings_identify_exact_elements_in_every_report_format() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!doctype html><html lang="en"><head><title>Test</title></head><body>
+        <!-- whitespace and comments do not affect CSS positions -->
+        <main><h1>Test</h1><input type="text"><svg><title>Map</title></svg></main>
+        <nav><a href="/about/">About</a></nav></body></html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(dir.path(), "{}");
+    let finding = json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["rule_id"] == "forms/label-missing")
+        .unwrap();
+    let selector = finding["location"]["selector"].as_str().unwrap();
+    let html =
+        scraper::Html::parse_document(&fs::read_to_string(dir.path().join("index.html")).unwrap());
+    let parsed = scraper::Selector::parse(selector).unwrap();
+    let matches: Vec<_> = html.select(&parsed).collect();
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].value().name(), "input");
+    let navigation = json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["rule_id"] == "navigation/location-missing")
+        .unwrap();
+    assert!(navigation["help"].as_str().unwrap().contains("home/logo"));
+    for format in ["text", "markdown", "sarif"] {
+        let config = serde_json::json!({"format": format}).to_string();
+        let (output, _, _) = run_audit(dir.path(), &config);
+        assert!(
+            output.contains(selector),
+            "{format} omitted {selector}: {output}"
+        );
+    }
+}

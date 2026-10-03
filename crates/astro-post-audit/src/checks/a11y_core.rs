@@ -91,6 +91,7 @@ fn hilfe_zu(rule_id: &str) -> Option<&'static str> {
 /// Er hängt an der Zielgruppe und an der Sprache der Oberfläche; `auditmysite`
 /// und LiveAudit formulieren anders. Im Kern stünde er allen im Weg.
 const VORSCHLAEGE: &[(&str, &str)] = &[
+    ("navigation/location-missing", "On the home page, mark the home/logo link with aria-current=\"page\"; it need not be a navigation item."),
     ("document/lang-missing", "<html lang=\"en\">"),
     ("document/title-missing", "<title>Page Title</title>"),
     ("document/title-empty", "<title>Page Title</title>"),
@@ -138,8 +139,16 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     // Werkzeug prüft Dateien. Beides bleibt stehen — die
                     // Kennung ist der Rückbezug in den Baum.
                     f.location.file = Some(page.rel_path.clone());
+                    if f.location.selector.is_none() {
+                        f.location.selector = f.location.node.as_deref().and_then(|n| seite.selector(n));
+                    }
                     if f.help.is_none() {
                         f.help = hilfe_zu(&f.rule_id).map(str::to_string);
+                        if f.rule_id == "navigation/location-missing" {
+                            if let Some(help) = &mut f.help {
+                                help.push_str(" On the home page, aria-current=\"page\" can go on the home/logo link.");
+                            }
+                        }
                     }
                     if f.suggestion.is_none() {
                         f.suggestion = vorschlag_zu(&f.rule_id).map(str::to_string);

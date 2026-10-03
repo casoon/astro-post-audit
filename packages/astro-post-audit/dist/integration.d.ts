@@ -130,7 +130,7 @@ export interface RulesConfig {
         check_missing_dimensions?: boolean;
         /** Warn if `<img>` beyond the first on a page has no `loading` attribute. @default true */
         warn_missing_lazy?: boolean;
-        /** Info if `<img>` has no `srcset` (no responsive image markup). @default true */
+        /** Info if an image wider than 1,000 px has no `srcset`; unknown-width local assets are flagged above 100 KiB. @default true */
         info_missing_srcset?: boolean;
         /** Info if `<img>` uses a legacy format (`.jpg`, `.png`, `.gif`) — suggests WebP/AVIF. @default false */
         format_hints?: boolean;

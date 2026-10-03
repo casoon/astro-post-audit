@@ -31,11 +31,13 @@ use scraper::{Html, Node as ScraperNode};
 /// werden.
 struct NodeIndex {
     ids: HashMap<ego_tree::NodeId, u32>,
+    nodes: Vec<ego_tree::NodeId>,
 }
 
 impl NodeIndex {
     fn build(root: NodeRef<'_, ScraperNode>) -> Self {
         let mut ids = HashMap::new();
+        let mut nodes = Vec::new();
         let mut stack = vec![root];
         let mut next = 0u32;
         while let Some(n) = stack.pop() {
@@ -43,13 +45,14 @@ impl NodeIndex {
                 continue;
             }
             ids.insert(n.id(), next);
+            nodes.push(n.id());
             next += 1;
             // Umgekehrt auf den Stapel, damit die Reihenfolge stimmt.
             for kind in n.children().collect::<Vec<_>>().into_iter().rev() {
                 stack.push(kind);
             }
         }
-        NodeIndex { ids }
+        NodeIndex { ids, nodes }
     }
 
     fn of(&self, id: ego_tree::NodeId) -> NodeId {
@@ -160,6 +163,30 @@ pub struct Seite<'a> {
 }
 
 impl<'a> Seite<'a> {
+    /// A structural selector avoids escaping IDs and remains unique with duplicate IDs.
+    pub fn selector(&self, node: &str) -> Option<String> {
+        let id = node.parse::<u32>().ok()?;
+        let tree_id = self.index.nodes.get(id as usize)?;
+        let mut current = self.html.tree.get(*tree_id)?;
+        if !current.value().is_element() {
+            current = current.parent()?;
+        }
+        let mut parts = Vec::new();
+        while current.id() != self.html.root_element().id() {
+            let parent = current.parent()?;
+            let position = parent
+                .children()
+                .filter(|n| n.value().is_element())
+                .position(|n| n.id() == current.id())?
+                + 1;
+            parts.push(format!(":nth-child({position})"));
+            current = parent;
+        }
+        parts.push(":root".into());
+        parts.reverse();
+        Some(parts.join(" > "))
+    }
+
     pub fn new(html: &'a Html) -> Self {
         Seite {
             html,
@@ -330,5 +357,30 @@ mod tests {
         let doc = SeiteMitNamen::new(&seite);
         let a = elements(&doc).find(|n| n.local_name() == "a").unwrap();
         assert_eq!(doc.role(a).as_deref(), Some("link"));
+    }
+}
+
+#[cfg(test)]
+mod selector_tests {
+    use super::*;
+    use a11y_dom::{elements, Node};
+
+    #[test]
+    fn selectors_find_exact_nodes_with_whitespace_svg_templates_and_duplicate_ids() {
+        let html = Html::parse_document(
+            r#"<!doctype html><html><body>
+            <!-- comment --> <div id="same"><span>First</span></div>
+            <div id="same"><svg><title>Map</title></svg></div>
+            <template><p>Template content</p></template><p id="odd:id">Last</p>
+            </body></html>"#,
+        );
+        let page = Seite::new(&html);
+        for node in elements(&page) {
+            let selector = page.selector(&node.id().to_string()).unwrap();
+            let parsed = scraper::Selector::parse(&selector).unwrap();
+            let matches: Vec<_> = html.select(&parsed).collect();
+            assert_eq!(matches.len(), 1, "{selector}");
+            assert_eq!(matches[0].id(), node.inner.id(), "{selector}");
+        }
     }
 }
