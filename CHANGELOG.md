@@ -6,6 +6,8 @@ reconstructed from the git history and the README release notes.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-03
+
 ### Added
 
 - Rule group `viz_alternatives` (`groups: { viz_alternatives: true }`, or

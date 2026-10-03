@@ -200,7 +200,7 @@ dependencies = [
 
 [[package]]
 name = "astro-post-audit"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "a11y-dom",
  "a11y-report",
