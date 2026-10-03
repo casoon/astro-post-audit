@@ -288,6 +288,8 @@ export interface RulesConfig {
     require_reciprocal?: boolean;
     /** Warn when an internal hreflang target does not exist in the build. @default false */
     require_target_exists?: boolean;
+    /** Warn on `hreflang` values that are not a language code (ISO 639, optional script and region, e.g. `de`, `de-AT`, `zh-Hant-TW`) or `x-default`. @default true */
+    require_valid_code?: boolean;
   };
   /** Security heuristic checks. */
   security?: {

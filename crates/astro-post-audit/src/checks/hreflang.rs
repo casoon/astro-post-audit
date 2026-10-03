@@ -3,8 +3,9 @@ use std::sync::LazyLock;
 
 use scraper::Selector;
 use url::Url;
+use web_checks::hreflang::{self as wc, Alternate};
 
-use crate::config::Config;
+use crate::config::{Config, UrlNormalizationConfig};
 use crate::discovery::SiteIndex;
 use crate::normalize;
 use crate::report::{Finding, Location, Severity};
@@ -12,6 +13,9 @@ use crate::report::{Finding, Location, Severity};
 static HREFLANG_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("link[rel='alternate'][hreflang]").expect("valid selector"));
 
+/// Codes, `x-default` and the self-reference come from `web-checks`, shared
+/// with auditmysite. Reciprocal links and target existence need the whole
+/// build and stay here.
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     if !config.hreflang.check_hreflang {
         return Vec::new();
@@ -23,15 +27,13 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         .pages
         .iter()
         .filter_map(|p| {
-            p.absolute_url
-                .as_ref()
-                .map(|u| (normalize_url_like(u, norm_cfg), p.route.clone()))
+            let url = absolute(p.absolute_url.as_deref()?, "", norm_cfg)?;
+            Some((url, p.route.clone()))
         })
         .collect();
 
-    // Collect all hreflang declarations across pages
-    // Map: page_route -> Vec<(lang, href)>
-    let mut all_hreflangs: HashMap<String, Vec<(String, String)>> = HashMap::new();
+    // page route -> its alternates, hrefs resolved against the page URL
+    let mut all_hreflangs: HashMap<String, Vec<Alternate>> = HashMap::new();
 
     for page in &index.pages {
         let html = page.parse_html();
@@ -49,34 +51,53 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             continue;
         }
 
-        // Check x-default presence
-        if config.hreflang.require_x_default {
-            let has_x_default = entries.iter().any(|(lang, _)| lang == "x-default");
-            if !has_x_default {
+        let page_url = page
+            .absolute_url
+            .as_deref()
+            .and_then(|u| absolute(u, "", norm_cfg));
+        // Resolved like the browser does; without a site URL they stay as written.
+        let alternates: Vec<Alternate> = entries
+            .iter()
+            .map(|(lang, href)| Alternate {
+                hreflang: lang.clone(),
+                href: page_url
+                    .as_deref()
+                    .and_then(|base| absolute(base, href, norm_cfg))
+                    .unwrap_or_else(|| href.clone()),
+            })
+            .collect();
+
+        if config.hreflang.require_valid_code {
+            for alt in wc::invalid_codes(&alternates) {
                 findings.push(
                     Finding::fail(
-                        "hreflang/no-x-default",
-                        "Hreflang tags present but no x-default",
+                        "hreflang/invalid-code",
+                        format!("Invalid hreflang value '{}'", alt.hreflang),
                     )
                     .with_severity(Severity::Medium)
                     .at(Location::file(page.rel_path.clone())
-                        .with_selector("link[rel='alternate'][hreflang]"))
-                    .with_help("Add <link rel=\"alternate\" hreflang=\"x-default\" href=\"...\">"),
+                        .with_selector(format!("link[hreflang='{}']", alt.hreflang)))
+                    .with_help("Use a language code (ISO 639), optionally with script and region, e.g. \"de\", \"de-AT\" or \"zh-Hant-TW\" — or \"x-default\". Search engines ignore other values."),
                 );
             }
         }
 
-        // Check self-reference
+        if config.hreflang.require_x_default && !wc::has_x_default(&alternates) {
+            findings.push(
+                Finding::fail(
+                    "hreflang/no-x-default",
+                    "Hreflang tags present but no x-default",
+                )
+                .with_severity(Severity::Medium)
+                .at(Location::file(page.rel_path.clone())
+                    .with_selector("link[rel='alternate'][hreflang]"))
+                .with_help("Add <link rel=\"alternate\" hreflang=\"x-default\" href=\"...\">"),
+            );
+        }
+
         if config.hreflang.require_self_reference {
-            if let Some(page_url_norm) = page
-                .absolute_url
-                .as_ref()
-                .map(|u| normalize_url_like(u, norm_cfg))
-            {
-                let has_self = entries
-                    .iter()
-                    .any(|(_, href)| normalize_url_like(href, norm_cfg) == page_url_norm);
-                if !has_self {
+            if let Some(page_url) = &page_url {
+                if !wc::has_self_reference(&alternates, page_url) {
                     findings.push(
                         Finding::fail(
                             "hreflang/no-self-reference",
@@ -85,7 +106,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         .with_severity(Severity::Medium)
                         .at(Location::file(page.rel_path.clone())
                             .with_selector("link[rel='alternate'][hreflang]"))
-                        .with_help("Include the current page URL in hreflang annotations"),
+                        .with_help("Include the current page URL under its own language code; x-default does not count"),
                     );
                 }
             }
@@ -94,7 +115,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         // Check that internal hreflang targets actually exist in the build
         if config.hreflang.require_target_exists {
             for (lang, href) in &entries {
-                if lang == "x-default" {
+                if wc::is_x_default(lang) {
                     continue;
                 }
                 if !normalize::is_internal(href, index.base_url.as_deref()) {
@@ -118,60 +139,49 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             }
         }
 
-        all_hreflangs.insert(page.route.clone(), entries);
+        all_hreflangs.insert(page.route.clone(), alternates);
     }
 
     // Check reciprocal references
     if config.hreflang.require_reciprocal {
-        for (source_route, entries) in &all_hreflangs {
-            for (lang, href) in entries {
-                if lang == "x-default" {
+        for (source_route, alternates) in &all_hreflangs {
+            let Some(source) = index.pages.iter().find(|p| p.route == *source_route) else {
+                continue;
+            };
+            let Some(source_url) = source
+                .absolute_url
+                .as_deref()
+                .and_then(|u| absolute(u, "", norm_cfg))
+            else {
+                continue;
+            };
+            for alt in alternates {
+                if wc::is_x_default(&alt.hreflang) || wc::same_page(&alt.href, &source_url) {
                     continue;
                 }
-                // Try to find the target page and check it links back
-                let target_route = route_by_abs_url.get(&normalize_url_like(href, norm_cfg));
-
-                if let Some(target_route) = target_route {
-                    if let Some(target_entries) = all_hreflangs.get(target_route) {
-                        let source_url = index
-                            .pages
-                            .iter()
-                            .find(|p| p.route == *source_route)
-                            .and_then(|p| p.absolute_url.as_ref())
-                            .map(|u| normalize_url_like(u, norm_cfg));
-
-                        let has_reciprocal = source_url.is_some_and(|source_url| {
-                            target_entries
-                                .iter()
-                                .any(|(_, h)| normalize_url_like(h, norm_cfg) == source_url)
-                        });
-
-                        if !has_reciprocal {
-                            let source_file = index
-                                .pages
-                                .iter()
-                                .find(|p| p.route == *source_route)
-                                .map(|p| p.rel_path.as_str())
-                                .unwrap_or("(unknown)");
-                            findings.push(
-                                Finding::fail(
-                                    "hreflang/no-reciprocal",
-                                    format!(
-                                        "Hreflang target '{}' (lang='{}') doesn't link back",
-                                        href, lang
-                                    ),
-                                )
-                                .with_severity(Severity::Medium)
-                                .at(
-                                    Location::file(source_file.to_string()).with_selector(format!(
-                                        "link[hreflang='{}'][href='{}']",
-                                        lang, href
-                                    )),
-                                )
-                                .with_help("Add reciprocal hreflang link on the target page"),
-                            );
-                        }
-                    }
+                let Some(target_entries) = route_by_abs_url
+                    .get(&alt.href)
+                    .and_then(|route| all_hreflangs.get(route))
+                else {
+                    continue;
+                };
+                let has_reciprocal = target_entries
+                    .iter()
+                    .any(|t| wc::same_page(&t.href, &source_url));
+                if !has_reciprocal {
+                    findings.push(
+                        Finding::fail(
+                            "hreflang/no-reciprocal",
+                            format!(
+                                "Hreflang target '{}' (lang='{}') doesn't link back",
+                                alt.href, alt.hreflang
+                            ),
+                        )
+                        .with_severity(Severity::Medium)
+                        .at(Location::file(source.rel_path.clone())
+                            .with_selector(format!("link[hreflang='{}']", alt.hreflang)))
+                        .with_help("Add reciprocal hreflang link on the target page"),
+                    );
                 }
             }
         }
@@ -180,14 +190,12 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     findings
 }
 
-fn normalize_url_like(url_or_path: &str, norm: &crate::config::UrlNormalizationConfig) -> String {
-    if let Ok(parsed) = Url::parse(url_or_path) {
-        let mut rebuilt = parsed.clone();
-        rebuilt.set_path(&normalize::normalize_path(parsed.path(), norm));
-        rebuilt.set_query(None);
-        rebuilt.set_fragment(None);
-        rebuilt.to_string()
-    } else {
-        normalize::normalize_path(url_or_path, norm)
-    }
+/// `href` resolved against `base` (an absolute URL), with the path normalized
+/// per `url_normalization`. The query stays — some sites tell their language
+/// versions apart only by it (`?lang=de`); the fragment goes.
+fn absolute(base: &str, href: &str, norm: &UrlNormalizationConfig) -> Option<String> {
+    let mut url = Url::parse(base).ok()?.join(href).ok()?;
+    url.set_path(&normalize::normalize_path(url.path(), norm));
+    url.set_fragment(None);
+    Some(url.to_string())
 }
