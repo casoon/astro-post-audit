@@ -121,7 +121,7 @@ export interface RulesConfig {
     check_disallow_all?: boolean;
     /** Warn if `Crawl-delay` exceeds this value in seconds (0 = disabled). @default 10 */
     max_crawl_delay?: number;
-    /** Warn if AI citation bots (GPTBot, ClaudeBot, PerplexityBot) are blocked. @default false */
+    /** Warn if AI citation bots (PerplexityBot, OAI-SearchBot …) are blocked; note AI training bots (GPTBot, CCBot …) that are allowed. @default false */
     ai_bot_policy?: boolean;
     /** Error when a page is `Disallow`'d in robots.txt yet also has a `noindex` meta tag. @default false */
     check_noindex_contradiction?: boolean;
@@ -183,7 +183,11 @@ export interface RulesConfig {
   a11y?: {
     /** `<img>` elements must have an `alt` attribute. @default true */
     img_alt_required?: boolean;
-    /** Allow images with `role="presentation"` or `aria-hidden="true"` to skip `alt`. @default true */
+    /**
+     * @deprecated No effect since the switch to `a11y-rules`: images with `role="presentation"`,
+     * `role="none"` or `aria-hidden="true"` never need `alt`. Kept so existing configs stay valid.
+     * @default true
+     */
     allow_decorative_images?: boolean;
     /** `<a>` elements must have an accessible name (text, `aria-label`, or `aria-labelledby`). @default true */
     a_accessible_name_required?: boolean;
@@ -205,6 +209,8 @@ export interface RulesConfig {
     check_aria_roles?: boolean;
     /** Flag low-quality `alt` text (file names, placeholder words like "image"/"logo", too short). @default true */
     check_alt_quality?: boolean;
+    /** List the `manual/*` checklist items: criteria no machine can decide, once per page where they apply. They never count as errors or warnings. @default false */
+    manual_checklist?: boolean;
   };
   /** Asset reference and size checks. */
   assets?: {
@@ -623,7 +629,6 @@ export interface PostAuditOptions {
   /**
    * Enable AI visibility scoring. Checks static signals (word count, schema, OG tags, semantic HTML)
    * that influence how AI search systems (Perplexity, ChatGPT Search, Claude) cite your content.
-   * Pass `true` to enable with defaults, or an object for fine-grained control.
    * @default false
    */
   aiVisibility?: boolean;

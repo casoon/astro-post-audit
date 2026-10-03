@@ -112,7 +112,6 @@
                         },
                         "allow_decorative_images": {
                             "default": true,
-                            "description": "Allow images with `role=\"presentation\"` or `aria-hidden=\"true\"` to skip `alt`.",
                             "type": "boolean"
                         },
                         "aria_hidden_focusable_check": {
@@ -153,6 +152,11 @@
                         "label_for_required": {
                             "default": true,
                             "description": "Form controls must have an associated `<label>`.",
+                            "type": "boolean"
+                        },
+                        "manual_checklist": {
+                            "default": false,
+                            "description": "List the `manual/*` checklist items: criteria no machine can decide, once per page where they apply. They never count as errors or warnings.",
                             "type": "boolean"
                         },
                         "require_skip_link": {
@@ -881,7 +885,7 @@
                     "properties": {
                         "ai_bot_policy": {
                             "default": false,
-                            "description": "Warn if AI citation bots (GPTBot, ClaudeBot, PerplexityBot) are blocked.",
+                            "description": "Warn if AI citation bots (PerplexityBot, OAI-SearchBot …) are blocked; note AI training bots (GPTBot, CCBot …) that are allowed.",
                             "type": "boolean"
                         },
                         "check_disallow_all": {
@@ -1219,7 +1223,7 @@
     "properties": {
         "aiVisibility": {
             "default": false,
-            "description": "Enable AI visibility scoring. Checks static signals (word count, schema, OG tags, semantic HTML)\nthat influence how AI search systems (Perplexity, ChatGPT Search, Claude) cite your content.\nPass `true` to enable with defaults, or an object for fine-grained control.",
+            "description": "Enable AI visibility scoring. Checks static signals (word count, schema, OG tags, semantic HTML)\nthat influence how AI search systems (Perplexity, ChatGPT Search, Claude) cite your content.",
             "type": "boolean"
         },
         "baseline": {

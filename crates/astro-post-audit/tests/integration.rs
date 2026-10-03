@@ -452,6 +452,29 @@ fn a11y_form_label_wrapped_input_ok() {
 }
 
 #[test]
+fn a11y_manual_checklist_is_opt_in_and_never_fails() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="https://example.com/"></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Test</h1><form action="/s"><label>Search<input type="text" name="q"></label><button>Go</button></form></main><footer><a href="/">Home</a></footer></body></html>"#,
+    ).unwrap();
+    let is_manual = |f: &serde_json::Value| f["rule_id"].as_str().unwrap().starts_with("manual/");
+
+    let (json, _) = run_audit_json(dir.path(), r#"{"site":{"base_url":"https://example.com"}}"#);
+    assert!(!json["findings"].as_array().unwrap().iter().any(is_manual));
+
+    let (json, code) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"a11y":{"manual_checklist":true},"strict":true}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    assert!(findings.iter().any(is_manual), "{findings:?}");
+    assert_eq!(json["summary"]["errors"].as_u64(), Some(0));
+    assert_eq!(json["summary"]["warnings"].as_u64(), Some(0));
+    assert_eq!(code, 0);
+}
+
+#[test]
 fn a11y_aria_hidden_focusable() {
     let dir = TempDir::new().unwrap();
     fs::write(
@@ -2715,6 +2738,22 @@ fn golive_enabled_no_site_emits_config_error() {
         "Should emit config-missing-site when no expected site, got: {:?}",
         rule_ids
     );
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn golive_findings_ignore_severity_overrides() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    let (json, code) = run_audit_json(
+        dir.path(),
+        r#"{"go_live":{"enabled":true},"severity":{"golive/config-missing-site":"off"}}"#,
+    );
+    assert!(json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|f| f["rule_id"] == "golive/config-missing-site"));
     assert_eq!(code, 1);
 }
 

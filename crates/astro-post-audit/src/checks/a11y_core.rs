@@ -9,7 +9,7 @@
 //! # Was hier nicht geprüft werden kann
 //!
 //! Statisches HTML bedient Tier 1 und, über `accname`, Tier 2. Tier 3 —
-//! berechnete Stile und Geometrie — gibt es nicht. Die Kontrastregeln laufen
+//! berechnete Stile und Geometrie — gibt es nicht. Kontrast, Fokus, Zielgrößen u. a. laufen
 //! deshalb nicht und werden als **nicht gelaufen** vermerkt statt übergangen.
 //! [`nicht_gelaufen`] gibt diese Vermerke nach außen; wer sie unterschlägt,
 //! macht aus „nicht geprüft" ein stillschweigendes „bestanden".
@@ -52,6 +52,9 @@ fn eingeschaltet(rule_id: &str, config: &Config) -> bool {
         | "aria/reference-missing"
         | "aria/required-attribute-missing" => a.check_aria_roles,
         id if id.starts_with("landmarks/") => a.check_landmarks,
+        // Die Checkliste ist kein Urteil, sondern eine Aufgabe für Menschen --
+        // auf jeder Seite wiederholt wäre sie im Build-Log Rauschen.
+        id if id.starts_with("manual/") => a.manual_checklist,
         // Was frueher in html_basics lag und jetzt aus dem Kern kommt. Die
         // Schalter heissen weiter wie vorher -- sie sind die Oberflaeche.
         "document/lang-missing" | "document/lang-invalid" => config.html_basics.lang_attr_required,
@@ -254,10 +257,9 @@ mod tests {
     fn kontrast_wird_als_nicht_gelaufen_vermerkt() {
         let offen = nicht_gelaufen();
         let ids: Vec<&str> = offen.iter().map(|r| r.rule_id.as_str()).collect();
-        assert_eq!(
-            ids,
-            ["contrast/text-insufficient", "contrast/text-undetermined"]
-        );
+        for erwartet in ["contrast/text-insufficient", "contrast/text-undetermined"] {
+            assert!(ids.contains(&erwartet), "{erwartet} fehlt: {ids:?}");
+        }
         assert!(offen
             .iter()
             .all(|r| r.not_run == Some(a11y_report::NotRun::CapabilityMissing)));

@@ -6,6 +6,38 @@ reconstructed from the git history and the README release notes.
 
 ## [Unreleased]
 
+### Added
+
+- `rules.a11y.manual_checklist` (default `false`) lists the `manual/*` checklist items from
+  `a11y-rules`. They carry outcome `untested` and never count as errors or warnings, in any
+  report format.
+
+### Changed
+
+- Accessibility rules come from `a11y-rules` 0.17 (was 0.12), HTML validation from
+  `html-conform` 0.3.1 (was 0.2). Finding counts change on upgrade — fewer false positives
+  (hidden subtrees are skipped, lists, `listbox`, `name` next to RDFa `property`, skip-link
+  detection by target), and new rule ids from the auditmysite migration (B1–B4): ARIA
+  attributes (`aria/*`), accessible names (`names/*`, `dialog/*`, `summary/*`, `status/*`,
+  `label-in-name/*`), forms (`forms/*`, `context/*`, `auth/*`), landmarks and structure
+  (`landmarks/not-unique`, `landmarks/not-top-level`, `landmarks/banner-duplicate`,
+  `landmarks/contentinfo-duplicate`, `landmarks/content-outside`, `headings/none`,
+  `keyboard/focusable-no-role`, `keyboard/interactive-not-focusable`,
+  `dialog/focusable-missing`, `patterns/accordion-controls-missing`). New `landmarks/*` ids
+  follow `rules.a11y.check_landmarks`; the others run by default and can be switched off
+  per id with `severity`.
+- The JSON report's `rule_runs` now also lists the other rules that need rendering (focus
+  indicator, target size, reflow, motion, visual order) as `capability_missing`.
+
+### Fixed
+
+- `golive/*` findings can no longer be downgraded or switched off with `severity`, as
+  documented.
+- Docs: `outputMarkdown` and `progress: 'verbose'` documented, check count (32), the
+  `ai_bot_policy` bot classes, `links/broken` in the sample output, and the npm badge on the
+  project page corrected. `rules.a11y.allow_decorative_images` is marked deprecated — it has
+  had no effect since the switch to `a11y-rules`.
+
 ## [0.8.0] - 2026-09-28
 
 ### Added

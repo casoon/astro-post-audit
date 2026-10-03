@@ -263,6 +263,8 @@ pub struct A11yConfig {
     pub check_aria_roles: bool,
     /// Flag low-quality alt text (filename, placeholder words, too short). @default true
     pub check_alt_quality: bool,
+    /// List the `manual/*` checklist items (criteria only a human can judge). @default false
+    pub manual_checklist: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -555,7 +557,7 @@ pub struct RobotsTxtConfig {
     pub check_disallow_all: bool,
     /// Warn if Crawl-delay exceeds this value in seconds. 0 = disabled. @default 10
     pub max_crawl_delay: u32,
-    /// Warn if AI citation bots (GPTBot, ClaudeBot, PerplexityBot) are blocked. @default false
+    /// Warn if AI citation bots (PerplexityBot, OAI-SearchBot …) are blocked; note allowed AI training bots (GPTBot, CCBot …). @default false
     pub ai_bot_policy: bool,
     /// Error when a page is Disallow'd in robots.txt yet also carries a noindex meta. @default false
     pub check_noindex_contradiction: bool,
@@ -921,6 +923,7 @@ impl Default for A11yConfig {
             check_duplicate_ids: true,
             check_aria_roles: true,
             check_alt_quality: true,
+            manual_checklist: false,
         }
     }
 }
