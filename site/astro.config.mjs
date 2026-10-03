@@ -12,7 +12,7 @@ export default defineConfig({
       description:
         'Astro integration that audits the built dist/ output for SEO, broken links and lightweight WCAG heuristics, offline and in Rust.',
       repo: 'casoon/astro-post-audit',
-      version: '0.9.0',
+      version: '0.9.1',
       license: 'MIT',
       packages: [
         { label: 'npm', href: 'https://www.npmjs.com/package/@casoon/astro-post-audit' },

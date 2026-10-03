@@ -4,27 +4,28 @@ version = 4
 
 [[package]]
 name = "a11y-dom"
-version = "0.18.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca5eb5a911fae9b8aab3f901b8c8a7d7c4dbec48385a1f8d537d54ff23c3202b"
+checksum = "0cfeb15101def9f8873a0e0ba2259ebe67ef24ecc728e5726f70ee5e3de010ac"
 
 [[package]]
 name = "a11y-report"
-version = "0.18.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1187260b7b8b6fbfdc00695f98b9c16db2d091dcc1308076f0753be8a62fee7c"
+checksum = "c5b05587d8d49cb4e07de2b320aa9a28588be6773ebc1bb251d7b012582dc9a2"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "a11y-rules"
-version = "0.18.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6cff26298f28a062e0d172c9f2772d45f72d8325d44d1514570d1712d8d5001b"
+checksum = "02e48cdf78bd64067ea9ba3b280702d3ef58d4aefbdfe4880cb43bc89d3f0841"
 dependencies = [
  "a11y-dom",
  "a11y-report",
+ "stylesheet-parse",
 ]
 
 [[package]]
@@ -48,9 +49,9 @@ dependencies = [
 
 [[package]]
 name = "accname"
-version = "0.18.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e6835e6f3b187e5ebb8d76098905fc91da39e2c7d4b6cd07c3dd4897722622d"
+checksum = "77437707cd00968569b45ab6d328ba445b67d43118e3cf5877801f1bab116879"
 dependencies = [
  "a11y-dom",
 ]
@@ -200,7 +201,7 @@ dependencies = [
 
 [[package]]
 name = "astro-post-audit"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "a11y-dom",
  "a11y-report",
@@ -3307,6 +3308,15 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+
+[[package]]
+name = "stylesheet-parse"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f656ee850467622d66fdb15c3253df676e7f547d4252396117731f67cd55560"
+dependencies = [
+ "media-query-parse",
+]
 
 [[package]]
 name = "subtle"

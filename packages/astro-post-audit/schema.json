@@ -696,7 +696,7 @@
                         },
                         "info_missing_srcset": {
                             "default": true,
-                            "description": "Info if `<img>` has no `srcset` (no responsive image markup).",
+                            "description": "Info if an image wider than 1,000 px has no `srcset`; unknown-width local assets are flagged above 100 KiB.",
                             "type": "boolean"
                         },
                         "warn_missing_lazy": {

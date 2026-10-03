@@ -657,7 +657,7 @@ rules: {
   images: {
     check_missing_dimensions: true,     // Error on <img> without width/height (CLS risk)
     warn_missing_lazy: true,            // Warn when images below the fold lack loading="lazy"
-    info_missing_srcset: true,          // Info when <img> has no srcset (responsive images)
+    info_missing_srcset: true,          // Info for missing srcset above 1,000 px (unknown width: above 100 KiB)
     format_hints: false,                // Info hint when JPEG/PNG/GIF could use a modern format
   },
 
