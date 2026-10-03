@@ -6,6 +6,8 @@ reconstructed from the git history and the README release notes.
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-04
+
 ### Fixed
 
 - Update the shared accessibility crates to 0.19.1: quiz radios and checkboxes no longer request format instructions, search controls no longer request personal autocomplete, and language detection respects marked descendants (#75–#77).
