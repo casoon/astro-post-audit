@@ -1,6 +1,6 @@
 # astro-post-audit
 
-Fast, offline post-build auditor for Astro sites — SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output, with 33 check modules covering structured data, performance, privacy, and more. Static analysis only: no browser, and no network calls unless opt-in external-link checking is enabled — runs in <1s on typical sites. Recent releases added per-route CSS payload analysis, static Astro/Tailwind source analysis, offline HTML5 conformance validation, and C2PA Content Credentials verification.
+Fast, offline post-build auditor for Astro sites — SEO signals, internal link consistency, and lightweight WCAG heuristics against your `dist/` output, with 32 check modules covering structured data, performance, privacy, and more. Static analysis only: no browser, and no network calls unless opt-in external-link checking is enabled — runs in <1s on typical sites. Recent releases added per-route CSS payload analysis, static Astro/Tailwind source analysis, offline HTML5 conformance validation, and C2PA Content Credentials verification.
 
 **Product page:** [astro-post-audit.casoon.de](https://astro-post-audit.casoon.de/en/)
 
@@ -399,14 +399,15 @@ postAudit({
 | `site` | `string` | auto | Base URL — auto-detected from Astro's `site` config. |
 | `reports` | `ReportsConfig` | — | Write report files. See [Report files](#report-files). |
 | `output` | `string` | — | Write a JSON report to this path. Legacy alias for `reports.json`. |
+| `outputMarkdown` | `string` | — | Write a Markdown report to this path. Legacy alias for `reports.markdown`. |
 | `baseline` | `string` | — | Path to a baseline file. Only new findings since the baseline are reported. |
 | `writeBaseline` | `boolean` | `false` | Write current findings as the new baseline and exit 0. Run once to adopt the plugin on a site with existing issues. |
 | `hints.sourceFiles` | `boolean` | `false` | Show likely source file paths (e.g. `src/content/blog/post.mdx`) next to `dist/` findings. Heuristic — may not always match. |
-| `groups` | `GroupsConfig` | — | Enable rule groups: `seo`, `a11y`, `links`, `performance`, `privacy`. `true` enables the group, `"warn"` enables but downgrades all findings to warnings. |
+| `groups` | `GroupsConfig` | — | Enable rule groups: `seo`, `a11y`, `links`, `performance`, `privacy`, `viz_alternatives`. `true` enables the group, `"warn"` enables but downgrades all findings to warnings. See [Display-mode convention](#display-mode-convention) for `viz_alternatives`. |
 | `goLive` | `GoLiveConfig` | — | Production readiness gate. See [Go-live gate](#go-live-gate). |
 | `pageOverview` | `boolean` | `false` | Print a page properties table (title, description, canonical, OG, H1, lang, JSON-LD) instead of running checks. |
 | `benchmark` | `boolean` | `false` | Print per-check timing breakdown. |
-| `progress` | `boolean` | auto | Live progress bar on stderr while checks run. Auto-on in an interactive terminal, silent in CI. Set `true`/`false` to force. |
+| `progress` | `boolean \| 'verbose'` | auto | Live progress bar on stderr while checks run. Auto-on in an interactive terminal, silent in CI. Set `true`/`false` to force; `'verbose'` lists every check with its finding count and time. |
 | `color` | `'auto' \| 'always' \| 'never'` | `'auto'` | Colour for the text report and progress output. `auto` styles only an interactive terminal and honours `NO_COLOR`; `always` forces colour and Unicode symbols for piped logs shown in a colour-capable terminal. |
 | `debug` | `boolean` | `false` | Verbose diagnostics on stderr (resolved config, discovery stats, per-check counts/timings). Never touches the stdout report; replaces the progress bar. See [Diagnostics](#diagnostics). |
 | `aiVisibility` | `boolean` | `false` | Enable AI visibility checks (LLM-readability, citability, chunk quality). See [AI visibility](#ai-visibility). |
@@ -530,7 +531,7 @@ rules: {
     require_sitemap_link: false,        // Must contain a sitemap link
     check_disallow_all: true,           // Error when User-agent: * blocks everything
     max_crawl_delay: 10,                // Warn when Crawl-delay exceeds this value (seconds)
-    ai_bot_policy: false,               // Check AI bot (GPTBot, ClaudeBot, CCBot …) rules
+    ai_bot_policy: false,               // Warn on blocked AI citation bots, note allowed training bots
     check_noindex_contradiction: false, // Error when a Disallow'd page also has noindex
     check_sitemap_blocked: false,       // Warn when a sitemap URL is blocked by robots.txt
   },
@@ -555,7 +556,7 @@ rules: {
   // Accessibility
   a11y: {
     img_alt_required: true,             // <img> must have alt attribute
-    allow_decorative_images: true,      // role="presentation" skips alt check
+    allow_decorative_images: true,      // Deprecated, no effect: decorative images are always recognised
     a_accessible_name_required: true,   // <a> must have accessible name
     button_name_required: true,         // <button> must have accessible name
     label_for_required: true,           // Form controls need associated <label>
@@ -563,9 +564,11 @@ rules: {
     aria_hidden_focusable_check: true,  // Warn on aria-hidden on focusable elements
     require_skip_link: false,           // Require skip navigation link
     check_landmarks: true,              // Require proper landmark structure (<main>, <nav>, …)
-    check_duplicate_ids: true,          // Error on duplicate id attributes
+    check_duplicate_ids: true,          // Error on a duplicate id that an IDREF points at
     check_aria_roles: true,             // Validate role= values against WAI-ARIA spec
     check_alt_quality: true,            // Warn on filename/placeholder/too-short alt text
+    manual_checklist: false,            // List manual/* items to check by hand (counted by severity)
+    viz_alternatives: false,            // Display-mode convention rules (viz/*, display/*)
   },
 
   // Asset checks
@@ -771,7 +774,7 @@ rules: {
 - **Links** — Broken internal links, query parameters, fragment validation, orphan pages, URL depth, links pointing at redirect pages
 - **External Links** — HEAD requests to verify external URLs return 2xx, with domain filtering and concurrency control
 - **Sitemap** — Cross-reference with canonical URLs, stale entries, missing pages
-- **robots.txt** — Existence check, sitemap link, disallow-all detection, crawl-delay threshold, AI bot policy (GPTBot, ClaudeBot, CCBot …), noindex/Disallow contradiction, sitemap entries blocked by robots
+- **robots.txt** — Existence check, sitemap link, disallow-all detection, crawl-delay threshold, AI bot policy (citation bots such as PerplexityBot/OAI-SearchBot blocked, training bots such as GPTBot/CCBot allowed), noindex/Disallow contradiction, sitemap entries blocked by robots
 - **Redirects** — Static meta-refresh redirect chains, loops, and internal links that point at redirect pages
 - **HTML** — `<html lang>`, `<title>`, viewport, meta description, heading hierarchy, native HTML5 conformance validation *(opt-in)*
 - **Accessibility** — img alt + alt-text quality heuristics, link/button names, form labels (including wrapping labels), generic link text, skip link, aria-hidden on focusable elements, landmark structure (`<main>`, `<nav>`, `<header>`, `<footer>`), duplicate IDs, WAI-ARIA role validation
@@ -1022,10 +1025,10 @@ postAudit({ debug: true })
 Config { preset: None, strict: false, ... }            ← resolved config after preset merge
 [debug] discovery: 770 HTML file(s) found, 2 excluded by filters, 768 parsed into pages (180 ms)
 [debug] sitemap.xml: 768 URL(s)
-[debug]  1/33 seo                        12 finding(s)  40 ms
-[debug]  2/33 links                       3 finding(s)  95 ms
+[debug]  1/32 seo                        12 finding(s)  40 ms
+[debug]  2/32 links                       3 finding(s)  95 ms
 ...
-[debug] 33/33 source_analysis             0 finding(s)   2 ms
+[debug] 32/32 source_analysis             0 finding(s)   2 ms
 ```
 
 Use it to confirm which config actually applies, what discovery found/filtered, and which check produces (or misses) findings and how long it takes.
@@ -1053,7 +1056,7 @@ When the result set is large (20 or more findings), the report prepends a top-ru
        8x  html/meta-description-missing
        3x  canonical/missing
        2x  images/alt-missing
-       1x  links/broken-internal
+       1x  links/broken
 ```
 
 ### Rule ids come from the shared core
@@ -1073,6 +1076,30 @@ the problem is (`low` … `critical`). The JSON report also lists `rule_runs` fo
 rules this tool could not serve at all — static HTML has no computed styles, so
 the contrast rules appear there with `capability_missing` rather than silently
 counting as passed.
+
+Findings with outcome `review` are heuristic and need a human to confirm them; their
+`severity` still decides whether they fail the build, so use `severity` overrides
+if one doesn't apply to your site. The `manual/*` checklist — criteria no machine
+can decide, such as whether alt texts fit their context — is off by default.
+Enable it with `rules.a11y.manual_checklist: true`; its items carry outcome
+`untested` and count by severity like any finding, so tune them with `severity`.
+
+### Display-mode convention
+
+Sites that follow barrierlab's [display-mode convention](https://github.com/casoon/barrierlab/blob/main/docs/a11y/concepts/darstellungsmodi.md)
+(`figure[data-viz]` with text, still and live layers; `html[data-display]` with a toggle) can
+have it checked with `groups: { viz_alternatives: true }` (or `rules.a11y.viz_alternatives: true`).
+Pages that don't use the convention produce no findings.
+
+| Rule ID | Severity | Checks |
+|---------|----------|--------|
+| `viz/text-missing` | High | A `figure[data-viz]` has no non-empty text layer |
+| `viz/caption-missing` | Low | A `figure[data-viz]` has no `<figcaption>` |
+| `viz/static-missing` | Medium | A live visualisation has no still image |
+| `viz/table-missing` | Low (review) | A chart has no data table |
+| `display/text-hidden` | High | The text layer is hidden from assistive technology |
+| `display/toggle-missing` | Medium | The page uses display modes but offers no toggle |
+| `display/init-missing` | Low (review) | No sign that `data-display` is set before first paint |
 
 ### Report files
 

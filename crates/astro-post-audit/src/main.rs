@@ -263,6 +263,10 @@ fn run() -> Result<i32> {
         if !config.severity.overrides.is_empty() {
             use config::SeverityLevel;
             new_findings.retain_mut(|f| {
+                // Go-live findings are production gates: not downgradable.
+                if f.rule_id.starts_with("golive/") {
+                    return true;
+                }
                 if let Some(override_level) = severity_overrides.get(&f.rule_id) {
                     match override_level {
                         SeverityLevel::Off => return false,

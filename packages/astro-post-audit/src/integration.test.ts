@@ -337,6 +337,40 @@ describe("postAudit", () => {
     assert.equal(auditConfig?.strict, true);
   });
 
+  it("expands groups.viz_alternatives and warn groups to current rule ids", () => {
+    let auditConfig: Record<string, unknown> | undefined;
+    const deps = {
+      existsSync: () => true,
+      writeFileSync: () => {},
+      execFileSync: makeExecMock((_file, args, execOptions) => {
+        if (args[0] === "--help") return "Usage: ... --config-stdin ...";
+        auditConfig = JSON.parse(
+          (execOptions as { input: string }).input,
+        ) as Record<string, unknown>;
+        return "";
+      }),
+    };
+    const integration = postAudit(
+      {
+        site: "https://example.com",
+        groups: { viz_alternatives: true, a11y: "warn" },
+      },
+      deps,
+    );
+    const hook = integration.hooks["astro:build:done"] as Function;
+    const { logger } = makeLogger();
+    hook({ dir: new URL("file:///tmp/dist/"), logger });
+
+    const a11y = auditConfig?.a11y as Record<string, unknown>;
+    assert.equal(a11y.viz_alternatives, true);
+    const severity = auditConfig?.severity as Record<string, string>;
+    assert.equal(severity["images/alt-missing"], "warning");
+    assert.equal(
+      Object.keys(severity).some((id) => id.startsWith("a11y/")),
+      false,
+    );
+  });
+
   it("makes maxWarnings enable build failure unless failOn is never", () => {
     const deps = {
       existsSync: () => true,
