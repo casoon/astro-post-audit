@@ -1,15 +1,15 @@
 [1;91m✖[0m astro-post-audit
 
-  [2mErrors: [0m[1;91m14[0m   [2mWarnings: [0m[1;93m2[0m   [2mInfo: [0m[36m4[0m   [2mFiles: [0m[2m1[0m
+  [2mErrors: [0m[1;91m14[0m   [2mWarnings: [0m[1;93m7[0m   [2mInfo: [0m[36m4[0m   [2mFiles: [0m[2m1[0m
 
   [1;96mTop issue rules:[0m
+       4x  [2mlandmarks/content-outside[0m
        3x  [2mlinks/broken[0m
        1x  [2mbuttons/name-missing[0m
        1x  [2mcanonical/missing[0m
        1x  [2mdocument/lang-missing[0m
-       1x  [2mdocument/title-empty[0m
 
-● [1;96mindex.html[0m [2m(20)[0m
+● [1;96mindex.html[0m [2m(25)[0m
   - [1;91mMissing canonical tag[0m [2m[canonical/missing][0m at [36m`head`[0m
     [2mRemedy: Set `site` in astro.config.mjs and render <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} /> in your BaseHead component[0m
   - [1;91mBroken internal link '/broken-page/' -> '/broken-page/' (not found in dist)[0m [2m[links/broken][0m at [36m`a[href='/broken-page/']`[0m
@@ -46,6 +46,16 @@
     [2mRemedy: Every button needs a name that describes what it does.[0m
   - [1;93mThe link text "mehr" says nothing about its target.[0m [2m[links/generic-name][0m [2m(medium confidence)[0m
     [2mRemedy: Link text should say where it leads without the surrounding sentence.[0m
+  - [1;93mThe field "" seems to ask for information about the user but has no autocomplete token.[0m [2m[forms/purpose-missing][0m [2m(medium confidence)[0m
+    [2mRemedy: Fields asking for information about the user carry the matching autocomplete token.[0m
+  - [1;93mContent is not contained in any landmark.[0m [2m[landmarks/content-outside][0m
+    [2mRemedy: All content belongs inside a landmark.[0m
+  - [1;93mContent is not contained in any landmark.[0m [2m[landmarks/content-outside][0m
+    [2mRemedy: All content belongs inside a landmark.[0m
+  - [1;93mContent is not contained in any landmark.[0m [2m[landmarks/content-outside][0m
+    [2mRemedy: All content belongs inside a landmark.[0m
+  - [1;93mContent is not contained in any landmark.[0m [2m[landmarks/content-outside][0m
+    [2mRemedy: All content belongs inside a landmark.[0m
   - [1;91mImage missing width and height attribute (causes CLS): src='/photo.jpg'[0m [2m[images/missing-dimensions][0m at [36m`img[src='/photo.jpg']`[0m
     [2mRemedy: Add explicit width and height attributes to prevent Cumulative Layout Shift. Use <Image> from astro:assets to get them automatically.[0m
   - [36mImage has no srcset (no responsive image markup): src='/photo.jpg'[0m [2m[images/missing-srcset][0m at [36m`img[src='/photo.jpg']`[0m

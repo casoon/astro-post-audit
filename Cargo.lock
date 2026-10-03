@@ -4,24 +4,24 @@ version = 4
 
 [[package]]
 name = "a11y-dom"
-version = "0.12.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abfad8937bc7a129aa6b23572d36e8f78d68c6b6b48cc6cb1c56eb4f0616bb27"
+checksum = "ca5eb5a911fae9b8aab3f901b8c8a7d7c4dbec48385a1f8d537d54ff23c3202b"
 
 [[package]]
 name = "a11y-report"
-version = "0.12.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10fe5d9b3c61f2e2b1b4c6ace2b8ad676a35265576f402f94d7037f666a541a9"
+checksum = "1187260b7b8b6fbfdc00695f98b9c16db2d091dcc1308076f0753be8a62fee7c"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "a11y-rules"
-version = "0.12.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8806d52a741b5e8ffe6b9c4b4be4f0c5f64d88abdb3509b06df55b75bea3da8b"
+checksum = "6cff26298f28a062e0d172c9f2772d45f72d8325d44d1514570d1712d8d5001b"
 dependencies = [
  "a11y-dom",
  "a11y-report",
@@ -48,9 +48,9 @@ dependencies = [
 
 [[package]]
 name = "accname"
-version = "0.12.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9977f382fdd62d07a727a0d5d8679dd4889b2a46d9890b9a3594160ad0d7660"
+checksum = "4e6835e6f3b187e5ebb8d76098905fc91da39e2c7d4b6cd07c3dd4897722622d"
 dependencies = [
  "a11y-dom",
 ]
@@ -1422,9 +1422,9 @@ dependencies = [
 
 [[package]]
 name = "html-conform"
-version = "0.2.1"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8755f1547ad4959342195d330f9d986272e8fa8a8909fa5894e6a2860e71906a"
+checksum = "561deac238454531cedaedb7af0b79cef7d85c10d1b20f691c43a53f6949fdb4"
 dependencies = [
  "csp-parse",
  "encoding_rs",
@@ -1440,9 +1440,9 @@ dependencies = [
 
 [[package]]
 name = "html5-parser"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b851f35c29d28aaba06e9b0022d2110e5339bf34b343766821e5d65dc49be2c"
+checksum = "2813e1598b78703c3339b10ee9ea6e55c41935cba69129046a13653c0c856d84"
 
 [[package]]
 name = "html5ever"

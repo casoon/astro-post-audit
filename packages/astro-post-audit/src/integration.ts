@@ -121,7 +121,7 @@ export interface RulesConfig {
     check_disallow_all?: boolean;
     /** Warn if `Crawl-delay` exceeds this value in seconds (0 = disabled). @default 10 */
     max_crawl_delay?: number;
-    /** Warn if AI citation bots (GPTBot, ClaudeBot, PerplexityBot) are blocked. @default false */
+    /** Warn if AI citation bots (PerplexityBot, OAI-SearchBot …) are blocked; note AI training bots (GPTBot, CCBot …) that are allowed. @default false */
     ai_bot_policy?: boolean;
     /** Error when a page is `Disallow`'d in robots.txt yet also has a `noindex` meta tag. @default false */
     check_noindex_contradiction?: boolean;
@@ -183,7 +183,11 @@ export interface RulesConfig {
   a11y?: {
     /** `<img>` elements must have an `alt` attribute. @default true */
     img_alt_required?: boolean;
-    /** Allow images with `role="presentation"` or `aria-hidden="true"` to skip `alt`. @default true */
+    /**
+     * @deprecated No effect since the switch to `a11y-rules`: images with `role="presentation"`,
+     * `role="none"` or `aria-hidden="true"` never need `alt`. Kept so existing configs stay valid.
+     * @default true
+     */
     allow_decorative_images?: boolean;
     /** `<a>` elements must have an accessible name (text, `aria-label`, or `aria-labelledby`). @default true */
     a_accessible_name_required?: boolean;
@@ -205,6 +209,10 @@ export interface RulesConfig {
     check_aria_roles?: boolean;
     /** Flag low-quality `alt` text (file names, placeholder words like "image"/"logo", too short). @default true */
     check_alt_quality?: boolean;
+    /** List the `manual/*` checklist items: criteria no machine can decide, once per page where they apply. They count by severity like any finding. @default false */
+    manual_checklist?: boolean;
+    /** Run the display-mode convention rules (`viz/*`, `display/*`); see `groups.viz_alternatives`. @default false */
+    viz_alternatives?: boolean;
   };
   /** Asset reference and size checks. */
   assets?: {
@@ -497,6 +505,12 @@ export interface GroupsConfig {
   performance?: GroupValue;
   /** Enable privacy/security rules (third-party domains, SRI, inline scripts). */
   privacy?: GroupValue;
+  /**
+   * Check pages that use the display-mode convention (`figure[data-viz]`, `html[data-display]`):
+   * every chart has a text layer, a still image and a caption, and a display-mode toggle exists.
+   * Pages without the convention produce no findings.
+   */
+  viz_alternatives?: GroupValue;
 }
 
 export interface ReportsConfig {
@@ -623,7 +637,6 @@ export interface PostAuditOptions {
   /**
    * Enable AI visibility scoring. Checks static signals (word count, schema, OG tags, semantic HTML)
    * that influence how AI search systems (Perplexity, ChatGPT Search, Claude) cite your content.
-   * Pass `true` to enable with defaults, or an object for fine-grained control.
    * @default false
    */
   aiVisibility?: boolean;
@@ -730,7 +743,7 @@ const GROUP_DEFS: Record<
       "sitemap/missing", "sitemap/canonical-missing", "sitemap/entry-not-in-dist",
       "sitemap/non-canonical-entry", "opengraph/title-missing",
       "opengraph/description-missing", "opengraph/image-missing",
-      "html/title-missing", "html/meta-description-missing",
+      "document/title-missing", "html/meta-description-missing",
       "html/meta-description-too-long", "structured-data/missing",
       "structured-data/invalid-json",
     ],
@@ -741,10 +754,10 @@ const GROUP_DEFS: Record<
       headings: { no_skip: true },
     },
     ruleIds: [
-      "a11y/img-alt", "a11y/link-name", "a11y/generic-link-text",
-      "a11y/button-name", "a11y/form-label", "a11y/skip-link",
-      "a11y/aria-hidden-focusable", "headings/no-h1", "headings/multiple-h1",
-      "headings/skip-level", "html/lang-missing",
+      "images/alt-missing", "links/name-missing", "links/generic-name",
+      "buttons/name-missing", "forms/label-missing", "keyboard/skip-link-missing",
+      "keyboard/hidden-focusable", "headings/h1-missing", "headings/h1-multiple",
+      "headings/skip-level", "document/lang-missing",
     ],
   },
   links: {
@@ -779,6 +792,16 @@ const GROUP_DEFS: Record<
       "privacy-security/missing-consent-indicator",
       "security/target-blank-noopener", "security/inline-scripts",
       "security/mixed-content",
+    ],
+  },
+  viz_alternatives: {
+    rules: {
+      a11y: { viz_alternatives: true },
+    },
+    ruleIds: [
+      "viz/text-missing", "viz/caption-missing", "viz/static-missing",
+      "viz/table-missing", "display/text-hidden", "display/toggle-missing",
+      "display/init-missing",
     ],
   },
 };

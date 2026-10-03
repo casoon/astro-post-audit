@@ -67,6 +67,14 @@
                         true,
                         "warn"
                     ]
+                },
+                "viz_alternatives": {
+                    "description": "Check pages that use the display-mode convention (`figure[data-viz]`, `html[data-display]`):\nevery chart has a text layer, a still image and a caption, and a display-mode toggle exists.\nPages without the convention produce no findings.",
+                    "enum": [
+                        false,
+                        true,
+                        "warn"
+                    ]
                 }
             },
             "type": "object"
@@ -112,7 +120,6 @@
                         },
                         "allow_decorative_images": {
                             "default": true,
-                            "description": "Allow images with `role=\"presentation\"` or `aria-hidden=\"true\"` to skip `alt`.",
                             "type": "boolean"
                         },
                         "aria_hidden_focusable_check": {
@@ -155,9 +162,19 @@
                             "description": "Form controls must have an associated `<label>`.",
                             "type": "boolean"
                         },
+                        "manual_checklist": {
+                            "default": false,
+                            "description": "List the `manual/*` checklist items: criteria no machine can decide, once per page where they apply. They count by severity like any finding.",
+                            "type": "boolean"
+                        },
                         "require_skip_link": {
                             "default": false,
                             "description": "Require a skip navigation link (e.g. `<a href=\"#main-content\">`).",
+                            "type": "boolean"
+                        },
+                        "viz_alternatives": {
+                            "default": false,
+                            "description": "Run the display-mode convention rules (`viz/*`, `display/*`); see `groups.viz_alternatives`.",
                             "type": "boolean"
                         },
                         "warn_generic_link_text": {
@@ -881,7 +898,7 @@
                     "properties": {
                         "ai_bot_policy": {
                             "default": false,
-                            "description": "Warn if AI citation bots (GPTBot, ClaudeBot, PerplexityBot) are blocked.",
+                            "description": "Warn if AI citation bots (PerplexityBot, OAI-SearchBot …) are blocked; note AI training bots (GPTBot, CCBot …) that are allowed.",
                             "type": "boolean"
                         },
                         "check_disallow_all": {
@@ -1219,7 +1236,7 @@
     "properties": {
         "aiVisibility": {
             "default": false,
-            "description": "Enable AI visibility scoring. Checks static signals (word count, schema, OG tags, semantic HTML)\nthat influence how AI search systems (Perplexity, ChatGPT Search, Claude) cite your content.\nPass `true` to enable with defaults, or an object for fine-grained control.",
+            "description": "Enable AI visibility scoring. Checks static signals (word count, schema, OG tags, semantic HTML)\nthat influence how AI search systems (Perplexity, ChatGPT Search, Claude) cite your content.",
             "type": "boolean"
         },
         "baseline": {

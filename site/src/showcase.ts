@@ -42,7 +42,7 @@ const examples_ = [
     input: { code: read(fixtures, '../../tests/fixtures/good/index.html'), lang: 'html' },
     tags: ['pass', 'advisory'],
     description:
-      'The three pages in tests/fixtures/good. No errors and no warnings; one advisory finding does not fail the build.',
+      'The three pages in tests/fixtures/good. No errors and no warnings; advisory findings do not fail the build.',
   },
   {
     slug: 'baseline',
