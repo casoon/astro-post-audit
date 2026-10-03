@@ -489,6 +489,11 @@ export interface RulesConfig {
     enabled?: boolean;
     /** Maximum distinct findings reported per page. @default 20 */
     max_per_page?: number;
+    /**
+     * Reuse validation results for pages whose HTML is unchanged since the last build. The cache lives in
+     * `node_modules/.cache/astro-post-audit/`; without it (e.g. a fresh CI checkout) every page is validated. @default true
+     */
+    cache?: boolean;
   };
 }
 
@@ -1015,6 +1020,13 @@ export default function postAudit(
           ...resolvedRules,
         };
         if (site) stdinConfig.site = { base_url: site };
+        // The binary only caches when it gets a path; it is unused unless html_validation runs.
+        if (rootDir && resolvedRules.html_validation?.cache !== false) {
+          stdinConfig.html_validation = {
+            ...((stdinConfig.html_validation as Record<string, unknown>) ?? {}),
+            cache_path: resolve(rootDir, "node_modules/.cache/astro-post-audit/html-validation.json"),
+          };
+        }
         if (options.preset) stdinConfig.preset = options.preset;
         if (options.mode) stdinConfig.mode = options.mode;
         // Auto-bridge trailingSlash from Astro config if not explicitly set in rules
