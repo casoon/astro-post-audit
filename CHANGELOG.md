@@ -13,6 +13,10 @@ reconstructed from the git history and the README release notes.
   `figure[data-viz]` (text layer, still image, caption, data table) and `display/*` for
   `html[data-display]` (toggle, early init, hidden text layer). Off by default; pages without the
   convention produce no findings (#69).
+- `html_validation` caches its results per page, keyed by a hash of the page's HTML, in
+  `node_modules/.cache/astro-post-audit/html-validation.json`. Incremental builds validate only
+  the pages whose HTML changed (1,000 pages: 34 s → under 10 ms when nothing changed). On by
+  default; `rules.html_validation.cache: false` switches it off (#70).
 - `rules.a11y.manual_checklist` (default `false`) lists the `manual/*` checklist items from
   `a11y-rules`, once per page where they apply, with outcome `untested`. Like any finding they
   count by severity — items with severity `high` fail the build; tune them with `severity`.

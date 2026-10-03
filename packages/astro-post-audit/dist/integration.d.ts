@@ -485,6 +485,11 @@ export interface RulesConfig {
         enabled?: boolean;
         /** Maximum distinct findings reported per page. @default 20 */
         max_per_page?: number;
+        /**
+         * Reuse validation results for pages whose HTML is unchanged since the last build. The cache lives in
+         * `node_modules/.cache/astro-post-audit/`; without it (e.g. a fresh CI checkout) every page is validated. @default true
+         */
+        cache?: boolean;
     };
 }
 export type GroupValue = boolean | "warn";
