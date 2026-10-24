@@ -11,6 +11,8 @@ export default defineConfig({
       name: 'astro-post-audit',
       description:
         'Astro integration that audits the built dist/ output for SEO, broken links and lightweight WCAG heuristics, offline and in Rust.',
+      tagline: 'SEO, link and a11y checks after build',
+      website: 'https://astro-post-audit.casoon.de',
       repo: 'casoon/astro-post-audit',
       version: '0.9.1',
       license: 'MIT',
