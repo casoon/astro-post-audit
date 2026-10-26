@@ -234,7 +234,7 @@ postAudit({
 })
 ```
 
-Pass `uxHeuristics: true` to use the defaults (`maxLinksPerPage: 80`, `minCtaPerPage: 1`), or pass an object to override them.
+Pass `uxHeuristics: true` to use the defaults (`maxLinksPerPage: 80`, `minCtaPerPage: 1`), or pass an object to override them. Values in `rules.ux_heuristics` are kept; `uxHeuristics: false` switches the check off.
 
 ### Environment-based gate (dev / staging / prod)
 
@@ -352,7 +352,7 @@ postAudit({
 | `strict` | `boolean` | `false` | Treat warnings as errors (exit code 1). |
 | `throwOnError` | `boolean` | `false` | Throw an error (fail the build) when the audit finds issues. Ignored when `failOn` is set. |
 | `failOn` | `'errors' \| 'warnings' \| 'never'` | — | Fail on errors only, on warnings and errors, or never. Takes precedence over `throwOnError`; `'warnings'` always implies strict mode. |
-| `maxErrors` | `number` | — | Truncate output after this many errors. |
+| `maxErrors` | `number` | — | Stop after this many errors; the report is then marked truncated. Errors known from the baseline do not count, and `writeBaseline` ignores the limit. |
 | `maxWarnings` | `number` | — | Fail the build if the warning count exceeds this number. Activates build gating unless `failOn: 'never'` is set. |
 | `site` | `string` | auto | Base URL — auto-detected from Astro's `site` config. |
 | `reports` | `ReportsConfig` | — | Write report files. See [Report files](#report-files). |
@@ -409,6 +409,7 @@ The `goLive` option adds a set of production-readiness checks that run only when
 | `goLive.enabled` | `boolean` | `false` | Enable go-live checks. |
 | `goLive.expectedSite` | `string` | auto | Expected production origin. Defaults to Astro's `site` config. Only set this when the go-live target differs from Astro `site`. |
 | `goLive.forbiddenDomains` | `string[]` | `[]` | Domains that must not appear in canonical URLs, sitemaps, OG tags, or absolute links. |
+| `goLive.imageHosts` | `string[]` | `[]` | Further hosts that may serve `og:image`, e.g. an image CDN on another domain. The production host and its subdomains are always allowed. |
 
 **What it checks (rule IDs prefixed with `golive/`):**
 
@@ -416,7 +417,7 @@ The `goLive` option adds a set of production-readiness checks that run only when
 |---------|-------------|
 | `golive/noindex` | Page has a `noindex` robots directive |
 | `golive/canonical-origin` | Canonical URL uses the wrong origin |
-| `golive/og-origin` | `og:url` or `og:image` uses the wrong origin |
+| `golive/og-origin` | `og:url` uses the wrong origin, or `og:image` comes from a host that is neither the production host, one of its subdomains nor listed in `goLive.imageHosts` |
 | `golive/sitemap-origin` | Sitemap entry uses the wrong origin |
 | `golive/forbidden-domain` | Absolute link, script, canonical, or sitemap entry contains a forbidden domain |
 | `golive/robots-blocked` | `robots.txt` globally blocks crawlers with `Disallow: /` |

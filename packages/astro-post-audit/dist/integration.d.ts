@@ -1,6 +1,6 @@
 import type { AstroIntegration } from "astro";
 import { execFileSync } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 /** A single content-style heuristic rule for the `content_style` check. */
 export interface StyleRule {
     /** Stable identifier, used as `content-style/{id}` in the finding's rule_id and as the key for `severity`. */
@@ -533,6 +533,11 @@ export interface GoLiveConfig {
     expectedSite?: string;
     /** Domains that must not appear in canonical URLs, sitemaps, OG tags, or absolute links. @default [] */
     forbiddenDomains?: string[];
+    /**
+     * Further hosts that may serve `og:image` (e.g. an image CDN such as `images.example.net`).
+     * The production host and its subdomains are always allowed. @default []
+     */
+    imageHosts?: string[];
 }
 export interface PostAuditOptions {
     /** Inline rules config — all check settings go here. */
@@ -650,7 +655,7 @@ export interface PostAuditOptions {
 interface RuntimeDeps {
     execFileSync: typeof execFileSync;
     existsSync: typeof existsSync;
-    writeFileSync: typeof writeFileSync;
+    readFileSync: (path: string, encoding: "utf-8") => string;
 }
 export default function postAudit(options?: PostAuditOptions, deps?: RuntimeDeps): AstroIntegration;
 export {};

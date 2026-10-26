@@ -23,8 +23,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     let mut findings = Vec::new();
 
     // Check if sitemap exists
-    let sitemap_path = index.dist_path.join("sitemap.xml");
-    if !sitemap_path.exists() {
+    let Some(sitemap_file) = &index.sitemap_file else {
         if config.sitemap.require {
             findings.push(Finding::fail("sitemap/missing","sitemap.xml not found in dist directory")
 .with_severity(Severity::High)
@@ -32,21 +31,21 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 .with_help("Add a sitemap integration to astro.config.mjs (e.g. `@casoon/astro-sitemap` or `@astrojs/sitemap`) and ensure `site` is set"));
         }
         return findings;
-    }
+    };
 
     if let Some(parse_error) = &index.sitemap_parse_error {
         findings.push(
             Finding::fail(
                 "sitemap/parse-error",
-                format!("Could not parse sitemap.xml: {}", parse_error),
+                format!("Could not read the sitemap: {}", parse_error),
             )
             .with_severity(if config.sitemap.require {
                 Severity::High
             } else {
                 Severity::Medium
             })
-            .at(Location::file("sitemap.xml"))
-            .with_help("Fix sitemap.xml syntax and regenerate the file"),
+            .at(Location::file(sitemap_file.clone()))
+            .with_help("Fix the sitemap syntax and regenerate the file"),
         );
     }
 
@@ -59,7 +58,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     // Build normalized sitemap URL set (used by multiple checks)
     let normalized_sitemap: std::collections::HashSet<String> = index
         .sitemap_urls
-        .iter()
+        .keys()
         .map(|u| normalize_url(u, norm))
         .collect();
 
@@ -91,7 +90,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     // Check: sitemap entries should exist in dist
     if config.sitemap.entries_must_exist_in_dist {
         let known_routes = build_known_routes_set(&config.links.known_routes);
-        for url_str in &index.sitemap_urls {
+        for (url_str, file) in &index.sitemap_urls {
             if let Ok(parsed) = Url::parse(url_str) {
                 let route = normalize::normalize_path(parsed.path(), norm);
                 let is_known_route = known_routes
@@ -107,7 +106,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                             ),
                         )
                         .with_severity(Severity::Medium)
-                        .at(Location::file("sitemap.xml")
+                        .at(Location::file(file.clone())
                             .with_selector(format!("<loc>{}</loc>", url_str)))
                         .with_help("Remove stale entries from sitemap or add the missing page"),
                     );
@@ -118,7 +117,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
     // Check: sitemap should not contain non-canonical URLs
     if config.sitemap.forbid_noncanonical_in_sitemap {
-        for url_str in &index.sitemap_urls {
+        for (url_str, file) in &index.sitemap_urls {
             if let Ok(parsed) = Url::parse(url_str) {
                 let route = normalize::normalize_path(parsed.path(), norm);
                 // Find the page for this route
@@ -141,7 +140,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                                     ),
                                 )
                                 .with_severity(Severity::Medium)
-                                .at(Location::file("sitemap.xml")
+                                .at(Location::file(file.clone())
                                     .with_selector(format!("<loc>{}</loc>", url_str)))
                                 .with_help("Use the canonical URL in the sitemap"),
                             );

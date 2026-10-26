@@ -21,6 +21,14 @@
                         "type": "string"
                     },
                     "type": "array"
+                },
+                "imageHosts": {
+                    "default": [],
+                    "description": "Further hosts that may serve `og:image` (e.g. an image CDN such as `images.example.net`).\nThe production host and its subdomains are always allowed.",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
                 }
             },
             "type": "object"

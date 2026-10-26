@@ -1,6 +1,6 @@
 import type { AstroIntegration } from "astro";
 import { execFileSync } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -541,6 +541,11 @@ export interface GoLiveConfig {
   expectedSite?: string;
   /** Domains that must not appear in canonical URLs, sitemaps, OG tags, or absolute links. @default [] */
   forbiddenDomains?: string[];
+  /**
+   * Further hosts that may serve `og:image` (e.g. an image CDN such as `images.example.net`).
+   * The production host and its subdomains are always allowed. @default []
+   */
+  imageHosts?: string[];
 }
 
 export interface PostAuditOptions {
@@ -665,13 +670,13 @@ export interface PostAuditOptions {
 interface RuntimeDeps {
   execFileSync: typeof execFileSync;
   existsSync: typeof existsSync;
-  writeFileSync: typeof writeFileSync;
+  readFileSync: (path: string, encoding: "utf-8") => string;
 }
 
 const defaultDeps: RuntimeDeps = {
   execFileSync,
   existsSync,
-  writeFileSync,
+  readFileSync,
 };
 
 function resolveBinaryPath(exists: RuntimeDeps["existsSync"]): string | null {
@@ -731,7 +736,9 @@ function logJsonSummary(
 
 const GROUP_DEFS: Record<
   keyof GroupsConfig,
-  { rules: Partial<RulesConfig>; ruleIds: string[] }
+  // `modules`: check modules whose findings a 'warn' group caps at warning, so rules
+  // added later (e.g. from a11y-rules) are covered without listing their ids.
+  { rules: Partial<RulesConfig>; ruleIds: string[]; modules: string[] }
 > = {
   seo: {
     rules: {
@@ -754,6 +761,7 @@ const GROUP_DEFS: Record<
       "html/meta-description-too-long", "structured-data/missing",
       "structured-data/invalid-json",
     ],
+    modules: ["seo", "sitemap", "opengraph", "structured_data"],
   },
   a11y: {
     rules: {
@@ -766,6 +774,7 @@ const GROUP_DEFS: Record<
       "keyboard/hidden-focusable", "headings/h1-missing", "headings/h1-multiple",
       "headings/skip-level", "document/lang-missing",
     ],
+    modules: ["a11y_core"],
   },
   links: {
     rules: {
@@ -775,6 +784,7 @@ const GROUP_DEFS: Record<
       "links/broken", "links/broken-fragment", "links/query-params",
       "links/mixed-content", "links/orphan-page", "external-links/broken",
     ],
+    modules: ["links", "external_links"],
   },
   performance: {
     rules: {
@@ -786,6 +796,7 @@ const GROUP_DEFS: Record<
       "assets/large-js", "assets/large-css", "render-blocking/sync-head-scripts",
       "render-blocking/missing-preconnect",
     ],
+    modules: ["assets", "images", "render_blocking"],
   },
   privacy: {
     rules: {
@@ -800,6 +811,7 @@ const GROUP_DEFS: Record<
       "security/target-blank-noopener", "security/inline-scripts",
       "security/mixed-content",
     ],
+    modules: ["privacy_security", "security"],
   },
   viz_alternatives: {
     rules: {
@@ -810,6 +822,8 @@ const GROUP_DEFS: Record<
       "viz/table-missing", "display/text-hidden", "display/toggle-missing",
       "display/init-missing",
     ],
+    // Part of a11y_core; the ids above are the whole group.
+    modules: [],
   },
 };
 
@@ -868,6 +882,13 @@ function expandGroups(
   }
 
   return merged;
+}
+
+/** Check modules of the groups set to 'warn' (see GROUP_DEFS). */
+function warnModules(groups: GroupsConfig): string[] {
+  return (Object.entries(groups) as [keyof GroupsConfig, GroupValue | undefined][])
+    .filter(([, value]) => value === "warn")
+    .flatMap(([name]) => GROUP_DEFS[name].modules);
 }
 
 const STYLE_RULE_TYPES = [
@@ -1022,6 +1043,8 @@ export default function postAudit(
           ...resolvedRules,
         };
         if (site) stdinConfig.site = { base_url: site };
+        const groupWarnModules = options.groups ? warnModules(options.groups) : [];
+        if (groupWarnModules.length > 0) stdinConfig.warn_modules = groupWarnModules;
         // The binary only caches when it gets a path; it is unused unless html_validation runs.
         if (rootDir && resolvedRules.html_validation?.cache !== false) {
           stdinConfig.html_validation = {
@@ -1084,19 +1107,19 @@ export default function postAudit(
           };
         }
         if (options.uxHeuristics !== undefined) {
-          if (options.uxHeuristics === true) {
-            stdinConfig.ux_heuristics = { enabled: true };
-          } else if (options.uxHeuristics && typeof options.uxHeuristics === "object") {
-            stdinConfig.ux_heuristics = {
-              enabled: true,
-              ...(options.uxHeuristics.maxLinksPerPage !== undefined
-                ? { max_links_per_page: options.uxHeuristics.maxLinksPerPage }
-                : {}),
-              ...(options.uxHeuristics.minCtaPerPage !== undefined
-                ? { min_cta_per_page: options.uxHeuristics.minCtaPerPage }
-                : {}),
-            };
-          }
+          // Like aiVisibility: the shorthand switches the check, thresholds given here
+          // override `rules.ux_heuristics`, everything else from there is kept.
+          const ux = options.uxHeuristics;
+          stdinConfig.ux_heuristics = {
+            ...((stdinConfig.ux_heuristics as Record<string, unknown>) ?? {}),
+            enabled: ux !== false,
+            ...(typeof ux === "object" && ux.maxLinksPerPage !== undefined
+              ? { max_links_per_page: ux.maxLinksPerPage }
+              : {}),
+            ...(typeof ux === "object" && ux.minCtaPerPage !== undefined
+              ? { min_cta_per_page: ux.minCtaPerPage }
+              : {}),
+          };
         }
         if (options.contentStyle !== undefined) {
           stdinConfig.content_style = {
@@ -1113,6 +1136,7 @@ export default function postAudit(
                 ? { expected_site: effectiveSite }
                 : {}),
             forbidden_domains: options.goLive.forbiddenDomains ?? [],
+            image_hosts: options.goLive.imageHosts ?? [],
           };
         }
         const root = rootDir ?? process.cwd();
@@ -1139,26 +1163,31 @@ export default function postAudit(
         if (outputMarkdownPath) extraReports.push({ format: "markdown", path: outputMarkdownPath });
         if (outputSarifPath) extraReports.push({ format: "sarif", path: outputSarifPath });
         if (outputHtmlPath) extraReports.push({ format: "html", path: outputHtmlPath });
-        if (extraReports.length > 0) stdinConfig.extra_reports = extraReports;
+        // The binary writes the JSON report itself: a large report would overflow the
+        // capture buffer of execFileSync (ENOBUFS).
+        const binaryReports = outputPath
+          ? [...extraReports, { format: "json", path: outputPath }]
+          : extraReports;
+        if (binaryReports.length > 0) stdinConfig.extra_reports = binaryReports;
 
         const stdinInput = JSON.stringify(stdinConfig);
 
         logger.info("Running post-build audit...");
 
-        const captureOutput = !!outputPath;
+        const logJsonReport = () => {
+          if (!outputPath) return;
+          logger.info(`Report written to ${outputPath}`);
+          logJsonSummary(deps.readFileSync(outputPath, "utf-8"), logger);
+        };
 
         try {
-          const result = deps.execFileSync(binaryPath, args, {
-            stdio: ["pipe", captureOutput ? "pipe" : "inherit", "inherit"],
+          deps.execFileSync(binaryPath, args, {
+            // With a JSON report, stdout carries the same JSON again; it is not needed.
+            stdio: ["pipe", outputPath ? "ignore" : "inherit", "inherit"],
             input: stdinInput,
-            encoding: captureOutput ? "utf-8" : undefined,
           });
 
-          if (captureOutput && result) {
-            deps.writeFileSync(outputPath!, result as string);
-            logger.info(`Report written to ${outputPath}`);
-            logJsonSummary(result as string, logger);
-          }
+          logJsonReport();
           for (const r of extraReports) {
             logger.info(`${r.format.charAt(0).toUpperCase() + r.format.slice(1)} report written to ${r.path}`);
           }
@@ -1170,25 +1199,9 @@ export default function postAudit(
               ? (err as { status: number }).status
               : undefined;
 
-          // Write output file even on exit code 1 (findings exist but run succeeded)
-          if (
-            captureOutput &&
-            exitCode === 1 &&
-            err &&
-            typeof err === "object" &&
-            "stdout" in err
-          ) {
-            const stdout = (err as { stdout: string | Buffer }).stdout;
-            if (stdout) {
-              const stdoutStr =
-                typeof stdout === "string" ? stdout : stdout.toString("utf-8");
-              deps.writeFileSync(outputPath!, stdoutStr);
-              logger.info(`Report written to ${outputPath}`);
-              logJsonSummary(stdoutStr, logger);
-            }
-          }
-          // extra_reports are written by the binary directly; log them on any non-crash exit
+          // Reports are written by the binary directly; log them on any non-crash exit
           if (exitCode === 1) {
+            logJsonReport();
             for (const r of extraReports) {
               logger.info(`${r.format.charAt(0).toUpperCase() + r.format.slice(1)} report written to ${r.path}`);
             }

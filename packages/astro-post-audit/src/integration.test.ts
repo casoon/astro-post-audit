@@ -104,7 +104,7 @@ describe("postAudit", () => {
     const execCalls: Array<{ args: string[] }> = [];
     const deps = {
       existsSync: () => true,
-      writeFileSync: () => {},
+      readFileSync: () => "",
       execFileSync: makeExecMock((_file: string, args: string[]) => {
         execCalls.push({ args });
         if (args[0] === "--help") return "Usage: ... --config-stdin ...";
@@ -134,7 +134,7 @@ describe("postAudit", () => {
     let auditConfig: Record<string, unknown> | undefined;
     const deps = {
       existsSync: () => true,
-      writeFileSync: () => {},
+      readFileSync: () => "",
       execFileSync: makeExecMock((_file, args, execOptions) => {
         if (args[0] === "--help") return "Usage: ... --config-stdin ...";
         auditConfig = JSON.parse(
@@ -217,7 +217,7 @@ describe("postAudit", () => {
     const execCalls: Array<{ args: string[] }> = [];
     const deps = {
       existsSync: () => true,
-      writeFileSync: () => {},
+      readFileSync: () => "",
       execFileSync: makeExecMock((_file: string, args: string[]) => {
         execCalls.push({ args });
         if (args[0] === "--help") return "Usage: ... --config <CONFIG> ...";
@@ -245,7 +245,7 @@ describe("postAudit", () => {
   it("throws on binary failures when build failure is enabled", () => {
     const deps = {
       existsSync: () => true,
-      writeFileSync: () => {},
+      readFileSync: () => "",
       execFileSync: makeExecMock((_file: string, args: string[]) => {
         if (args[0] === "--help") return "Usage: ... --config-stdin ...";
         throw Object.assign(new Error("binary failed"), { status: 2 });
@@ -264,7 +264,7 @@ describe("postAudit", () => {
   it("only logs binary failures when build failure is disabled", () => {
     const deps = {
       existsSync: () => true,
-      writeFileSync: () => {},
+      readFileSync: () => "",
       execFileSync: makeExecMock((_file: string, args: string[]) => {
         if (args[0] === "--help") return "Usage: ... --config-stdin ...";
         throw Object.assign(new Error("binary failed"), { status: 2 });
@@ -283,7 +283,7 @@ describe("postAudit", () => {
   it("lets failOn never override throwOnError", () => {
     const deps = {
       existsSync: () => true,
-      writeFileSync: () => {},
+      readFileSync: () => "",
       execFileSync: makeExecMock((_file: string, args: string[]) => {
         if (args[0] === "--help") return "Usage: ... --config-stdin ...";
         throw Object.assign(new Error("findings"), { status: 1 });
@@ -310,7 +310,7 @@ describe("postAudit", () => {
     let auditConfig: Record<string, unknown> | undefined;
     const deps = {
       existsSync: () => true,
-      writeFileSync: () => {},
+      readFileSync: () => "",
       execFileSync: makeExecMock((_file, args, execOptions) => {
         if (args[0] === "--help") return "Usage: ... --config-stdin ...";
         auditConfig = JSON.parse(
@@ -341,7 +341,7 @@ describe("postAudit", () => {
     let auditConfig: Record<string, unknown> | undefined;
     const deps = {
       existsSync: () => true,
-      writeFileSync: () => {},
+      readFileSync: () => "",
       execFileSync: makeExecMock((_file, args, execOptions) => {
         if (args[0] === "--help") return "Usage: ... --config-stdin ...";
         auditConfig = JSON.parse(
@@ -374,7 +374,7 @@ describe("postAudit", () => {
   it("makes maxWarnings enable build failure unless failOn is never", () => {
     const deps = {
       existsSync: () => true,
-      writeFileSync: () => {},
+      readFileSync: () => "",
       execFileSync: makeExecMock((_file: string, args: string[]) => {
         if (args[0] === "--help") return "Usage: ... --config-stdin ...";
         throw Object.assign(new Error("warning threshold exceeded"), {
@@ -408,5 +408,67 @@ describe("postAudit", () => {
     assert.doesNotThrow(() =>
       neverHook({ dir: new URL("file:///tmp/dist/"), logger }),
     );
+  });
+
+  /** Runs the build hook with `options` and returns the config sent to the binary. */
+  function auditConfigFor(
+    options: PostAuditOptions,
+    readReport: () => string = () => "",
+  ): { config: Record<string, unknown>; stdio: unknown; info: string[] } {
+    let config: Record<string, unknown> = {};
+    let stdio: unknown;
+    const deps = {
+      existsSync: () => true,
+      readFileSync: readReport,
+      execFileSync: makeExecMock((_file, args, execOptions) => {
+        if (args[0] === "--help") return "Usage: ... --config-stdin ...";
+        const opts = execOptions as { input: string; stdio: unknown };
+        config = JSON.parse(opts.input) as Record<string, unknown>;
+        stdio = opts.stdio;
+        return "";
+      }),
+    };
+    const integration = postAudit({ site: "https://example.com", ...options }, deps);
+    const hook = integration.hooks["astro:build:done"] as Function;
+    const { logger, info } = makeLogger();
+    hook({ dir: new URL("file:///tmp/dist/"), logger });
+    return { config, stdio, info };
+  }
+
+  it("lets uxHeuristics switch the check without dropping rules.ux_heuristics (#101)", () => {
+    const rules = { ux_heuristics: { enabled: true, max_links_per_page: 20 } };
+    assert.deepEqual(auditConfigFor({ rules, uxHeuristics: false }).config.ux_heuristics, {
+      enabled: false,
+      max_links_per_page: 20,
+    });
+    assert.deepEqual(auditConfigFor({ rules, uxHeuristics: true }).config.ux_heuristics, {
+      enabled: true,
+      max_links_per_page: 20,
+    });
+    assert.deepEqual(
+      auditConfigFor({ rules, uxHeuristics: { minCtaPerPage: 2 } }).config.ux_heuristics,
+      { enabled: true, max_links_per_page: 20, min_cta_per_page: 2 },
+    );
+  });
+
+  it("passes the check modules of warn groups (#98)", () => {
+    assert.deepEqual(
+      auditConfigFor({ groups: { a11y: "warn", performance: true } }).config.warn_modules,
+      ["a11y_core"],
+    );
+    assert.equal(auditConfigFor({ groups: { a11y: true } }).config.warn_modules, undefined);
+  });
+
+  it("lets the binary write the JSON report instead of capturing stdout (#96)", () => {
+    const { config, stdio, info } = auditConfigFor(
+      { reports: { json: "audit-report.json" } },
+      () => JSON.stringify({ summary: { errors: 0, files_checked: 3 } }),
+    );
+    const reports = config.extra_reports as Array<{ format: string; path: string }>;
+    assert.equal(reports.length, 1);
+    assert.equal(reports[0].format, "json");
+    assert.ok(reports[0].path.endsWith("audit-report.json"));
+    assert.deepEqual(stdio, ["pipe", "ignore", "inherit"]);
+    assert.ok(info.includes("Audit passed (3 files checked)."));
   });
 });

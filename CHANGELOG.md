@@ -6,17 +6,34 @@ reconstructed from the git history and the README release notes.
 
 ## [Unreleased]
 
+### Added
+
+- **Go-live:** `goLive.imageHosts` lists further hosts that may serve `og:image`, such as an image CDN on another domain (#100).
+
 ### Changed
 
+- **Go-live:** `og:image` may come from a subdomain of the production host without a `golive/og-origin` finding; `og:url` still has to use the production origin. `og:url` and `og:image` on a forbidden domain are reported as `golive/forbidden-domain` (#100).
+- **Groups:** a group set to `'warn'` caps every finding of its check modules at warning, including rules added later through `a11y-rules`; an explicit `severity` entry still wins (#98).
 - **Docs:** release history lives in the changelog, and the full rules reference lives in the integration options documentation.
 
 ### Fixed
 
+- **Sitemap:** a `sitemap-index.xml` (as written by `@astrojs/sitemap`) and its child sitemaps are read, so sitemap, robots and go-live checks see their URLs instead of reporting `sitemap/missing` (#95).
+- **Reports:** the binary writes the JSON report itself, so large reports no longer fail with `ENOBUFS` (#96).
+- **Baseline:** errors already in the baseline no longer count towards `maxErrors`, which could stop the audit before new errors were found; `writeBaseline` ignores `maxErrors` so the snapshot is complete (#93).
+- **Reports:** a run that `maxErrors` stopped early is marked truncated even when no finding was dropped (#94).
+- **Images:** a missing `width`/`height` is reported once as `images/missing-dimensions`; `assets/img-dimensions` only reports when the images check is off (#99).
 - **Structured data:** `structured-data/website-missing-search-action` only reports on the start
   page; `WebSite` reference nodes on subpages no longer produce one hint per page (#88).
+- **UX heuristics:** `minCtaPerPage` compares the number of CTAs on a page with the minimum instead of only checking for one (#102).
+- **UX heuristics:** `uxHeuristics: false` switches the check off, and `true` or an object keep the other settings from `rules.ux_heuristics` (#101).
 - **Docs:** historical changelog entries use flat lists so their details render on the project site.
 - **Docs:** the project site's version badge and metadata read the npm package version instead of a separately maintained value.
 - **npm:** published packages exclude compiled unit and end-to-end test files and their declarations.
+
+### Security
+
+- **Dependencies:** updated `rustls`, `rustls-webpki` and `webpki-roots` (external link checks), `quick-xml` 0.42 (sitemap parsing) and `c2pa` 0.91 (pulls in `zip` 9); `cargo audit` reports one remaining advisory (`rsa`, no fix available, only affects private-key operations, which this tool does not perform).
 
 ## [0.9.2] - 2026-10-26
 

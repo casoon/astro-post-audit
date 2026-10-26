@@ -54,9 +54,12 @@ pub struct SiteIndex {
     pub pages: Vec<PageInfo>,
     /// Map from normalized route -> index into pages vec
     pub route_to_index: HashMap<String, usize>,
-    /// Sitemap entries (absolute URLs) if sitemap.xml exists
-    pub sitemap_urls: HashSet<String>,
-    /// Parse error for sitemap.xml, if parsing failed.
+    /// Sitemap entries (absolute URL -> sitemap file in dist that lists it).
+    /// Child sitemaps of a sitemap index are resolved offline.
+    pub sitemap_urls: HashMap<String, String>,
+    /// The root sitemap in dist (`sitemap-index.xml` or `sitemap.xml`), if any.
+    pub sitemap_file: Option<String>,
+    /// Parse error for the sitemap or one of its children, if any.
     pub sitemap_parse_error: Option<String>,
     /// Path to the dist directory
     pub dist_path: PathBuf,
@@ -248,22 +251,29 @@ impl SiteIndex {
             route_to_index.insert(page.route.clone(), i);
         }
 
-        // Parse sitemap
-        let sitemap_path = dist_path.join("sitemap.xml");
-        let (sitemap_urls, sitemap_parse_error): (HashSet<String>, Option<String>) =
-            if sitemap_path.exists() {
-                match parse_sitemap(&sitemap_path) {
-                    Ok(urls) => (urls.into_iter().collect(), None),
-                    Err(e) => (HashSet::new(), Some(e.to_string())),
-                }
-            } else {
-                (HashSet::new(), None)
-            };
+        // Parse sitemap (@astrojs/sitemap writes sitemap-index.xml plus children)
+        let sitemap_file = ["sitemap-index.xml", "sitemap.xml"]
+            .into_iter()
+            .find(|name| dist_path.join(name).is_file())
+            .map(str::to_string);
+        let mut sitemap_urls = HashMap::new();
+        let mut sitemap_parse_error = None;
+        if let Some(file) = &sitemap_file {
+            load_sitemap(
+                &dist_path,
+                file,
+                0,
+                &mut HashSet::new(),
+                &mut sitemap_urls,
+                &mut sitemap_parse_error,
+            );
+        }
 
         Ok(Self {
             pages,
             route_to_index,
             sitemap_urls,
+            sitemap_file,
             sitemap_parse_error,
             dist_path,
             base_url,
@@ -313,7 +323,71 @@ fn has_noindex(html: &Html, sel: &Selector) -> bool {
     })
 }
 
-fn parse_sitemap(path: &Path) -> Result<Vec<String>> {
+/// Nesting limit for sitemap indexes (an index of indexes is already unusual).
+const MAX_SITEMAP_DEPTH: usize = 3;
+
+/// Read the sitemap `file` (relative to dist) into `urls`; a sitemap index
+/// pulls in its children from dist. The first problem ends up in `error`.
+fn load_sitemap(
+    dist: &Path,
+    file: &str,
+    depth: usize,
+    visited: &mut HashSet<String>,
+    urls: &mut HashMap<String, String>,
+    error: &mut Option<String>,
+) {
+    if !visited.insert(file.to_string()) {
+        return;
+    }
+    let sitemap = match parse_sitemap(&dist.join(file)) {
+        Ok(sitemap) => sitemap,
+        Err(e) => {
+            error.get_or_insert_with(|| format!("{file}: {e}"));
+            return;
+        }
+    };
+    if !sitemap.is_index {
+        for url in sitemap.locs {
+            urls.entry(url).or_insert_with(|| file.to_string());
+        }
+        return;
+    }
+    if depth >= MAX_SITEMAP_DEPTH {
+        error.get_or_insert_with(|| format!("{file}: sitemap indexes nested too deeply"));
+        return;
+    }
+    for loc in sitemap.locs {
+        match child_sitemap_file(dist, &loc) {
+            Some(child) => load_sitemap(dist, &child, depth + 1, visited, urls, error),
+            None => {
+                error.get_or_insert_with(|| {
+                    format!("{file}: child sitemap '{loc}' not found in dist")
+                });
+            }
+        }
+    }
+}
+
+/// Map the URL of a child sitemap to its file in dist: the URL path first,
+/// then (for an Astro `base` prefix) the bare file name.
+fn child_sitemap_file(dist: &Path, loc: &str) -> Option<String> {
+    let path = url::Url::parse(loc)
+        .map(|u| u.path().to_string())
+        .unwrap_or_else(|_| loc.to_string());
+    let rel = path.trim_start_matches('/').to_string();
+    let name = rel.rsplit('/').next().unwrap_or_default().to_string();
+    [rel, name]
+        .into_iter()
+        .find(|candidate| !candidate.is_empty() && dist.join(candidate).is_file())
+}
+
+struct ParsedSitemap {
+    is_index: bool,
+    locs: Vec<String>,
+}
+
+fn parse_sitemap(path: &Path) -> Result<ParsedSitemap> {
+    use quick_xml::escape::resolve_predefined_entity;
     use quick_xml::events::Event;
     use quick_xml::reader::Reader;
 
@@ -321,27 +395,52 @@ fn parse_sitemap(path: &Path) -> Result<Vec<String>> {
     let mut reader = Reader::from_str(&content);
 
     let mut urls = Vec::new();
-    let mut in_loc = false;
+    let mut is_index = false;
+    let mut root_seen = false;
+    // Text of the open <loc>; entities arrive as separate events since quick-xml 0.38.
+    let mut loc: Option<String> = None;
 
     loop {
         match reader.read_event() {
-            Ok(Event::Start(ref e)) if e.name().as_ref() == b"loc" => {
-                in_loc = true;
+            Ok(Event::Start(ref e)) if !root_seen => {
+                root_seen = true;
+                is_index = e.local_name().as_ref() == "sitemapindex";
             }
-            Ok(Event::Text(ref e)) if in_loc => {
-                if let Ok(text) = e.unescape() {
+            Ok(Event::Start(ref e)) if e.name().as_ref() == "loc" => {
+                loc = Some(String::new());
+            }
+            Ok(Event::Text(ref e)) => {
+                if let Some(text) = loc.as_mut() {
+                    text.push_str(&e.xml10_content());
+                }
+            }
+            Ok(Event::CData(ref e)) => {
+                if let Some(text) = loc.as_mut() {
+                    text.push_str(&e.xml10_content());
+                }
+            }
+            Ok(Event::GeneralRef(ref e)) => {
+                if let Some(text) = loc.as_mut() {
+                    if let Ok(Some(c)) = e.resolve_char_ref() {
+                        text.push(c);
+                    } else if let Some(entity) = resolve_predefined_entity(&e.xml10_content()) {
+                        text.push_str(entity);
+                    }
+                }
+            }
+            Ok(Event::End(ref e)) if e.name().as_ref() == "loc" => {
+                if let Some(text) = loc.take() {
                     urls.push(text.trim().to_string());
                 }
-                in_loc = false;
-            }
-            Ok(Event::End(ref e)) if e.name().as_ref() == b"loc" => {
-                in_loc = false;
             }
             Ok(Event::Eof) => break,
-            Err(e) => anyhow::bail!("invalid sitemap.xml: {e}"),
+            Err(e) => anyhow::bail!("invalid XML: {e}"),
             _ => {}
         }
     }
 
-    Ok(urls)
+    Ok(ParsedSitemap {
+        is_index,
+        locs: urls,
+    })
 }

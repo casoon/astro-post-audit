@@ -184,7 +184,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
         // Sitemap URLs that robots.txt blocks send mixed signals to search engines.
         if config.robots_txt.check_sitemap_blocked {
-            for url in &index.sitemap_urls {
+            for (url, file) in &index.sitemap_urls {
                 let path = Url::parse(url)
                     .ok()
                     .map(|u| u.path().to_string())
@@ -192,7 +192,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 if path_is_disallowed(&disallows, &allows, &path) {
                     findings.push(Finding::fail("sitemap/entry-blocked-by-robots", format!("Sitemap URL '{}' is blocked by robots.txt", url))
 .with_severity(Severity::Medium)
-.at(Location::file("sitemap.xml"))
+.at(Location::file(file.clone()))
 .with_help("A sitemap should only list crawlable URLs. Remove the entry or allow it in robots.txt."));
                 }
             }

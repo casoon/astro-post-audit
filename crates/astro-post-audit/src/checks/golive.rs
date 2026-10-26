@@ -44,7 +44,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             check_canonical_origin(page, &expected_origin, &mut f);
 
             // OG url/image origin check
-            check_og_origin(page, &expected_origin, &mut f);
+            check_og_origin(page, &expected_origin, &config.go_live.image_hosts, &mut f);
 
             // forbidden domains in absolute links, scripts, and OG
             if !forbidden.is_empty() {
@@ -127,12 +127,20 @@ fn check_canonical_origin(
     }
 }
 
+/// og:url names the page and must use the production origin. og:image is a
+/// resource: it may also come from a subdomain of the production host (an image
+/// CDN) or from a host listed in `go_live.image_hosts`.
 fn check_og_origin(
     page: &crate::discovery::PageInfo,
     expected_origin: &str,
+    image_hosts: &[String],
     findings: &mut Vec<Finding>,
 ) {
     let html = page.parse_html();
+    let expected_host = Url::parse(expected_origin)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_lowercase))
+        .unwrap_or_default();
     for prop in &["og:url", "og:image"] {
         let sel_str = format!("meta[property='{}']", prop);
         let sel = scraper::Selector::parse(&sel_str).unwrap();
@@ -143,20 +151,33 @@ fn check_og_origin(
                     Some(p) => format!("{}://{}:{}", url.scheme(), url.host_str().unwrap_or(""), p),
                     None => format!("{}://{}", url.scheme(), url.host_str().unwrap_or("")),
                 };
-                if actual_origin != expected_origin {
-                    findings.push(
-                        Finding::fail(
-                            "golive/og-origin",
-                            format!(
-                                "{} uses '{}' instead of expected production origin '{}'",
-                                prop, actual_origin, expected_origin
-                            ),
-                        )
-                        .with_severity(Severity::High)
-                        .at(Location::file(page.rel_path.clone()).with_selector(sel_str.clone()))
-                        .with_help(format!("Set {} to use the production origin", prop)),
-                    );
+                if actual_origin == expected_origin {
+                    continue;
                 }
+                if *prop == "og:image" {
+                    let host = url.host_str().unwrap_or("").to_lowercase();
+                    let allowed = host.ends_with(&format!(".{expected_host}"))
+                        || image_hosts.iter().any(|h| h.eq_ignore_ascii_case(&host));
+                    if allowed {
+                        continue;
+                    }
+                }
+                findings.push(
+                    Finding::fail(
+                        "golive/og-origin",
+                        format!(
+                            "{} uses '{}' instead of expected production origin '{}'",
+                            prop, actual_origin, expected_origin
+                        ),
+                    )
+                    .with_severity(Severity::High)
+                    .at(Location::file(page.rel_path.clone()).with_selector(sel_str.clone()))
+                    .with_help(if *prop == "og:image" {
+                        "Serve og:image from the production origin, or list its CDN host in `goLive.imageHosts`".to_string()
+                    } else {
+                        format!("Set {} to use the production origin", prop)
+                    }),
+                );
             }
         }
     }
@@ -219,6 +240,29 @@ fn check_forbidden_domains(
         }
     }
 
+    // Check OG tags (og:image may come from a CDN, but never from a forbidden host)
+    let og_sel =
+        scraper::Selector::parse("meta[property='og:url'], meta[property='og:image']").unwrap();
+    for el in html.select(&og_sel) {
+        let content = el.value().attr("content").unwrap_or("");
+        if let Some(domain) = is_forbidden(content, forbidden) {
+            let prop = el.value().attr("property").unwrap_or("og");
+            findings.push(
+                Finding::fail(
+                    "golive/forbidden-domain",
+                    format!(
+                        "{} contains forbidden domain '{}': {}",
+                        prop, domain, content
+                    ),
+                )
+                .with_severity(Severity::High)
+                .at(Location::file(page.rel_path.clone())
+                    .with_selector(format!("meta[property='{}']", prop)))
+                .with_help("Point OG tags at the production domain"),
+            );
+        }
+    }
+
     // Check canonical href
     for href in &page.canonical_hrefs {
         if let Some(domain) = is_forbidden(href, forbidden) {
@@ -244,7 +288,7 @@ fn check_sitemap_origins(
     forbidden: &[String],
     findings: &mut Vec<Finding>,
 ) {
-    for url in &index.sitemap_urls {
+    for (url, file) in &index.sitemap_urls {
         if let Ok(parsed) = Url::parse(url) {
             let actual_origin = match parsed.port() {
                 Some(p) => format!(
@@ -265,7 +309,7 @@ fn check_sitemap_origins(
                     ),
                     )
                     .with_severity(Severity::High)
-                    .at(Location::file("sitemap.xml").with_selector("<loc>"))
+                    .at(Location::file(file.clone()).with_selector("<loc>"))
                     .with_help("Regenerate the sitemap with the production `site` URL"),
                 );
             }
@@ -281,7 +325,7 @@ fn check_sitemap_origins(
                         ),
                     )
                     .with_severity(Severity::High)
-                    .at(Location::file("sitemap.xml").with_selector("<loc>"))
+                    .at(Location::file(file.clone()).with_selector("<loc>"))
                     .with_help("Regenerate the sitemap with the production `site` URL"),
                 );
             }
