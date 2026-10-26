@@ -6,7 +6,7 @@
 # their remedies; long lines are wrapped at spaces for the scene width.
 # Rebuild the scenes afterwards:
 #   cd site/captures && for f in audit.terminal.yaml audit-narrow.terminal.yaml; do
-#     npx -y -p @casoon/castwright@0.4.0 -p shiki castwright build "$f" --format svg --loop-delay 10000 -o .; done
+#     npx -y -p @casoon/castwright@0.5.0 -p shiki castwright build "$f" --format svg --loop-delay 10000 -o .; done
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
