@@ -49,6 +49,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             let texts: Vec<String> = scripts.iter().map(|s| s.text().collect()).collect();
             let blocks = sd::parse_blocks(&texts);
             let selector = |i: usize| format!("script[type='application/ld+json']:nth({})", i + 1);
+            let is_home = page.rel_path == "index.html";
 
             if config.structured_data.check_json_ld {
                 for (i, block) in blocks.iter().enumerate() {
@@ -64,7 +65,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                                 &node.content,
                                 sd::ProductRuleContext::Indeterminate,
                             ) {
-                                assessment_findings(&assessment, &at, &mut findings);
+                                assessment_findings(&assessment, is_home, &at, &mut findings);
                             }
                         }
                     }
@@ -158,8 +159,10 @@ fn structural_finding(issue: StructuralIssue, block: &sd::Block, at: Location) -
 /// Findings for one rule assessment. Missing **required** properties are
 /// always reported; missing **recommended** ones only where this tool has a
 /// dedicated rule id — the rest lowers no score here, as in auditmysite.
+/// `is_home` marks the site's start page (see [`recommended_rule`]).
 fn assessment_findings(
     assessment: &sd::SchemaRuleAssessment,
+    is_home: bool,
     at: &Location,
     findings: &mut Vec<Finding>,
 ) {
@@ -180,7 +183,7 @@ fn assessment_findings(
         );
     }
     for property in &assessment.missing_recommended {
-        let Some((rule, severity)) = recommended_rule(schema_type, property) else {
+        let Some((rule, severity)) = recommended_rule(schema_type, property, is_home) else {
             continue;
         };
         findings.push(
@@ -221,8 +224,14 @@ fn required_rule(schema_type: &str, property: &str) -> (&'static str, Severity) 
 }
 
 /// Rule id and severity for a missing recommended property that this tool
-/// reports; `None` for the others.
-fn recommended_rule(schema_type: &str, property: &str) -> Option<(&'static str, Severity)> {
+/// reports; `None` for the others. The SearchAction belongs to the start
+/// page's WebSite node; on other pages WebSite is usually a slim reference
+/// node, so it is only asked for on the start page.
+fn recommended_rule(
+    schema_type: &str,
+    property: &str,
+    is_home: bool,
+) -> Option<(&'static str, Severity)> {
     let article = matches!(schema_type, "Article" | "BlogPosting" | "NewsArticle");
     Some(match property {
         "author" if article => ("structured-data/article-missing-author", Severity::Medium),
@@ -246,7 +255,7 @@ fn recommended_rule(schema_type: &str, property: &str) -> Option<(&'static str, 
             "structured-data/local-business-missing-telephone",
             Severity::Low,
         ),
-        "potentialAction" if schema_type == "WebSite" => (
+        "potentialAction" if schema_type == "WebSite" && is_home => (
             "structured-data/website-missing-search-action",
             Severity::Low,
         ),
