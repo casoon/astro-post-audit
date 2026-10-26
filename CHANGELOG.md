@@ -6,6 +6,8 @@ reconstructed from the git history and the README release notes.
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-10-26
+
 ### Added
 
 - **Releases:** the Release workflow publishes the npm package through trusted publishing, after approval in the `npm` environment — no npm token is stored anywhere and the package carries a provenance statement. Every release archive carries a signed build provenance attestation (`gh attestation verify <archive> --repo casoon/astro-post-audit`).
