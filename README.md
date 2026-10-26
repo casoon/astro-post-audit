@@ -354,7 +354,7 @@ postAudit({
 | `failOn` | `'errors' \| 'warnings' \| 'never'` | — | Fail on errors only, on warnings and errors, or never. Takes precedence over `throwOnError`; `'warnings'` always implies strict mode. |
 | `maxErrors` | `number` | — | Stop after this many errors; the report is then marked truncated. Errors known from the baseline do not count, and `writeBaseline` ignores the limit. |
 | `maxWarnings` | `number` | — | Fail the build if the warning count exceeds this number. Activates build gating unless `failOn: 'never'` is set. |
-| `site` | `string` | auto | Base URL — auto-detected from Astro's `site` config. |
+| `site` | `string` | auto | Base URL — auto-detected from Astro's `site` config. Astro's `base` is applied too: links, canonicals and sitemap URLs carry it, files in `dist/` do not. |
 | `reports` | `ReportsConfig` | — | Write report files. See [Report files](#report-files). |
 | `output` | `string` | — | Write a JSON report to this path. Legacy alias for `reports.json`. |
 | `outputMarkdown` | `string` | — | Write a Markdown report to this path. Legacy alias for `reports.markdown`. |

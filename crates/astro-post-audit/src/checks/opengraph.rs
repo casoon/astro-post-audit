@@ -296,15 +296,14 @@ fn resolve_local_og_image(img_url: &str, page_rel: &str, index: &SiteIndex) -> O
         if host != base_host {
             return None;
         }
-        let path = parsed.path().trim_start_matches('/');
-        return Some(dist.join(path));
+        return index.dist_path_for(parsed.path());
     }
 
     // Relative reference.
     let clean = img_url.split('?').next().unwrap_or(img_url);
     let clean = clean.split('#').next().unwrap_or(clean);
     if clean.starts_with('/') {
-        Some(dist.join(clean.trim_start_matches('/')))
+        index.dist_path_for(clean)
     } else {
         let page_dir = Path::new(page_rel).parent().unwrap_or(Path::new(""));
         Some(dist.join(page_dir).join(clean))

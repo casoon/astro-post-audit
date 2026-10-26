@@ -48,8 +48,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 let Some(href) = link.value().attr("href") else {
                     continue;
                 };
-                let Some(path) = resolve_local_stylesheet(href, &page.rel_path, &index.dist_path)
-                else {
+                let Some(path) = resolve_local_stylesheet(href, &page.rel_path, index) else {
                     continue;
                 };
                 if !seen.insert(path.clone()) {
@@ -131,7 +130,8 @@ fn outlier_finding(route: &RouteCss, median: u64, factor: f64) -> Finding {
 .with_help("Review the stylesheets unique to this route and confirm that the difference is intentional.")
 }
 
-fn resolve_local_stylesheet(href: &str, page_rel: &str, dist: &Path) -> Option<PathBuf> {
+fn resolve_local_stylesheet(href: &str, page_rel: &str, index: &SiteIndex) -> Option<PathBuf> {
+    let dist = &index.dist_path;
     if href.starts_with("http://")
         || href.starts_with("https://")
         || href.starts_with("//")
@@ -144,7 +144,7 @@ fn resolve_local_stylesheet(href: &str, page_rel: &str, dist: &Path) -> Option<P
         return None;
     }
     let candidate = if clean.starts_with('/') {
-        dist.join(clean.trim_start_matches('/'))
+        index.dist_path_for(clean)?
     } else {
         let page_dir = Path::new(page_rel).parent().unwrap_or(Path::new(""));
         dist.join(page_dir).join(clean)

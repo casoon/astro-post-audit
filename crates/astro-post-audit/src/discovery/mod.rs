@@ -65,6 +65,9 @@ pub struct SiteIndex {
     pub dist_path: PathBuf,
     /// Base URL (if provided)
     pub base_url: Option<String>,
+    /// Astro `base` without trailing slash (e.g. `/docs`), empty for a root deployment.
+    /// Routes include it; files in dist do not.
+    pub base_path: String,
     /// Total HTML files found in dist before include/exclude filtering (diagnostics).
     pub html_total: usize,
     /// HTML files remaining after include/exclude filtering (diagnostics).
@@ -145,6 +148,7 @@ impl SiteIndex {
         let html_matched = html_files.len();
 
         let base_url = config.site.base_url.clone();
+        let base_path = normalize_base_path(config.site.base_path.as_deref());
         let norm_config = config.url_normalization.clone();
         let canonical_sel = Selector::parse("link[rel='canonical']").ok();
         let robots_sel = Selector::parse("meta[name='robots']").ok();
@@ -223,6 +227,11 @@ impl SiteIndex {
                     .and_then(parse_meta_refresh_target);
 
                 let route = normalize::file_path_to_route(rel, &norm_config);
+                let route = if base_path.is_empty() {
+                    route
+                } else {
+                    normalize::normalize_path(&format!("{base_path}{route}"), &norm_config)
+                };
                 let absolute_url = base_url
                     .as_ref()
                     .and_then(|base| normalize::to_absolute(&route, base));
@@ -262,6 +271,7 @@ impl SiteIndex {
             load_sitemap(
                 &dist_path,
                 file,
+                &base_path,
                 0,
                 &mut HashSet::new(),
                 &mut sitemap_urls,
@@ -277,6 +287,7 @@ impl SiteIndex {
             sitemap_parse_error,
             dist_path,
             base_url,
+            base_path,
             html_total,
             html_matched,
         })
@@ -287,10 +298,31 @@ impl SiteIndex {
         self.route_to_index.contains_key(route)
     }
 
-    /// Check if a file (relative path) exists in dist.
-    pub fn file_exists(&self, rel_path: &str) -> bool {
-        self.dist_path.join(rel_path).exists()
+    /// Map a root-relative public URL path to its file in dist. `None` when the
+    /// path lies outside the Astro `base`, so this build does not serve it.
+    pub fn dist_path_for(&self, url_path: &str) -> Option<PathBuf> {
+        dist_relative(url_path, &self.base_path).map(|rel| self.dist_path.join(rel))
     }
+}
+
+/// `/docs/` or `docs` -> `/docs`; `/` or nothing -> empty.
+fn normalize_base_path(base: Option<&str>) -> String {
+    let trimmed = base.unwrap_or("").trim_matches('/');
+    if trimmed.is_empty() {
+        String::new()
+    } else {
+        format!("/{trimmed}")
+    }
+}
+
+/// The dist-relative part of a root-relative public path, with `base_path`
+/// stripped; `None` if the path does not start with the base.
+fn dist_relative<'a>(url_path: &'a str, base_path: &str) -> Option<&'a str> {
+    let rest = url_path.strip_prefix(base_path)?;
+    if !rest.is_empty() && !rest.starts_with('/') {
+        return None;
+    }
+    Some(rest.trim_start_matches('/'))
 }
 
 /// Parse the redirect target from a `meta http-equiv="refresh"` content value
@@ -331,6 +363,7 @@ const MAX_SITEMAP_DEPTH: usize = 3;
 fn load_sitemap(
     dist: &Path,
     file: &str,
+    base_path: &str,
     depth: usize,
     visited: &mut HashSet<String>,
     urls: &mut HashMap<String, String>,
@@ -357,8 +390,8 @@ fn load_sitemap(
         return;
     }
     for loc in sitemap.locs {
-        match child_sitemap_file(dist, &loc) {
-            Some(child) => load_sitemap(dist, &child, depth + 1, visited, urls, error),
+        match child_sitemap_file(dist, base_path, &loc) {
+            Some(child) => load_sitemap(dist, &child, base_path, depth + 1, visited, urls, error),
             None => {
                 error.get_or_insert_with(|| {
                     format!("{file}: child sitemap '{loc}' not found in dist")
@@ -368,17 +401,13 @@ fn load_sitemap(
     }
 }
 
-/// Map the URL of a child sitemap to its file in dist: the URL path first,
-/// then (for an Astro `base` prefix) the bare file name.
-fn child_sitemap_file(dist: &Path, loc: &str) -> Option<String> {
+/// Map the URL of a child sitemap to its file in dist (Astro `base` stripped).
+fn child_sitemap_file(dist: &Path, base_path: &str, loc: &str) -> Option<String> {
     let path = url::Url::parse(loc)
         .map(|u| u.path().to_string())
         .unwrap_or_else(|_| loc.to_string());
-    let rel = path.trim_start_matches('/').to_string();
-    let name = rel.rsplit('/').next().unwrap_or_default().to_string();
-    [rel, name]
-        .into_iter()
-        .find(|candidate| !candidate.is_empty() && dist.join(candidate).is_file())
+    let rel = dist_relative(&path, base_path)?;
+    (!rel.is_empty() && dist.join(rel).is_file()).then(|| rel.to_string())
 }
 
 struct ParsedSitemap {

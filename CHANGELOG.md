@@ -18,6 +18,7 @@ reconstructed from the git history and the README release notes.
 
 ### Fixed
 
+- **Links:** sites with an Astro `base` are audited against their public URLs: links, canonicals, sitemap entries and assets under the base resolve to the files at the root of `dist/`, and a root-relative link that misses the base is reported as broken (#97).
 - **Sitemap:** a `sitemap-index.xml` (as written by `@astrojs/sitemap`) and its child sitemaps are read, so sitemap, robots and go-live checks see their URLs instead of reporting `sitemap/missing` (#95).
 - **Reports:** the binary writes the JSON report itself, so large reports no longer fail with `ENOBUFS` (#96).
 - **Baseline:** errors already in the baseline no longer count towards `maxErrors`, which could stop the audit before new errors were found; `writeBaseline` ignores `maxErrors` so the snapshot is complete (#93).

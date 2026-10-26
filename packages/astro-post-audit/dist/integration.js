@@ -203,6 +203,7 @@ export default function postAudit(options = {}, deps = defaultDeps) {
     let siteUrl;
     let rootDir;
     let astroTrailingSlash;
+    let astroBase;
     let astroOutput;
     return {
         name: "astro-post-audit",
@@ -214,6 +215,8 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                 if (config.trailingSlash) {
                     astroTrailingSlash = config.trailingSlash;
                 }
+                // Bridge Astro's base: pages live under it in public URLs, at the root of dist/
+                astroBase = config.base;
                 // buildOutput (Astro v7+) is resolved after adapter overrides; fall back
                 // to config.output for Astro v5/v6 where buildOutput is not provided.
                 astroOutput = buildOutput ?? config.output;
@@ -292,8 +295,13 @@ export default function postAudit(options = {}, deps = defaultDeps) {
                 const stdinConfig = {
                     ...resolvedRules,
                 };
-                if (site)
-                    stdinConfig.site = { base_url: site };
+                const basePath = astroBase?.replace(/\/+$/, "");
+                if (site || basePath) {
+                    stdinConfig.site = {
+                        ...(site ? { base_url: site } : {}),
+                        ...(basePath ? { base_path: basePath } : {}),
+                    };
+                }
                 const groupWarnModules = options.groups ? warnModules(options.groups) : [];
                 if (groupWarnModules.length > 0)
                     stdinConfig.warn_modules = groupWarnModules;
