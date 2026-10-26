@@ -12,6 +12,7 @@ import {
   Terminal,
 } from '@casoon/pages-theme/components';
 import Base from '@casoon/pages-theme/layouts/Base.astro';
+import config from 'virtual:casoon-pages/config';
 import { capture } from '../showcase';
 // Animated SVGs, built with castwright from site/captures/audit*.terminal.yaml: an excerpt of
 // examples/report.ansi, the real report for tests/fixtures/bad (see site/captures/excerpt.sh).
@@ -47,7 +48,7 @@ export default defineConfig({
     />
     <Badges>
       <Badge>MIT</Badge>
-      <Badge>npm 0.9.1</Badge>
+      <Badge>npm {config.version}</Badge>
       <Badge>Astro 5, 6, 7</Badge>
       <Badge>Node 18+</Badge>
     </Badges>
