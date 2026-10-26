@@ -1,5 +1,13 @@
 name: Release
 
+# A version tag verifies, builds the binaries, attaches them to the GitHub
+# release and publishes the npm package through trusted publishing: the last job
+# exchanges a GitHub OIDC token for npm, so no npm token is stored anywhere, and
+# the package gets a provenance statement. It runs in the `npm` environment,
+# whose required reviewer has to approve it. Every archive also carries a signed
+# build provenance attestation. The crates.io package is still published by a
+# maintainer before the tag.
+
 on:
   push:
     tags:
@@ -72,6 +80,11 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
     steps:
       - uses: actions/checkout@v4
 
@@ -130,6 +143,11 @@ jobs:
           $hash = (Get-FileHash "${{ env.ARCHIVE_NAME }}" -Algorithm SHA256).Hash.ToLower()
           "$hash  ${{ env.ARCHIVE_NAME }}" | Out-File -Encoding ascii "${{ env.ARCHIVE_NAME }}.sha256"
 
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: ${{ env.ARCHIVE_NAME }}
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -158,6 +176,32 @@ jobs:
           files: artifacts/*
           generate_release_notes: true
 
-  # Intentionally no crates.io or npm publish job. Both the Cargo crate and
-  # @casoon/astro-post-audit are always published manually by a maintainer
-  # after the release assets exist.
+  publish-npm:
+    name: Publish to npm
+    needs: release
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm 11.5 or newer.
+      - run: npm install -g npm@latest
+
+      # The package ships only the installer, which downloads the release binary
+      # for the user's platform; its postinstall must not run here.
+      - name: Install npm dependencies
+        working-directory: packages/astro-post-audit
+        run: npm ci --ignore-scripts
+
+      - name: Publish
+        working-directory: packages/astro-post-audit
+        run: npm publish --access public

@@ -74,6 +74,13 @@ Earlier releases (0.3.0–0.5.4) added, among other things: C2PA Content Credent
 npm i -D @casoon/astro-post-audit
 ```
 
+The package downloads the audit binary for your platform from the [GitHub releases](https://github.com/casoon/astro-post-audit/releases) and checks it against the published SHA-256 first. Official binaries come only from there, built by the release workflow. To verify an archive by hand:
+
+```bash
+shasum -a 256 -c <archive>.sha256
+gh attestation verify <archive> --repo casoon/astro-post-audit
+```
+
 ## Setup
 
 ```js
@@ -1154,18 +1161,10 @@ Set `benchmark: true` to see a per-check timing breakdown — useful for identif
 
 ## Maintainer release process
 
-GitHub release assets are published by the tag workflow. The crates.io package and the npm package are intentionally always published manually and must never be added to CI or the release workflow.
-
-After the GitHub release assets for the matching version are available:
+The tag workflow builds the binaries, attaches them to the GitHub release and publishes the npm package through npm trusted publishing. The last job waits in the `npm` environment until a maintainer approves it in the GitHub UI; no npm token exists anywhere, and the package gets a provenance statement. The crates.io package is published by a maintainer before the tag is pushed:
 
 ```bash
 cargo publish --manifest-path crates/astro-post-audit/Cargo.toml
-
-cd packages/astro-post-audit
-npm ci
-npm run verify:binary
-npm test
-npm publish --access public
 ```
 
 The Cargo package, npm package, lockfiles, README release heading, and `vX.Y.Z` tag must use the same version. The release workflow rejects mismatches before building artifacts.
