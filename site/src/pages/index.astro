@@ -13,6 +13,11 @@ import {
 } from '@casoon/pages-theme/components';
 import Base from '@casoon/pages-theme/layouts/Base.astro';
 import { capture } from '../showcase';
+// Animated SVGs, built with castwright from site/captures/audit*.terminal.yaml: an excerpt of
+// examples/report.ansi, the real report for tests/fixtures/bad (see site/captures/excerpt.sh).
+// The narrow scene has 48 columns, so the text stays readable on phones.
+import auditNarrowSvg from '../../captures/audit-narrow.svg?url';
+import auditSvg from '../../captures/audit.svg?url';
 
 const astroConfig = `import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
@@ -46,7 +51,16 @@ export default defineConfig({
       <Badge>Astro 5, 6, 7</Badge>
       <Badge>Node 18+</Badge>
     </Badges>
-    <Terminal slot="output" title="audit · tests/fixtures/bad" dots ansi={capture('report.ansi')} />
+    <picture slot="output">
+      <source media="(max-width: 640px)" srcset={auditNarrowSvg} width="427.2" height="530" />
+      <img
+        class="terminal-demo"
+        src={auditSvg}
+        width="561.6"
+        height="440"
+        alt="Terminal, excerpt of the real report astro-post-audit prints after the build for the test fixture tests/fixtures/bad: Errors 14, Warnings 7, Info 4, Files 1. Top issue rules: landmarks/content-outside 4 times, links/broken 3 times, buttons/name-missing, canonical/missing and document/lang-missing once each. Then the first two findings for index.html: a missing canonical tag, with the remedy to set site in astro.config.mjs and render a canonical link in the BaseHead component, and a broken internal link to /broken-page/, with the remedy to verify the route in src/pages or the Content Collection slug."
+      />
+    </picture>
   </Hero>
 
   <Facts
@@ -98,3 +112,14 @@ export default defineConfig({
     <CodeBlock code={astroConfig} lang="js" title="astro.config.mjs" label="JavaScript" />
   </Quickstart>
 </Base>
+
+<style>
+  /* Never scale the SVG beyond a readable terminal size. */
+  .terminal-demo {
+    display: block;
+    width: 100%;
+    max-width: 720px;
+    height: auto;
+    margin: 0 auto;
+  }
+</style>

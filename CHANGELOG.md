@@ -6,6 +6,12 @@ reconstructed from the git history and the README release notes.
 
 ## [Unreleased]
 
+### Changed
+
+- **Docs:** the start page of the [project site](https://casoon.github.io/astro-post-audit/)
+  opens with an excerpt of a real report next to the install commands instead of the full
+  report.
+
 ## [0.9.1] - 2026-10-04
 
 ### Fixed
