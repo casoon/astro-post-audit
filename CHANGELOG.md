@@ -18,6 +18,11 @@ reconstructed from the git history and the README release notes.
   opens with an excerpt of a real report next to the install commands instead of the full
   report.
 
+### Fixed
+
+- **Structured data:** `structured-data/website-missing-search-action` only reports on the start
+  page; `WebSite` reference nodes on subpages no longer produce one hint per page (#88).
+
 ## [0.9.1] - 2026-10-04
 
 ### Fixed

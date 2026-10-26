@@ -2012,6 +2012,37 @@ fn structured_data_top_level_array_and_breadcrumb_item_name() {
     );
 }
 
+/// Issue #88: the SearchAction is only expected on the start page; WebSite
+/// nodes on subpages are slim references.
+#[test]
+fn structured_data_search_action_only_on_home() {
+    let dir = TempDir::new().unwrap();
+    let page = |canonical: &str| {
+        format!(
+            r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title><link rel="canonical" href="{canonical}"><script type="application/ld+json">{{"@context": "https://schema.org", "@type": "WebSite", "name": "Example", "url": "https://example.com/"}}</script></head><body><h1>Test</h1></body></html>"#
+        )
+    };
+    fs::write(dir.path().join("index.html"), page("https://example.com/")).unwrap();
+    fs::create_dir_all(dir.path().join("about")).unwrap();
+    fs::write(
+        dir.path().join("about/index.html"),
+        page("https://example.com/about/"),
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#,
+    );
+    let files: Vec<&str> = json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["rule_id"] == "structured-data/website-missing-search-action")
+        .filter_map(|f| f["location"]["file"].as_str())
+        .collect();
+    assert_eq!(files, ["index.html"]);
+}
+
 #[test]
 fn structured_data_valid_article_no_semantic_warning() {
     let dir = TempDir::new().unwrap();
