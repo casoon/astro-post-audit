@@ -36,6 +36,3 @@ of the integration, not a standalone CLI.
 - **Guides:** presets, rolling the audit out on an existing site, report files and CI.
 - **Reference:** the options of `postAudit()`, the check modules and the parts the package is
   built from.
-
-The product page with a short tour lives at
-[astro-post-audit.casoon.de](https://astro-post-audit.casoon.de).
