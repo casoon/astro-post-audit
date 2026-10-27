@@ -750,6 +750,11 @@ can decide, such as whether alt texts fit their context — is off by default.
 Enable it with `rules.a11y.manual_checklist: true`; its items carry outcome
 `untested` and count by severity like any finding, so tune them with `severity`.
 
+Findings that only concern WCAG AAA criteria (such as `links/new-window-unannounced`,
+3.2.5) are reported once per element pattern across the site, not once per page: a
+`target="_blank"` link in the footer yields one finding whose message says how often
+and on how many pages it occurs. Findings for level A and AA stay per page.
+
 ### Display-mode convention
 
 Sites that follow barrierlab's [display-mode convention](https://github.com/casoon/barrierlab/blob/main/docs/a11y/concepts/darstellungsmodi.md)

@@ -6,6 +6,11 @@ reconstructed from the git history and the README release notes.
 
 ## [Unreleased]
 
+### Changed
+
+- **Accessibility:** rules come from `a11y-rules` 0.26. Several heuristic rules now report `review` instead of `fail`, landmark and heading-structure rules count as best practice, and new link rules (`links/new-window-unannounced`, `links/purpose-link-only`, URL and single-character link names) are added.
+- **Accessibility:** findings that only concern WCAG AAA criteria are reported once per element pattern across the site instead of once per page; the message gives the number of occurrences and pages.
+
 ## [0.9.3] - 2026-10-27
 
 ### Added
