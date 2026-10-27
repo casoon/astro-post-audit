@@ -14,7 +14,9 @@
 //! [`nicht_gelaufen`] gibt diese Vermerke nach außen; wer sie unterschlägt,
 //! macht aus „nicht geprüft" ein stillschweigendes „bestanden".
 
-use a11y_report::{Finding, RuleRun};
+use std::collections::{HashMap, HashSet};
+
+use a11y_report::{Finding, RootCauseId, RuleRun};
 use rayon::prelude::*;
 
 use crate::adapter::{Seite, SeiteMitNamen};
@@ -120,9 +122,69 @@ fn vorschlag_zu(rule_id: &str) -> Option<&'static str> {
         .map(|(_, v)| *v)
 }
 
+/// Die Erfolgskriterien der Stufe AAA in WCAG 2.2.
+///
+/// Die Regeln setzen `wcag_level` nicht; die Stufe ergibt sich hier aus den
+/// Kriterien, die ein Befund trägt.
+const AAA_KRITERIEN: &[&str] = &[
+    "1.2.6", "1.2.7", "1.2.8", "1.2.9", "1.3.6", "1.4.6", "1.4.7", "1.4.8", "1.4.9", "2.1.3",
+    "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.3.2", "2.3.3", "2.4.8", "2.4.9", "2.4.10", "2.4.12",
+    "2.4.13", "2.5.5", "2.5.6", "3.1.3", "3.1.4", "3.1.5", "3.1.6", "3.2.5", "3.3.5", "3.3.6",
+    "3.3.9",
+];
+
+fn nur_aaa(f: &Finding) -> bool {
+    !f.wcag.is_empty() && f.wcag.iter().all(|c| AAA_KRITERIEN.contains(&c.as_str()))
+}
+
+/// Fasst AAA-Befunde am selben Element-Muster über alle Seiten zu einem zusammen.
+///
+/// Ein `target="_blank"` im Footer stünde sonst auf jeder Seite einzeln im
+/// Bericht -- dieselbe Ursache, hundertfach. Das Muster ist das von
+/// `normalize_selector`: Ziffern fallen weg, gleichartige Geschwister (die
+/// Links einer Footer-Liste) gelten als ein Muster. Stehen bleibt der Befund aus der
+/// alphabetisch ersten Datei, damit der Bericht nicht von der Reihenfolge des
+/// Dateisystems abhängt; die Nachricht nennt die Zahl der Seiten. Befunde der
+/// Stufen A und AA bleiben je Seite: Dort zählt jede Seite für das Gate.
+fn aaa_zusammenfassen(findings: Vec<Finding>) -> Vec<Finding> {
+    let ursache =
+        |f: &Finding| RootCauseId::new(&f.rule_id, f.location.selector.as_deref().unwrap_or(""));
+    // Je Ursache: Vorkommen, betroffene Seiten und Index des Vertreters.
+    let mut gruppen: HashMap<RootCauseId, (usize, HashSet<Option<&str>>, usize)> = HashMap::new();
+    for (i, f) in findings.iter().enumerate().filter(|(_, f)| nur_aaa(f)) {
+        let (vorkommen, seiten, vertreter) =
+            gruppen.entry(ursache(f)).or_insert((0, HashSet::new(), i));
+        *vorkommen += 1;
+        seiten.insert(f.location.file.as_deref());
+        if f.location.file < findings[*vertreter].location.file {
+            *vertreter = i;
+        }
+    }
+    let behalten: HashMap<usize, (usize, usize)> = gruppen
+        .into_values()
+        .map(|(vorkommen, seiten, i)| (i, (vorkommen, seiten.len())))
+        .collect();
+    findings
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, mut f)| {
+            if !nur_aaa(&f) {
+                return Some(f);
+            }
+            let (vorkommen, seiten) = *behalten.get(&i)?;
+            if vorkommen > 1 {
+                f.message.push_str(&format!(
+                    " Same element pattern {vorkommen} times on {seiten} page(s); reported once."
+                ));
+            }
+            Some(f)
+        })
+        .collect()
+}
+
 /// Prüft jede Seite mit dem gemeinsamen Regelbestand.
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
-    index
+    let findings = index
         .pages
         .par_iter()
         .flat_map(|page| {
@@ -157,7 +219,8 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 })
                 .collect::<Vec<_>>()
         })
-        .collect()
+        .collect();
+    aaa_zusammenfassen(findings)
 }
 
 /// Die Regeln, die dieser Host nicht bedienen kann, samt Grund.
@@ -275,5 +338,46 @@ mod tests {
         assert!(offen
             .iter()
             .all(|r| r.not_run == Some(a11y_report::NotRun::CapabilityMissing)));
+    }
+
+    fn aaa_befund(datei: &str, selektor: &str) -> Finding {
+        let mut f =
+            Finding::review("links/new-window-unannounced", "neues Fenster").with_wcag(["3.2.5"]);
+        f.location.file = Some(datei.to_string());
+        f.location.selector = Some(selektor.to_string());
+        f
+    }
+
+    /// Dasselbe Footer-Element auf jeder Seite ist eine Ursache, kein
+    /// hundertfacher Befund. A/AA-Befunde bleiben je Seite.
+    #[test]
+    fn aaa_befunde_werden_seitenuebergreifend_zusammengefasst() {
+        let mut aa = Finding::fail("images/alt-missing", "kein alt").with_wcag(["1.1.1"]);
+        aa.location.selector = Some("footer > a".into());
+        let mut aa2 = aa.clone();
+        aa.location.file = Some("b.html".into());
+        aa2.location.file = Some("a.html".into());
+        let raus = aaa_zusammenfassen(vec![
+            aaa_befund("c.html", "footer > a"),
+            aaa_befund("a.html", "footer > a"),
+            aaa_befund("b.html", "footer > a"),
+            aaa_befund("b.html", "footer > a"),
+            aaa_befund("b.html", "main > a"),
+            aa,
+            aa2,
+        ]);
+        let aaa: Vec<_> = raus.iter().filter(|f| nur_aaa(f)).collect();
+        assert_eq!(aaa.len(), 2);
+        assert_eq!(aaa[0].location.file.as_deref(), Some("a.html"));
+        assert!(aaa[0]
+            .message
+            .ends_with("Same element pattern 4 times on 3 page(s); reported once."));
+        assert_eq!(aaa[1].message, "neues Fenster");
+        assert_eq!(
+            raus.iter()
+                .filter(|f| f.rule_id == "images/alt-missing")
+                .count(),
+            2
+        );
     }
 }
