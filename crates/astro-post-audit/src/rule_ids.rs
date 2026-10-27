@@ -27,6 +27,16 @@ use std::sync::Mutex;
 /// einem ARIA-Attribut referenziert wird. Für die Übersetzung einer Baseline
 /// ist das unschädlich — sie wird dadurch großzügiger, nicht strenger.
 pub const ALTE_KENNUNGEN: &[(&str, &str)] = &[
+    // Doppelungen aus aiVisibility und uxHeuristics: Dieselbe Beobachtung
+    // melden die Module opengraph, seo, html_basics und a11y_core.
+    ("ai-visibility/lang-missing", "document/lang-missing"),
+    ("ai-visibility/missing-canonical", "canonical/missing"),
+    (
+        "ai-visibility/missing-og-description",
+        "opengraph/description-missing",
+    ),
+    ("ai-visibility/missing-og-title", "opengraph/title-missing"),
+    ("ux/generic-link-text", "links/generic-name"),
     ("a11y/aria-hidden-focusable", "keyboard/hidden-focusable"),
     ("a11y/aria-required-attr", "aria/required-attribute-missing"),
     ("a11y/aria-role-abstract", "aria/role-abstract"),

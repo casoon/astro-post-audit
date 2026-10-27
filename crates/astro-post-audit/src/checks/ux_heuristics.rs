@@ -35,19 +35,6 @@ const CTA_KEYWORDS_EN: &[&str] = &[
     "request",
 ];
 
-const GENERIC_LINK_TEXTS: &[&str] = &[
-    "mehr",
-    "hier",
-    "weiter",
-    "lesen",
-    "click here",
-    "read more",
-    "learn more",
-    "more",
-    "here",
-    "details",
-];
-
 const TRUST_KEYWORDS: &[&str] = &[
     "impressum",
     "datenschutz",
@@ -104,34 +91,20 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             if ux.min_cta_per_page > 0 && cta_count < ux.min_cta_per_page {
                 let message = if cta_count == 0 {
-                    "No call-to-action found on this page".to_string()
+                    "No link or button with a call-to-action keyword found on this page".to_string()
                 } else {
                     format!(
-                        "{} call-to-action(s) found on this page, expected at least {}",
+                        "{} link(s) or button(s) with a call-to-action keyword found on this page, expected at least {}",
                         cta_count, ux.min_cta_per_page
                     )
                 };
-                findings.push(Finding::fail("ux/no-cta", message)
+                findings.push(Finding::review("ux/no-cta", message)
 .with_severity(Severity::Medium)
 .at(Location::file(page.rel_path.clone()).with_selector("body"))
-.with_help("Add clear CTAs (buttons or links with action-oriented text like 'Get started', 'Contact', 'Buy')."));
+.with_help("The check matches action keywords in link and button text. Pages without a conversion goal, such as articles or legal pages, need no CTA; lower or disable `minCtaPerPage` for them."));
             }
 
-            // Generic link text (UX signal, separate from a11y check)
-            for link in &links {
-                let text = link.text().collect::<String>();
-                let normalized = text.trim().to_lowercase();
-                if GENERIC_LINK_TEXTS.iter().any(|&g| normalized == g) {
-                    let href = link.value().attr("href").unwrap_or("(no href)");
-                    findings.push(Finding::fail("ux/generic-link-text", format!(
-                            "Generic link text '{}' is not descriptive — users can't predict the destination",
-                            text.trim()
-                        ))
-.with_severity(Severity::Medium)
-.at(Location::file(page.rel_path.clone()).with_selector(format!("a[href='{}']", href)))
-.with_help("Replace with descriptive text that explains where the link leads."));
-                }
-            }
+            // Generic link text is reported by the links/generic-name rule of a11y_core.
 
             // === Dimension 3: Trust Signals ===
 
@@ -144,34 +117,34 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             let has_address = html.select(&ADDRESS_SEL).next().is_some();
 
             if !has_trust_link && !has_address {
-                findings.push(Finding::fail("ux/no-trust-signals","No trust signal links found (Impressum, Datenschutz, Contact, About)")
+                findings.push(Finding::review("ux/no-trust-signals","No link to an Impressum, privacy, contact or about page and no <address> element found")
 .with_severity(Severity::Medium)
 .at(Location::file(page.rel_path.clone()).with_selector("body"))
-.with_help("Add links to legal/contact pages to build user trust and comply with legal requirements."));
+.with_help("The check only looks for a short list of keywords in link text and URLs. If your legal or contact pages are linked under other names, ignore this; some jurisdictions require such links."));
             }
 
             // === Dimension 4: Cognitive Load ===
 
             let link_count = links.len();
             if link_count > ux.max_links_per_page {
-                findings.push(Finding::fail("ux/high-link-density", format!(
-                        "{} links on this page may overwhelm users (threshold: {})",
+                findings.push(Finding::review("ux/high-link-density", format!(
+                        "{} links on this page (threshold: {})",
                         link_count, ux.max_links_per_page
                     ))
 .with_severity(Severity::Low)
 .at(Location::file(page.rel_path.clone()).with_selector("body"))
-.with_help("Consider reducing the number of links or grouping them into fewer, clearer navigation areas."));
+.with_help("Many links can be fine on index and navigation pages. Raise `maxLinksPerPage` if this is intended."));
             }
 
             let interactive_count = html.select(&INTERACTIVE_SEL).count();
             if interactive_count > 20 {
-                findings.push(Finding::fail("ux/high-interactive-density", format!(
-                        "{} interactive elements on this page — high cognitive load",
+                findings.push(Finding::review("ux/high-interactive-density", format!(
+                        "{} buttons, inputs, selects and textareas on this page (threshold: 20)",
                         interactive_count
                     ))
 .with_severity(Severity::Low)
 .at(Location::file(page.rel_path.clone()).with_selector("body"))
-.with_help("Simplify forms and reduce the number of interactive elements per page."));
+.with_help("Long forms and control-heavy pages can be hard to complete. Ignore this where the page needs them."));
             }
 
             findings

@@ -486,31 +486,30 @@ Enable via `aiVisibility: true` (top-level option) or `rules.ai_visibility.enabl
 
 By default this also looks for `dist/llms.txt` or `dist/llms-full.txt` and validates their internal Markdown links. Set `rules.ai_visibility.require_llms_txt: false` to keep the other AI visibility checks without this file check.
 
+Findings that only rest on a heuristic carry the outcome `review` (see [Rule ids come from the shared core](#rule-ids-come-from-the-shared-core)): they do not change how severity gates the build. The module no longer repeats what other modules already report: a missing `lang`, `og:title`, `og:description` or canonical shows up as `document/lang-missing`, `opengraph/title-missing`, `opengraph/description-missing` and `canonical/missing`. Turn on `rules.opengraph.require_og_title` and `require_og_description` if you want the Open Graph ones.
+
 | Rule ID | Level | Description |
 |---------|-------|-------------|
 | `ai-visibility/missing-llms-txt` | Info | Neither `llms.txt` nor `llms-full.txt` exists in `dist/` |
 | `ai-visibility/llms-txt-broken-link` | Warning | An internal Markdown link in an LLM context file has no published target |
-| `ai-visibility/low-word-count` | Info | Page word count < 300 — may not be chunked by LLMs |
-| `ai-visibility/lang-missing` | Warning | Missing `<html lang>` — LLMs may not infer language |
-| `ai-visibility/missing-og-title` | Warning | No `og:title` — reduces citation quality |
-| `ai-visibility/missing-og-description` | Info | No `og:description` — reduces citation quality |
-| `ai-visibility/missing-canonical` | Warning | No canonical URL — LLMs may attribute content incorrectly |
-| `ai-visibility/missing-author-schema` | Info | No `author` in JSON-LD — reduces attribution quality |
-| `ai-visibility/no-semantic-sections` | Info | No `<article>` or `<section>` — poor chunk boundaries |
-| `ai-visibility/no-subheadings` | Warning | Long page with no H2/H3 — poor chunk quality |
-| `ai-visibility/noindex-page` | Info | Page is noindexed — will not be crawled by AI bots |
+| `ai-visibility/low-word-count` | Info, review | Fewer than 300 words of visible text (script and style excluded); a rule of thumb, short pages can be intentional |
+| `ai-visibility/missing-author-schema` | Info, review | No `author`, `publisher` or `creator` in JSON-LD; depends on the page type |
+| `ai-visibility/no-semantic-sections` | Info, review | No `<article>`, `<section>` or `<nav>` element |
+| `ai-visibility/no-subheadings` | Warning, review | More than 600 words of visible text and no H2/H3 |
+| `ai-visibility/noindex-page` | Info | Page has a noindex robots meta tag |
 
 ## UX heuristics
 
 Enable via `uxHeuristics: true` (top-level option) or `rules.ux_heuristics.enabled: true`. Pass an object to configure thresholds: `uxHeuristics: { maxLinksPerPage: 60, minCtaPerPage: 2 }`.
 
+These checks infer quality from keywords and counts, so their findings carry the outcome `review`. Generic link text is reported by `links/generic-name`, not by this module.
+
 | Rule ID | Level | Description |
 |---------|-------|-------------|
-| `ux/no-cta` | Warning | Page has no call-to-action (links/buttons with CTA keywords) |
-| `ux/generic-link-text` | Warning | Link with generic text ("click here", "mehr", "weiter", "read more") |
-| `ux/no-trust-signals` | Warning | No links to Impressum, Datenschutz, contact, or about pages |
-| `ux/high-link-density` | Info | Link count exceeds `max_links_per_page` (default 80) |
-| `ux/high-interactive-density` | Info | More than 20 interactive elements on a single page |
+| `ux/no-cta` | Warning, review | Fewer than `minCtaPerPage` links or buttons with a call-to-action keyword |
+| `ux/no-trust-signals` | Warning, review | No link to an Impressum, privacy, contact or about page and no `<address>` (keyword match) |
+| `ux/high-link-density` | Info, review | Link count exceeds `max_links_per_page` (default 80) |
+| `ux/high-interactive-density` | Info, review | More than 20 buttons, inputs, selects and textareas on a page |
 
 ## Source analysis (Astro + Tailwind)
 

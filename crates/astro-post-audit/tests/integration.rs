@@ -5670,3 +5670,120 @@ fn astro_base_maps_public_urls_to_dist() {
         assert!(messages(rule).is_empty(), "{rule}: {:?}", messages(rule));
     }
 }
+
+/// Issue #103: the word count covers visible text, not inline script or style.
+#[test]
+fn ai_word_count_ignores_script_and_style_text() {
+    let dir = TempDir::new().unwrap();
+    let script = "word ".repeat(500);
+    fs::write(
+        dir.path().join("index.html"),
+        format!(
+            r#"<!DOCTYPE html><html lang="en"><head><title>T</title><style>{script}</style></head><body><main><h1>T</h1><p>Only four visible words.</p><script>{script}</script></main></body></html>"#
+        ),
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"ai_visibility":{"enabled":true,"require_llms_txt":false}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    let low = findings
+        .iter()
+        .find(|f| f["rule_id"] == "ai-visibility/low-word-count")
+        .expect("a page with six visible words is short");
+    assert_eq!(low["outcome"], "review");
+    assert!(
+        low["message"].as_str().unwrap().contains("~6 words"),
+        "{}",
+        low["message"]
+    );
+}
+
+/// Issue #103: the AI and UX heuristics ask for review, they do not fail.
+#[test]
+fn heuristic_ai_and_ux_findings_are_review() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><title>T</title></head><body><main><h1>T</h1><p>Short.</p></main></body></html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"ai_visibility":{"enabled":true,"require_llms_txt":false},"ux_heuristics":{"enabled":true}}"#,
+    );
+    let findings = json["findings"].as_array().unwrap();
+    for id in [
+        "ai-visibility/low-word-count",
+        "ai-visibility/no-semantic-sections",
+        "ai-visibility/missing-author-schema",
+        "ux/no-cta",
+        "ux/no-trust-signals",
+    ] {
+        let f = findings
+            .iter()
+            .find(|f| f["rule_id"] == id)
+            .unwrap_or_else(|| panic!("{id} missing"));
+        assert_eq!(f["outcome"], "review", "{id}");
+    }
+    let noindex_dir = TempDir::new().unwrap();
+    fs::write(
+        noindex_dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><title>T</title><meta name="robots" content="noindex"></head><body><main><h1>T</h1></main></body></html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        noindex_dir.path(),
+        r#"{"ai_visibility":{"enabled":true,"require_llms_txt":false}}"#,
+    );
+    let noindex = json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["rule_id"] == "ai-visibility/noindex-page")
+        .expect("noindex is reported");
+    assert_eq!(noindex["outcome"], "fail", "noindex is observed markup");
+}
+
+/// Issue #103: the removed duplicates still work in overrides and baselines.
+#[test]
+fn removed_duplicate_rule_ids_translate() {
+    for (old, new) in [
+        ("ai-visibility/lang-missing", "document/lang-missing"),
+        ("ai-visibility/missing-og-title", "opengraph/title-missing"),
+        (
+            "ai-visibility/missing-og-description",
+            "opengraph/description-missing",
+        ),
+        ("ai-visibility/missing-canonical", "canonical/missing"),
+        ("ux/generic-link-text", "links/generic-name"),
+    ] {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join("index.html"),
+            r#"<!DOCTYPE html><html><head><title>T</title></head><body><main><h1>T</h1><a href="/">read more</a></main></body></html>"#,
+        )
+        .unwrap();
+        let config = |overrides: &str| {
+            format!(
+                r#"{{"ai_visibility":{{"enabled":true,"require_llms_txt":false}},"ux_heuristics":{{"enabled":true}},"opengraph":{{"require_og_title":true,"require_og_description":true}},"canonical":{{"require":true}},"severity":{{{overrides}}}}}"#
+            )
+        };
+        let (json, _) = run_audit_json(dir.path(), &config(""));
+        let has = |json: &serde_json::Value, id: &str| {
+            json["findings"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|f| f["rule_id"] == id)
+        };
+        assert!(has(&json, new), "{new} reports what {old} used to");
+        assert!(!has(&json, old), "{old} is gone");
+        let (json, _) = run_audit_json(dir.path(), &config(&format!(r#""{old}":"off""#)));
+        assert!(
+            !has(&json, new),
+            "an override on {old} also applies to {new}"
+        );
+    }
+}
