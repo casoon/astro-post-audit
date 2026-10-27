@@ -6,6 +6,8 @@ reconstructed from the git history and the README release notes.
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-10-27
+
 ### Added
 
 - **Go-live:** `goLive.imageHosts` lists further hosts that may serve `og:image`, such as an image CDN on another domain (#100).
