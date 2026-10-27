@@ -107,8 +107,9 @@ fn check_broken_assets(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 }
             }
 
-            // Check img width/height for CLS
-            if config.assets.check_image_dimensions {
+            // Check img width/height for CLS. With `images.check_missing_dimensions` on,
+            // `images/missing-dimensions` reports the same element; one finding is enough.
+            if config.assets.check_image_dimensions && !config.images.check_missing_dimensions {
                 for el in html.select(img_all.as_ref().expect("img selector initialized")) {
                     let has_width = el.value().attr("width").is_some();
                     let has_height = el.value().attr("height").is_some();

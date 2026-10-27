@@ -90,19 +90,31 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             // === Dimension 1: CTA Clarity ===
 
-            // Check for at least one CTA-like element
-            let cta_found = links.iter().chain(buttons.iter()).any(|el| {
-                let text = el.text().collect::<String>().to_lowercase();
-                let href = el.value().attr("href").unwrap_or("").to_lowercase();
-                CTA_KEYWORDS_DE.iter().any(|&kw| text.contains(kw) || href.contains(kw))
-                    || CTA_KEYWORDS_EN.iter().any(|&kw| text.contains(kw) || href.contains(kw))
-            });
+            // Count CTA-like elements; an element matching several keywords counts once
+            let cta_count = links
+                .iter()
+                .chain(buttons.iter())
+                .filter(|el| {
+                    let text = el.text().collect::<String>().to_lowercase();
+                    let href = el.value().attr("href").unwrap_or("").to_lowercase();
+                    CTA_KEYWORDS_DE.iter().any(|&kw| text.contains(kw) || href.contains(kw))
+                        || CTA_KEYWORDS_EN.iter().any(|&kw| text.contains(kw) || href.contains(kw))
+                })
+                .count();
 
-            if ux.min_cta_per_page > 0 && !cta_found {
-                findings.push(Finding::fail("ux/no-cta","No call-to-action found on this page")
+            if ux.min_cta_per_page > 0 && cta_count < ux.min_cta_per_page {
+                let message = if cta_count == 0 {
+                    "No call-to-action found on this page".to_string()
+                } else {
+                    format!(
+                        "{} call-to-action(s) found on this page, expected at least {}",
+                        cta_count, ux.min_cta_per_page
+                    )
+                };
+                findings.push(Finding::fail("ux/no-cta", message)
 .with_severity(Severity::Medium)
 .at(Location::file(page.rel_path.clone()).with_selector("body"))
-.with_help("Add at least one clear CTA (button or link with action-oriented text like 'Get started', 'Contact', 'Buy')."));
+.with_help("Add clear CTAs (buttons or links with action-oriented text like 'Get started', 'Contact', 'Buy')."));
             }
 
             // Generic link text (UX signal, separate from a11y check)

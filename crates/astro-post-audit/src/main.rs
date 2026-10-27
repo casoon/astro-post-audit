@@ -135,13 +135,14 @@ fn run() -> Result<i32> {
             site_index.pages.len(),
             discovery_ms
         );
+        let sitemap = site_index.sitemap_file.as_deref().unwrap_or("sitemap");
         match &site_index.sitemap_parse_error {
-            Some(err) => eprintln!("[debug] sitemap.xml: parse error: {err}"),
+            Some(err) => eprintln!("[debug] {sitemap}: parse error: {err}"),
             None if site_index.sitemap_urls.is_empty() => {
-                eprintln!("[debug] sitemap.xml: not found or empty")
+                eprintln!("[debug] {sitemap}: not found or empty")
             }
             None => eprintln!(
-                "[debug] sitemap.xml: {} URL(s)",
+                "[debug] {sitemap}: {} URL(s)",
                 site_index.sitemap_urls.len()
             ),
         }
@@ -177,8 +178,17 @@ fn run() -> Result<i32> {
 
     // Run all checks, with early stop if --max-errors is exceeded
     let mut findings: Vec<Finding> = Vec::new();
-    let max_errors = config.max_errors;
+    let recording_baseline = config.baseline.is_some() && config.write_baseline;
+    // A baseline is a complete snapshot, so recording one ignores the cap.
+    let max_errors = config.max_errors.filter(|_| !recording_baseline);
+    // Known findings are dropped per check, so they do not use up the error
+    // budget of the early stop.
+    let baseline = match &config.baseline {
+        Some(path) if !recording_baseline => baseline::Baseline::load(path)?,
+        _ => None,
+    };
     let mut error_count: usize = 0;
+    let mut stopped_early = false;
     let mut check_timings: Vec<report::CheckTiming> = Vec::new();
 
     type CheckFn = fn(&SiteIndex, &Config) -> Vec<Finding>;
@@ -251,6 +261,7 @@ fn run() -> Result<i32> {
 
     for (idx, &(name, check_fn)) in registry.iter().enumerate() {
         if max_errors.is_some_and(|m| error_count >= m) {
+            stopped_early = true;
             break;
         }
         if show_bar {
@@ -277,6 +288,19 @@ fn run() -> Result<i32> {
                 }
                 true
             });
+        }
+        if config.warn_modules.iter().any(|m| m == name) {
+            for f in &mut new_findings {
+                if report::is_error(f)
+                    && !f.rule_id.starts_with("golive/")
+                    && !severity_overrides.contains_key(&f.rule_id)
+                {
+                    f.severity = report::Severity::Medium;
+                }
+            }
+        }
+        if let Some(baseline) = &baseline {
+            new_findings.retain(|f| !baseline.contains(f));
         }
         if bench {
             check_timings.push(report::CheckTiming {
@@ -305,7 +329,6 @@ fn run() -> Result<i32> {
         error_count += new_findings.iter().filter(|f| report::is_error(f)).count();
         findings.extend(new_findings);
     }
-    let _ = error_count;
 
     if let Some(progress) = &verbose_progress {
         progress.finish(Verdict::Info, "Checks complete");
@@ -332,20 +355,17 @@ fn run() -> Result<i32> {
         }
     }
 
-    let baseline_written = if let Some(ref baseline_path) = config.baseline {
-        if config.write_baseline {
+    let baseline_written = match &config.baseline {
+        Some(baseline_path) if recording_baseline => {
             baseline::write(&findings, baseline_path)?;
             true
-        } else {
-            findings = baseline::filter(findings, baseline_path)?.0;
-            false
         }
-    } else {
-        false
+        _ => false,
     };
 
-    // Enforce exact --max-errors cap: keep only the first N errors (plus all non-errors before them)
-    let truncated = if let Some(max) = max_errors {
+    // Enforce exact --max-errors cap: keep only the first N errors (plus all non-errors before them).
+    // A run that skipped checks counts as truncated even if no finding was dropped.
+    let dropped_errors = if let Some(max) = max_errors {
         let total_errors = findings.iter().filter(|f| report::is_error(f)).count();
         if total_errors > max {
             let mut error_seen = 0usize;
@@ -364,6 +384,7 @@ fn run() -> Result<i32> {
     } else {
         false
     };
+    let truncated = stopped_early || dropped_errors;
 
     // Generate report
     let mut summary = Summary::from_findings(&findings);

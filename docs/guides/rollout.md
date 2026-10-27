@@ -70,7 +70,7 @@ Groups: `seo`, `a11y`, `links`, `performance`, `privacy`.
 | --- | --- |
 | `golive/noindex` | Page has a `noindex` robots directive |
 | `golive/canonical-origin` | Canonical URL uses the wrong origin |
-| `golive/og-origin` | `og:url` or `og:image` uses the wrong origin |
+| `golive/og-origin` | `og:url` uses the wrong origin, or `og:image` comes from a host that is neither the production host, one of its subdomains nor listed in `goLive.imageHosts` |
 | `golive/sitemap-origin` | Sitemap entry uses the wrong origin |
 | `golive/forbidden-domain` | A link, script, canonical or sitemap entry contains a forbidden domain |
 | `golive/robots-blocked` | `robots.txt` blocks all crawlers with `Disallow: /` |

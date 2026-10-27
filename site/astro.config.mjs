@@ -1,6 +1,11 @@
 // @ts-check
+import { readFileSync } from 'node:fs';
 import casoonPages from '@casoon/pages-theme';
 import { defineConfig } from 'astro/config';
+
+const { version } = JSON.parse(
+  readFileSync(new URL('../packages/astro-post-audit/package.json', import.meta.url), 'utf8'),
+);
 
 // Project page: https://casoon.github.io/astro-post-audit/ — `base` is the GitHub Pages path.
 export default defineConfig({
@@ -13,7 +18,7 @@ export default defineConfig({
         'Astro integration that audits the built dist/ output for SEO, broken links and lightweight WCAG heuristics, offline and in Rust.',
       tagline: 'SEO, link and a11y checks after build',
       repo: 'casoon/astro-post-audit',
-      version: '0.9.1',
+      version,
       license: 'MIT',
       packages: [
         { label: 'npm', href: 'https://www.npmjs.com/package/@casoon/astro-post-audit' },

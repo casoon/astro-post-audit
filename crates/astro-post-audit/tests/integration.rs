@@ -840,7 +840,7 @@ fn assets_img_dimensions_missing() {
     ).unwrap();
     let (json, _) = run_audit_json(
         dir.path(),
-        r#"{"site":{"base_url":"https://example.com"},"assets":{"check_broken_assets":true,"check_image_dimensions":true}}"#,
+        r#"{"site":{"base_url":"https://example.com"},"assets":{"check_broken_assets":true,"check_image_dimensions":true},"images":{"check_missing_dimensions":false}}"#,
     );
     let findings = json["findings"].as_array().unwrap();
     let dim_findings: Vec<_> = findings
@@ -5315,4 +5315,291 @@ fn published_a11y_rules_avoid_quiz_search_and_marked_language_false_positives() 
             Some(expected)
         );
     }
+}
+
+fn rule_files<'a>(json: &'a serde_json::Value, rule: &str) -> Vec<&'a str> {
+    json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["rule_id"] == rule)
+        .filter_map(|f| f["location"]["file"].as_str())
+        .collect()
+}
+
+/// A page whose only errors are a missing canonical (seo, first module) and
+/// the given broken links (links, second module).
+fn write_page_without_canonical(dir: &Path, rel_path: &str, broken_links: &[&str]) {
+    let links: String = broken_links
+        .iter()
+        .map(|href| format!(r#"<a href="{href}">Broken</a>"#))
+        .collect();
+    let full = dir.join(rel_path);
+    if let Some(parent) = full.parent() {
+        fs::create_dir_all(parent).unwrap();
+    }
+    fs::write(
+        full,
+        format!(
+            r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Page</title></head><body><header><nav><a href="/">Home</a></nav></header><main><h1>Page</h1>{links}</main></body></html>"#
+        ),
+    )
+    .unwrap();
+}
+
+/// Issue #93: findings suppressed by the baseline must not use up the
+/// max_errors budget and hide new errors.
+#[test]
+fn baseline_suppressed_errors_do_not_stop_the_audit_early() {
+    let dir = TempDir::new().unwrap();
+    let baseline = dir.path().join("baseline.json");
+    write_page_without_canonical(dir.path(), "index.html", &["/missing-1/"]);
+    let config = |extra: &str| {
+        format!(
+            r#"{{"site":{{"base_url":"https://example.com"}},"canonical":{{"require":true}},"baseline":"{}"{extra}}}"#,
+            baseline.display().to_string().replace('\\', "\\\\")
+        )
+    };
+    let (_, code) = run_audit_json(dir.path(), &config(r#","write_baseline":true"#));
+    assert_eq!(code, 0, "writing the baseline succeeds");
+
+    write_page_without_canonical(dir.path(), "index.html", &["/missing-1/", "/missing-2/"]);
+    let (json, code) = run_audit_json(dir.path(), &config(r#","max_errors":1"#));
+    let broken: Vec<&str> = json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["rule_id"] == "links/broken")
+        .filter_map(|f| f["message"].as_str())
+        .collect();
+    assert_eq!(broken.len(), 1, "only the new broken link: {broken:?}");
+    assert!(broken[0].contains("/missing-2/"));
+    assert_eq!(code, 1);
+}
+
+/// Issue #93: recording a baseline ignores max_errors, so the snapshot is complete.
+#[test]
+fn writing_a_baseline_ignores_max_errors() {
+    let dir = TempDir::new().unwrap();
+    let baseline = dir.path().join("baseline.json");
+    write_page_without_canonical(dir.path(), "index.html", &["/missing-1/"]);
+    let (_, code) = run_audit_json(
+        dir.path(),
+        &format!(
+            r#"{{"site":{{"base_url":"https://example.com"}},"canonical":{{"require":true}},"baseline":"{}","write_baseline":true,"max_errors":1}}"#,
+            baseline.display().to_string().replace('\\', "\\\\")
+        ),
+    );
+    assert_eq!(code, 0);
+    let written = fs::read_to_string(&baseline).unwrap();
+    assert!(written.contains("links/broken"), "{written}");
+}
+
+/// Issue #94: stopping at exactly max_errors skips later checks, so the run is truncated.
+#[test]
+fn max_errors_reached_exactly_marks_the_run_truncated() {
+    let dir = TempDir::new().unwrap();
+    write_page_without_canonical(dir.path(), "index.html", &["/missing/"]);
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"canonical":{"require":true},"max_errors":1}"#,
+    );
+    assert!(
+        rule_files(&json, "links/broken").is_empty(),
+        "links check skipped"
+    );
+    assert_eq!(json["summary"]["truncated"], true);
+}
+
+/// Issue #95: @astrojs/sitemap writes sitemap-index.xml plus child sitemaps.
+#[test]
+fn sitemap_index_children_are_read() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    fs::write(
+        dir.path().join("sitemap-index.xml"),
+        r#"<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><sitemap><loc>https://example.com/sitemap-0.xml</loc></sitemap></sitemapindex>"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("sitemap-0.xml"),
+        r#"<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://example.com/</loc></url><url><loc>https://example.com/gone/?a=1&amp;b=2</loc></url></urlset>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"sitemap":{"require":true,"entries_must_exist_in_dist":true}}"#,
+    );
+    assert!(rule_files(&json, "sitemap/missing").is_empty());
+    assert!(rule_files(&json, "sitemap/canonical-missing").is_empty());
+    let stale: Vec<&str> = json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["rule_id"] == "sitemap/entry-not-in-dist")
+        .filter_map(|f| f["message"].as_str())
+        .collect();
+    assert_eq!(stale.len(), 1, "{stale:?}");
+    assert!(
+        stale[0].contains("https://example.com/gone/?a=1&b=2"),
+        "entity decoded: {stale:?}"
+    );
+    assert_eq!(
+        rule_files(&json, "sitemap/entry-not-in-dist"),
+        ["sitemap-0.xml"]
+    );
+}
+
+/// Issue #95: a child sitemap missing from dist is reported, not silently skipped.
+#[test]
+fn sitemap_index_missing_child_is_reported() {
+    let dir = TempDir::new().unwrap();
+    write_valid_page(dir.path(), "index.html", "Home", "Home", "/");
+    fs::write(
+        dir.path().join("sitemap-index.xml"),
+        r#"<?xml version="1.0" encoding="UTF-8"?><sitemapindex><sitemap><loc>https://example.com/sitemap-9.xml</loc></sitemap></sitemapindex>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"sitemap":{"require":true}}"#,
+    );
+    assert_eq!(
+        rule_files(&json, "sitemap/parse-error"),
+        ["sitemap-index.xml"]
+    );
+}
+
+/// Issue #99: with both dimension checks on, an image gets one finding.
+#[test]
+fn image_dimensions_reported_once() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("image.png"), b"png").unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><title>T</title></head><body><main><h1>T</h1><img src="/image.png" alt="Image"></main></body></html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"assets":{"check_image_dimensions":true},"images":{"check_missing_dimensions":true}}"#,
+    );
+    assert_eq!(
+        rule_files(&json, "images/missing-dimensions"),
+        ["index.html"]
+    );
+    assert!(rule_files(&json, "assets/img-dimensions").is_empty());
+}
+
+/// Issue #100: og:image may come from a CDN; og:url must use the production origin.
+#[test]
+fn golive_og_image_from_cdn() {
+    let dir = TempDir::new().unwrap();
+    let page = |image: &str, url: &str| {
+        format!(
+            r#"<!DOCTYPE html><html lang="en"><head><title>T</title><meta property="og:url" content="{url}"><meta property="og:image" content="{image}"></head><body><main><h1>T</h1></main></body></html>"#
+        )
+    };
+    let write = |name: &str, html: String| {
+        let path = dir.path().join(name);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, html).unwrap();
+    };
+    write(
+        "index.html",
+        page("https://example.com/a.jpg", "https://example.com/"),
+    );
+    write(
+        "cdn/index.html",
+        page("https://cdn.example.com/a.jpg", "https://example.com/cdn/"),
+    );
+    write(
+        "listed/index.html",
+        page(
+            "https://images.example.net/a.jpg",
+            "https://example.com/listed/",
+        ),
+    );
+    write(
+        "other/index.html",
+        page("https://elsewhere.org/a.jpg", "https://example.com/other/"),
+    );
+    write(
+        "staging/index.html",
+        page(
+            "https://staging.example.com/a.jpg",
+            "https://example.com/staging/",
+        ),
+    );
+    write(
+        "wrong-url/index.html",
+        page("https://example.com/a.jpg", "https://cdn.example.com/x/"),
+    );
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"go_live":{"enabled":true,"forbidden_domains":["staging.example.com"],"image_hosts":["images.example.net"]}}"#,
+    );
+    let mut origin = rule_files(&json, "golive/og-origin");
+    origin.sort();
+    assert_eq!(origin, ["other/index.html", "wrong-url/index.html"]);
+    assert_eq!(
+        rule_files(&json, "golive/forbidden-domain"),
+        ["staging/index.html"]
+    );
+}
+
+/// Issue #102: min_cta_per_page is a count, not a switch.
+#[test]
+fn ux_min_cta_per_page_counts_elements() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><title>T</title></head><body><main><h1>T</h1><a href="/contact/">Contact us and get started</a></main></body></html>"#,
+    )
+    .unwrap();
+    let run = |min: usize| {
+        let (json, _) = run_audit_json(
+            dir.path(),
+            &format!(r#"{{"ux_heuristics":{{"enabled":true,"min_cta_per_page":{min}}}}}"#),
+        );
+        rule_files(&json, "ux/no-cta").len()
+    };
+    assert_eq!(run(0), 0, "zero disables the check");
+    assert_eq!(run(1), 0, "one CTA, even matching two keywords");
+    assert_eq!(run(2), 1, "one CTA is fewer than two");
+}
+
+/// Issue #98: a group set to 'warn' caps all findings of its modules.
+#[test]
+fn warn_modules_cap_severity() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("image.png"), b"png").unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><title>T</title></head><body><main><h1>T</h1><img src="/image.png" alt="Image"></main></body></html>"#,
+    )
+    .unwrap();
+    let severity = |config: &str| {
+        let (json, _) = run_audit_json(dir.path(), config);
+        json["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|f| f["rule_id"] == "images/missing-dimensions")
+            .map(|f| f["severity"].as_str().unwrap().to_string())
+    };
+    let images = r#""images":{"check_missing_dimensions":true}"#;
+    assert_eq!(severity(&format!("{{{images}}}")).as_deref(), Some("high"));
+    assert_eq!(
+        severity(&format!(r#"{{{images},"warn_modules":["images"]}}"#)).as_deref(),
+        Some("medium")
+    );
+    assert_eq!(
+        severity(&format!(
+            r#"{{{images},"warn_modules":["images"],"severity":{{"images/missing-dimensions":"error"}}}}"#
+        ))
+        .as_deref(),
+        Some("high"),
+        "an explicit per-rule override wins"
+    );
 }

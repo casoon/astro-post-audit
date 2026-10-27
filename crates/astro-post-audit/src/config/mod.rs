@@ -125,6 +125,9 @@ pub struct Config {
     pub write_baseline: bool,
     /// Additional report formats to write to disk in a single audit run.
     pub extra_reports: Vec<ExtraReport>,
+    /// Check modules of rule groups set to `'warn'`: their findings are capped at
+    /// warning severity unless `severity` names the rule explicitly.
+    pub warn_modules: Vec<String>,
     pub go_live: GoLiveConfig,
 }
 
@@ -848,6 +851,8 @@ pub struct GoLiveConfig {
     pub enabled: bool,
     pub expected_site: Option<String>,
     pub forbidden_domains: Vec<String>,
+    /// Hosts besides the production host and its subdomains that may serve og:image.
+    pub image_hosts: Vec<String>,
 }
 
 // --- Defaults (only for structs with non-zero defaults) ---

@@ -6,6 +6,35 @@ reconstructed from the git history and the README release notes.
 
 ## [Unreleased]
 
+### Added
+
+- **Go-live:** `goLive.imageHosts` lists further hosts that may serve `og:image`, such as an image CDN on another domain (#100).
+
+### Changed
+
+- **Go-live:** `og:image` may come from a subdomain of the production host without a `golive/og-origin` finding; `og:url` still has to use the production origin. `og:url` and `og:image` on a forbidden domain are reported as `golive/forbidden-domain` (#100).
+- **Groups:** a group set to `'warn'` caps every finding of its check modules at warning, including rules added later through `a11y-rules`; an explicit `severity` entry still wins (#98).
+- **Docs:** release history lives in the changelog, and the full rules reference lives in the integration options documentation.
+
+### Fixed
+
+- **Sitemap:** a `sitemap-index.xml` (as written by `@astrojs/sitemap`) and its child sitemaps are read, so sitemap, robots and go-live checks see their URLs instead of reporting `sitemap/missing` (#95).
+- **Reports:** the binary writes the JSON report itself, so large reports no longer fail with `ENOBUFS` (#96).
+- **Baseline:** errors already in the baseline no longer count towards `maxErrors`, which could stop the audit before new errors were found; `writeBaseline` ignores `maxErrors` so the snapshot is complete (#93).
+- **Reports:** a run that `maxErrors` stopped early is marked truncated even when no finding was dropped (#94).
+- **Images:** a missing `width`/`height` is reported once as `images/missing-dimensions`; `assets/img-dimensions` only reports when the images check is off (#99).
+- **Structured data:** `structured-data/website-missing-search-action` only reports on the start
+  page; `WebSite` reference nodes on subpages no longer produce one hint per page (#88).
+- **UX heuristics:** `minCtaPerPage` compares the number of CTAs on a page with the minimum instead of only checking for one (#102).
+- **UX heuristics:** `uxHeuristics: false` switches the check off, and `true` or an object keep the other settings from `rules.ux_heuristics` (#101).
+- **Docs:** historical changelog entries use flat lists so their details render on the project site.
+- **Docs:** the project site's version badge and metadata read the npm package version instead of a separately maintained value.
+- **npm:** published packages exclude compiled unit and end-to-end test files and their declarations.
+
+### Security
+
+- **Dependencies:** updated `rustls`, `rustls-webpki` and `webpki-roots` (external link checks), `quick-xml` 0.42 (sitemap parsing) and `c2pa` 0.91 (pulls in `zip` 9); `cargo audit` reports one remaining advisory (`rsa`, no fix available, only affects private-key operations, which this tool does not perform).
+
 ## [0.9.2] - 2026-10-26
 
 ### Added
@@ -17,11 +46,6 @@ reconstructed from the git history and the README release notes.
 - **Docs:** the start page of the [project site](https://casoon.github.io/astro-post-audit/)
   opens with an excerpt of a real report next to the install commands instead of the full
   report.
-
-### Fixed
-
-- **Structured data:** `structured-data/website-missing-search-action` only reports on the start
-  page; `WebSite` reference nodes on subpages no longer produce one hint per page (#88).
 
 ## [0.9.1] - 2026-10-04
 
@@ -51,16 +75,16 @@ reconstructed from the git history and the README release notes.
 
 ### Changed
 
-- hreflang checks use `web-checks` 0.5 (shared with auditmysite):
-  - **New:** `hreflang/invalid-code` for values that are not a language code (ISO 639, optional
-    script and region) or `x-default`, e.g. `de_DE` or `deutsch`. On by default when
-    `check_hreflang` is on; `hreflang.require_valid_code: false` switches it off.
-  - **Changed:** `x-default` no longer counts as a page's self-reference, so a page that names
-    itself only as `x-default` now gets `hreflang/no-self-reference`. `x-default` is matched
-    case-insensitively.
-  - **Fixed:** relative `href` values are resolved against the page URL, so a relative
-    self-reference (`href="/"`) counts. Query strings are kept when comparing URLs, so
-    `?lang=de` versions are no longer mistaken for the page itself.
+- **Hreflang:** checks use `web-checks` 0.5 (shared with auditmysite).
+- **Hreflang:** new `hreflang/invalid-code` for values that are not a language code (ISO 639, optional
+  script and region) or `x-default`, e.g. `de_DE` or `deutsch`. On by default when
+  `check_hreflang` is on; `hreflang.require_valid_code: false` switches it off.
+- **Hreflang:** `x-default` no longer counts as a page's self-reference, so a page that names
+  itself only as `x-default` now gets `hreflang/no-self-reference`. `x-default` is matched
+  case-insensitively.
+- **Hreflang:** relative `href` values are resolved against the page URL, so a relative
+  self-reference (`href="/"`) counts. Query strings are kept when comparing URLs, so
+  `?lang=de` versions are no longer mistaken for the page itself.
 
 - Accessibility rules come from `a11y-rules` 0.18 (was 0.12), HTML validation from
   `html-conform` 0.3.1 (was 0.2). Finding counts change on upgrade — fewer false positives
@@ -105,24 +129,24 @@ reconstructed from the git history and the README release notes.
 
 ### Changed
 
-- Structured data is evaluated by `web-checks` 0.4 (`structured_data`), shared with auditmysite.
-  The rule tables follow Google's structured-data docs, so finding counts change:
-  - **No longer reported:** Article/BlogPosting/NewsArticle `headline`, Organization/Person
-    `name` and WebSite `name`/`url` as `structured-data/missing-property` (Google lists no required
-    properties for these types).
-  - **Now reported:** missing required properties of Event, Recipe, VideoObject, JobPosting,
-    SoftwareApplication, ProfilePage, ItemList and Product (`name` plus one of
-    `offers`/`review`/`aggregateRating`) as `structured-data/missing-property`; BreadcrumbList with
-    fewer than 2 items or without `item` on a non-last entry; `structured-data/invalid-structure`
-    for a non-object root, a non-array `@graph` or an empty array/`@graph`.
-  - **Severity changed:** `structured-data/news-article-missing-publisher` High → Medium
-    (recommended, not required); `structured-data/local-business-missing-address` Low → Medium
-    (required by Google).
-  - **Behaviour:** empty values (`""`, `null`, `[]`, `{}`) count as missing; `@context` must be
-    exactly `http(s)://schema.org` (also as array entry or `@vocab`) and is inherited into
-    `@graph`; top-level arrays are expanded instead of reported as missing context; every `@type`
-    entry is assessed, full IRIs included; `structured-data/duplicate-type` counts blocks, not
-    repeats inside one block.
+- **Structured data:** JSON-LD is evaluated by `web-checks` 0.4 (`structured_data`), shared with auditmysite.
+  The rule tables follow Google's structured-data docs, so finding counts change.
+- **Structured data:** no longer reported: Article/BlogPosting/NewsArticle `headline`, Organization/Person
+  `name` and WebSite `name`/`url` as `structured-data/missing-property` (Google lists no required
+  properties for these types).
+- **Structured data:** now reported: missing required properties of Event, Recipe, VideoObject, JobPosting,
+  SoftwareApplication, ProfilePage, ItemList and Product (`name` plus one of
+  `offers`/`review`/`aggregateRating`) as `structured-data/missing-property`; BreadcrumbList with
+  fewer than 2 items or without `item` on a non-last entry; `structured-data/invalid-structure`
+  for a non-object root, a non-array `@graph` or an empty array/`@graph`.
+- **Structured data:** severity changed: `structured-data/news-article-missing-publisher` High → Medium
+  (recommended, not required); `structured-data/local-business-missing-address` Low → Medium
+  (required by Google).
+- **Structured data:** behaviour: empty values (`""`, `null`, `[]`, `{}`) count as missing; `@context` must be
+  exactly `http(s)://schema.org` (also as array entry or `@vocab`) and is inherited into
+  `@graph`; top-level arrays are expanded instead of reported as missing context; every `@type`
+  entry is assessed, full IRIs included; `structured-data/duplicate-type` counts blocks, not
+  repeats inside one block.
 - Title and meta description length come from `web-checks` 0.3 and count **characters**, not
   bytes: before, every umlaut counted twice, so a 60-character German title could be reported as
   too long. Whitespace is collapsed as in the browser before counting.

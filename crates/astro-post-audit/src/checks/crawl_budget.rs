@@ -97,7 +97,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             let Some(abs) = &page.absolute_url else {
                 continue;
             };
-            if index.sitemap_urls.contains(abs) {
+            if index.sitemap_urls.contains_key(abs) {
                 findings.push(
                     Finding::review(
                         "crawl-budget/noindex-in-sitemap",
