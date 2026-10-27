@@ -115,7 +115,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 fn needs_srcset(src: &str, width: Option<&str>, route: &str, index: &SiteIndex) -> bool {
     let local = if !src.contains(':') && !src.starts_with("//") {
         crate::normalize::resolve_href(src, route, index.base_url.as_deref())
-            .map(|path| index.dist_path.join(path.trim_start_matches('/')))
+            .and_then(|path| index.dist_path_for(&path))
     } else {
         None
     };

@@ -471,4 +471,26 @@ describe("postAudit", () => {
     assert.deepEqual(stdio, ["pipe", "ignore", "inherit"]);
     assert.ok(info.includes("Audit passed (3 files checked)."));
   });
+
+  it("passes Astro's base to the binary (#97)", () => {
+    let config: Record<string, unknown> = {};
+    const deps = {
+      existsSync: () => true,
+      readFileSync: () => "",
+      execFileSync: makeExecMock((_file, args, execOptions) => {
+        if (args[0] === "--help") return "Usage: ... --config-stdin ...";
+        config = JSON.parse((execOptions as { input: string }).input) as Record<string, unknown>;
+        return "";
+      }),
+    };
+    const integration = postAudit({}, deps);
+    const configDone = integration.hooks["astro:config:done"] as Function;
+    configDone({
+      config: { site: new URL("https://example.com"), base: "/site/", root: new URL("file:///tmp/") },
+      buildOutput: "static",
+    });
+    const hook = integration.hooks["astro:build:done"] as Function;
+    hook({ dir: new URL("file:///tmp/dist/"), logger: makeLogger().logger });
+    assert.deepEqual(config.site, { base_url: "https://example.com/", base_path: "/site" });
+  });
 });

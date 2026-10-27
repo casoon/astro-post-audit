@@ -43,7 +43,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             let Some(src) = el.value().attr("src") else {
                 continue;
             };
-            let Some(path) = resolve_local_script(src, &page.rel_path, &index.dist_path) else {
+            let Some(path) = resolve_local_script(src, &page.rel_path, index) else {
                 continue;
             };
             if !seen.insert(path.clone()) {
@@ -83,7 +83,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
 /// Resolve a `<script src>` to a local file path inside dist, or None for
 /// external/data URLs that cannot be weighed locally.
-fn resolve_local_script(src: &str, page_rel: &str, dist: &Path) -> Option<PathBuf> {
+fn resolve_local_script(src: &str, page_rel: &str, index: &SiteIndex) -> Option<PathBuf> {
     if src.starts_with("http://")
         || src.starts_with("https://")
         || src.starts_with("//")
@@ -97,9 +97,9 @@ fn resolve_local_script(src: &str, page_rel: &str, dist: &Path) -> Option<PathBu
         return None;
     }
     if clean.starts_with('/') {
-        Some(dist.join(clean.trim_start_matches('/')))
+        index.dist_path_for(clean)
     } else {
         let page_dir = Path::new(page_rel).parent().unwrap_or(Path::new(""));
-        Some(dist.join(page_dir).join(clean))
+        Some(index.dist_path.join(page_dir).join(clean))
     }
 }

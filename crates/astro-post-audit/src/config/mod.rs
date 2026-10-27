@@ -153,6 +153,8 @@ pub enum SeverityLevel {
 #[serde(default)]
 pub struct SiteConfig {
     pub base_url: Option<String>,
+    /// Astro `base` (e.g. `/docs`): pages are served under it, but sit at the root of dist.
+    pub base_path: Option<String>,
 }
 
 /// File include/exclude patterns (merged with CLI --include/--exclude).

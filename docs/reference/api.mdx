@@ -28,7 +28,7 @@ postAudit(options?: PostAuditOptions): AstroIntegration`}
 | `throwOnError` | `boolean` | `false` | Fail the build on findings. Ignored when `failOn` is set. |
 | `maxErrors` | `number` | – | Stop after this many errors; the report is then marked truncated. Errors known from the baseline do not count, and `writeBaseline` ignores the limit. |
 | `maxWarnings` | `number` | – | Fail when the warning count exceeds this number. |
-| `site` | `string` | Astro `site` | Base URL. |
+| `site` | `string` | Astro `site` | Base URL. Astro's `base` is applied too: links, canonicals and sitemap URLs carry it, files in `dist/` do not. |
 | `reports` | `{ json?, markdown?, sarif?, html? }` | – | Report files. See [Output and CI](../../guides/output-and-ci/). |
 | `output` | `string` | – | Legacy alias for `reports.json`. |
 | `outputMarkdown` | `string` | – | Legacy alias for `reports.markdown`. |

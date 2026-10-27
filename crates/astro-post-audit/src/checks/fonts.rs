@@ -66,7 +66,7 @@ fn css_sources(index: &SiteIndex, page: &PageInfo, html: &scraper::Html) -> Vec<
         let Some(href) = stylesheet.value().attr("href") else {
             continue;
         };
-        let Some(path) = local_asset_path(&index.dist_path, &page.rel_path, href) else {
+        let Some(path) = local_asset_path(index, &page.rel_path, href) else {
             continue;
         };
         if let Ok(css) = std::fs::read_to_string(path) {
@@ -77,7 +77,7 @@ fn css_sources(index: &SiteIndex, page: &PageInfo, html: &scraper::Html) -> Vec<
     sources
 }
 
-fn local_asset_path(dist_path: &Path, page_file: &str, href: &str) -> Option<std::path::PathBuf> {
+fn local_asset_path(index: &SiteIndex, page_file: &str, href: &str) -> Option<std::path::PathBuf> {
     if href.starts_with("http://")
         || href.starts_with("https://")
         || href.starts_with("//")
@@ -87,8 +87,9 @@ fn local_asset_path(dist_path: &Path, page_file: &str, href: &str) -> Option<std
     }
 
     let clean = normalize::strip_fragment_and_query(href);
+    let dist_path = &index.dist_path;
     let candidate = if clean.starts_with('/') {
-        dist_path.join(clean.trim_start_matches('/'))
+        index.dist_path_for(clean)?
     } else {
         let page_dir = Path::new(page_file)
             .parent()

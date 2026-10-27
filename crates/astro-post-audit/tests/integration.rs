@@ -5603,3 +5603,70 @@ fn warn_modules_cap_severity() {
         "an explicit per-rule override wins"
     );
 }
+
+/// Issue #97: with an Astro `base`, public URLs carry the prefix while the
+/// files sit at the root of dist.
+#[test]
+fn astro_base_maps_public_urls_to_dist() {
+    let dir = TempDir::new().unwrap();
+    let page = |canonical: &str, body: &str| {
+        format!(
+            r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>T</title><link rel="canonical" href="{canonical}"><link rel="stylesheet" href="/site/_astro/a.css"></head><body><header><nav><a href="/site/">Home</a></nav></header><main><h1>T</h1>{body}</main></body></html>"#
+        )
+    };
+    fs::create_dir_all(dir.path().join("_astro")).unwrap();
+    fs::write(dir.path().join("_astro/a.css"), "body{}").unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        page(
+            "https://example.com/site/",
+            r#"<a href="/site/about/">About</a><a href="about/">Relative</a><a href="/about/">No base</a><img src="/_astro/missing-base.png" alt="x" width="1" height="1">"#,
+        ),
+    )
+    .unwrap();
+    fs::create_dir_all(dir.path().join("about")).unwrap();
+    fs::write(
+        dir.path().join("about/index.html"),
+        page("https://example.com/site/about/", ""),
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("sitemap-index.xml"),
+        r#"<?xml version="1.0" encoding="UTF-8"?><sitemapindex><sitemap><loc>https://example.com/site/sitemap-0.xml</loc></sitemap></sitemapindex>"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("sitemap-0.xml"),
+        r#"<?xml version="1.0" encoding="UTF-8"?><urlset><url><loc>https://example.com/site/</loc></url><url><loc>https://example.com/site/about/</loc></url></urlset>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com","base_path":"/site"},"assets":{"check_broken_assets":true},"sitemap":{"require":true,"entries_must_exist_in_dist":true}}"#,
+    );
+    let messages = |rule: &str| -> Vec<String> {
+        json["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|f| f["rule_id"] == rule)
+            .map(|f| f["message"].as_str().unwrap().to_string())
+            .collect()
+    };
+    let broken = messages("links/broken");
+    assert_eq!(broken.len(), 1, "only the link without base: {broken:?}");
+    assert!(broken[0].contains("'/about/'"), "{broken:?}");
+    let assets = messages("assets/broken");
+    assert_eq!(assets.len(), 1, "{assets:?}");
+    assert!(assets[0].contains("/_astro/missing-base.png"), "{assets:?}");
+    for rule in [
+        "canonical/not-self",
+        "canonical/target-missing",
+        "sitemap/missing",
+        "sitemap/parse-error",
+        "sitemap/canonical-missing",
+        "sitemap/entry-not-in-dist",
+    ] {
+        assert!(messages(rule).is_empty(), "{rule}: {:?}", messages(rule));
+    }
+}

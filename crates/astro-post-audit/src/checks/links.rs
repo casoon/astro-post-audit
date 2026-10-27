@@ -55,7 +55,9 @@ fn check_url_depth(index: &SiteIndex, max_depth: usize) -> Vec<Finding> {
         .pages
         .iter()
         .filter_map(|page| {
-            let depth = page.route.split('/').filter(|s| !s.is_empty()).count();
+            // The Astro `base` is part of every route, not of the site's own nesting.
+            let path = page.route.strip_prefix(&index.base_path).unwrap_or(&page.route);
+            let depth = path.split('/').filter(|s| !s.is_empty()).count();
             if depth > max_depth {
                 Some(Finding::fail("links/url-depth", format!(
                         "URL is {} levels deep (max recommended: {}): {}",
@@ -154,8 +156,8 @@ fn check_internal_links(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     // Check if route exists or if it's a file asset
                     if !index.route_exists(&normalized) {
                         // Also check raw path as file
-                        let file_check = resolved.trim_start_matches('/');
-                        if !is_known_route && !index.file_exists(file_check) {
+                        let is_file = index.dist_path_for(&resolved).is_some_and(|p| p.exists());
+                        if !is_known_route && !is_file {
                             let schwere = if config.links.fail_on_broken {
                                 Severity::High
                             } else {

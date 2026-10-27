@@ -49,7 +49,7 @@ fn check_broken_assets(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 if let Some(src) = el.value().attr("src") {
                     if should_check_asset(src) {
                         check_asset_exists(
-                            &index.dist_path,
+                            index,
                             src,
                             &page.rel_path,
                             "img[src]",
@@ -64,7 +64,7 @@ fn check_broken_assets(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 if let Some(src) = el.value().attr("src") {
                     if should_check_asset(src) {
                         check_asset_exists(
-                            &index.dist_path,
+                            index,
                             src,
                             &page.rel_path,
                             "script[src]",
@@ -79,7 +79,7 @@ fn check_broken_assets(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 if let Some(href) = el.value().attr("href") {
                     if should_check_asset(href) {
                         check_asset_exists(
-                            &index.dist_path,
+                            index,
                             href,
                             &page.rel_path,
                             "link[href]",
@@ -96,7 +96,7 @@ fn check_broken_assets(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         let src = entry.split_whitespace().next().unwrap_or("");
                         if !src.is_empty() && should_check_asset(src) {
                             check_asset_exists(
-                                &index.dist_path,
+                                index,
                                 src,
                                 &page.rel_path,
                                 "srcset",
@@ -140,7 +140,7 @@ fn should_check_asset(src: &str) -> bool {
 }
 
 fn check_asset_exists(
-    dist_path: &Path,
+    index: &SiteIndex,
     src: &str,
     page_file: &str,
     selector_hint: &str,
@@ -148,15 +148,16 @@ fn check_asset_exists(
 ) {
     let clean = src.split('?').next().unwrap_or(src);
     let clean = clean.split('#').next().unwrap_or(clean);
+    // A root-relative path outside the Astro `base` is not served by this build.
     let asset_path = if clean.starts_with('/') {
-        dist_path.join(clean.trim_start_matches('/'))
+        index.dist_path_for(clean)
     } else {
         // Relative to page directory
         let page_dir = Path::new(page_file).parent().unwrap_or(Path::new(""));
-        dist_path.join(page_dir).join(clean)
+        Some(index.dist_path.join(page_dir).join(clean))
     };
 
-    if !asset_path.exists() {
+    if !asset_path.is_some_and(|path| path.exists()) {
         findings.push(
             Finding::fail(
                 "assets/broken",
