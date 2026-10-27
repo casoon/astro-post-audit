@@ -1,18 +1,22 @@
 ---
+import { readFile } from 'node:fs/promises';
 import {
   Badge,
   Badges,
   BuildOutput,
   CodeBlock,
   Facts,
+  Faq,
   Features,
   Hero,
   Install,
   Quickstart,
+  ReleaseHighlights,
   Terminal,
 } from '@casoon/pages-theme/components';
 import Base from '@casoon/pages-theme/layouts/Base.astro';
 import config from 'virtual:casoon-pages/config';
+import { parseChangelog } from '@casoon/pages-theme/lib/changelog';
 import { capture } from '../showcase';
 // Animated SVGs, built with castwright from site/captures/audit*.terminal.yaml: an excerpt of
 // examples/report.ansi, the real report for tests/fixtures/bad (see site/captures/excerpt.sh).
@@ -32,6 +36,13 @@ export default defineConfig({
     postAudit({ preset: 'standard', failOn: 'errors' }),
   ],
 });`;
+
+// Skip "Unreleased": it has no version to show as "New in v…" yet.
+const latestRelease = config.changelog
+  ? parseChangelog(await readFile(config.changelog, 'utf8')).find(
+      (r) => r.version.toLowerCase() !== 'unreleased'
+    )
+  : undefined;
 ---
 
 <Base>
@@ -112,6 +123,33 @@ export default defineConfig({
   >
     <CodeBlock code={astroConfig} lang="js" title="astro.config.mjs" label="JavaScript" />
   </Quickstart>
+
+  {latestRelease && <ReleaseHighlights release={latestRelease} />}
+
+  <Faq
+    items={[
+      {
+        q: 'Does astro-post-audit make network calls during the build?',
+        a: "No, by default. It's static analysis against the generated dist/ output, with no browser involved. The only opt-in exception is external link checking, which sends HEAD requests to verify third-party URLs.",
+      },
+      {
+        q: 'Will it slow down my build on a large site?',
+        a: 'Most checks run in well under a second on typical sites. The one expensive check, full HTML5 conformance validation, caches its results per page by content hash, so an incremental build only re-validates pages that actually changed.',
+      },
+      {
+        q: 'Can I adopt it on a site that already has findings, without failing CI right away?',
+        a: 'Yes. Run with writeBaseline: true once to snapshot current findings, then point baseline at that file — only new findings are reported from then on. Delete entries from the baseline to re-enable specific checks.',
+      },
+      {
+        q: 'Where do the accessibility rule ids come from?',
+        a: "From a11y-rules, the shared core crate also used by auditmysite and LiveAudit, so a finding like images/alt-missing carries the same id everywhere. Older ids from before that migration still work in severity overrides and baselines.",
+      },
+      {
+        q: 'Does it replace a browser-based tool like Lighthouse?',
+        a: "No. It never runs a browser, so it can't measure things like computed contrast or runtime performance — those show up in the report as capability_missing rather than silently passing. It covers SEO, links and static WCAG heuristics against what actually shipped.",
+      },
+    ]}
+  />
 </Base>
 
 <style>
