@@ -809,7 +809,7 @@ The tag workflow builds the binaries, attaches them to the GitHub release and pu
 cargo publish --manifest-path crates/astro-post-audit/Cargo.toml
 ```
 
-The Cargo package, npm package, lockfiles, README release heading, and `vX.Y.Z` tag must use the same version. The release workflow rejects mismatches before building artifacts.
+The Cargo package, npm package, lockfiles and `vX.Y.Z` tag must use the same version. The release workflow rejects mismatches before building artifacts.
 
 ## License
 
