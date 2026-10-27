@@ -8,23 +8,18 @@ use crate::discovery::SiteIndex;
 use crate::normalize;
 use crate::report::{Finding, Location, Severity};
 
+/// Elements whose text is code or data, not words a reader sees.
+const NON_VISIBLE: &[&str] = &["script", "style", "noscript", "template"];
+
 static H2_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("h2").expect("valid selector"));
 static H3_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("h3").expect("valid selector"));
 static ARTICLE_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("article, section, nav").expect("valid selector"));
-static OG_TITLE_SEL: LazyLock<Selector> =
-    LazyLock::new(|| Selector::parse("meta[property='og:title']").expect("valid selector"));
-static OG_DESC_SEL: LazyLock<Selector> =
-    LazyLock::new(|| Selector::parse("meta[property='og:description']").expect("valid selector"));
-static CANONICAL_SEL: LazyLock<Selector> =
-    LazyLock::new(|| Selector::parse("link[rel='canonical']").expect("valid selector"));
 static LD_SEL: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("script[type='application/ld+json']").expect("valid selector")
 });
-static LANG_SEL: LazyLock<Selector> =
-    LazyLock::new(|| Selector::parse("html[lang]").expect("valid selector"));
 static META_ROBOTS_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("meta[name='robots']").expect("valid selector"));
 static MARKDOWN_LINK_RE: LazyLock<Regex> =
@@ -42,10 +37,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         let llms_path = index.dist_path.join("llms.txt");
         let llms_full_path = index.dist_path.join("llms-full.txt");
         if !llms_path.exists() && !llms_full_path.exists() {
-            site_findings.push(Finding::fail("ai-visibility/missing-llms-txt","No llms.txt or llms-full.txt found in dist/ — AI crawlers use this file for site context")
+            site_findings.push(Finding::fail("ai-visibility/missing-llms-txt","No llms.txt or llms-full.txt found in dist/")
 .with_severity(Severity::Low)
 .at(Location::file("llms.txt").with_selector("root"))
-.with_help("Create public/llms.txt with key site links and summaries for LLM crawlers."));
+.with_help("llms.txt is a proposed convention that not every AI system reads. If you want to offer one, create public/llms.txt with key site links and summaries."));
         }
         for path in [&llms_path, &llms_full_path] {
             if let Ok(content) = std::fs::read_to_string(path) {
@@ -63,71 +58,33 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             // === Dimension 1: LLM Readability ===
 
-            // Word count
-            let body_text = html
+            // Word count of the visible text: script, style and similar
+            // elements hold code or data, not words a reader sees.
+            let word_count: usize = html
                 .root_element()
-                .text()
-                .collect::<String>();
-            let word_count = body_text.split_whitespace().count();
+                .descendants()
+                .filter_map(|node| {
+                    let text = node.value().as_text()?;
+                    let in_code = node
+                        .parent()
+                        .and_then(|p| p.value().as_element())
+                        .is_some_and(|el| NON_VISIBLE.contains(&el.name()));
+                    (!in_code).then(|| text.split_whitespace().count())
+                })
+                .sum();
             if word_count < 300 {
-                findings.push(Finding::fail("ai-visibility/low-word-count", format!(
-                        "Page has only ~{} words — AI systems prefer content-rich pages (300+ words)",
+                findings.push(Finding::review("ai-visibility/low-word-count", format!(
+                        "Page has ~{} words of visible text; the 300-word guideline is a rule of thumb and short pages can be intentional",
                         word_count
                     ))
 .with_severity(Severity::Low)
 .at(Location::file(page.rel_path.clone()).with_selector("body"))
-.with_help("Add more substantive content to improve AI citation probability."));
-            }
-
-            // lang attribute
-            if html.select(&LANG_SEL).next().is_none() {
-                findings.push(Finding::fail("ai-visibility/lang-missing","Missing lang attribute on <html> — AI systems use language signals for relevance")
-.with_severity(Severity::Medium)
-.at(Location::file(page.rel_path.clone()).with_selector("html"))
-.with_help("Add lang=\"en\" (or your language) to the <html> element.")
-.with_suggestion("lang=\"en\""));
+.with_help("If this page is meant to be cited on its own, consider whether it says enough to stand alone."));
             }
 
             // === Dimension 2: Citability ===
-
-            let has_og_title = html
-                .select(&OG_TITLE_SEL)
-                .next()
-                .and_then(|el| el.value().attr("content"))
-                .is_some_and(|v| !v.trim().is_empty());
-
-            let has_og_desc = html
-                .select(&OG_DESC_SEL)
-                .next()
-                .and_then(|el| el.value().attr("content"))
-                .is_some_and(|v| !v.trim().is_empty());
-
-            let has_canonical = html
-                .select(&CANONICAL_SEL)
-                .next()
-                .and_then(|el| el.value().attr("href"))
-                .is_some_and(|v| !v.trim().is_empty());
-
-            if !has_og_title {
-                findings.push(Finding::fail("ai-visibility/missing-og-title","Missing og:title — AI systems use this as the citation title")
-.with_severity(Severity::Medium)
-.at(Location::file(page.rel_path.clone()).with_selector("head"))
-.with_help("Add <meta property=\"og:title\" content=\"...\"> for better AI citations."));
-            }
-
-            if !has_og_desc {
-                findings.push(Finding::fail("ai-visibility/missing-og-description","Missing og:description — AI systems use this as the citation snippet")
-.with_severity(Severity::Low)
-.at(Location::file(page.rel_path.clone()).with_selector("head"))
-.with_help("Add <meta property=\"og:description\" content=\"...\"> for AI citation snippets."));
-            }
-
-            if !has_canonical {
-                findings.push(Finding::fail("ai-visibility/missing-canonical","Missing canonical URL — AI systems need a definitive URL for citations")
-.with_severity(Severity::Medium)
-.at(Location::file(page.rel_path.clone()).with_selector("head"))
-.with_help("Add <link rel=\"canonical\" href=\"https://...\"> to each page."));
-            }
+            // (lang, og:title, og:description and canonical are reported by the
+            // html_basics, opengraph and seo modules.)
 
             // Author / publisher schema
             let has_author_schema = html.select(&LD_SEL).any(|script| {
@@ -140,32 +97,32 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
             });
 
             if !has_author_schema {
-                findings.push(Finding::fail("ai-visibility/missing-author-schema","No author or publisher in JSON-LD — reduces AI citation authority")
+                findings.push(Finding::review("ai-visibility/missing-author-schema","No author or publisher in JSON-LD; whether a page needs one depends on its type")
 .with_severity(Severity::Low)
 .at(Location::file(page.rel_path.clone()).with_selector("head"))
-.with_help("Add an Article or Person schema with \"author\": {\"@type\": \"Person\", \"name\": \"...\"}"));
+.with_help("For articles and other attributed content, add an Article or Person schema with \"author\": {\"@type\": \"Person\", \"name\": \"...\"}. Landing and utility pages often need none."));
             }
 
             // === Dimension 3: Chunk Quality (RAG) ===
 
             let semantic_count = html.select(&ARTICLE_SEL).count();
             if semantic_count == 0 {
-                findings.push(Finding::fail("ai-visibility/no-semantic-sections","No <article> or <section> elements found — semantic HTML improves AI chunking")
+                findings.push(Finding::review("ai-visibility/no-semantic-sections","No <article>, <section> or <nav> element found; the page has no sectioning markup")
 .with_severity(Severity::Low)
 .at(Location::file(page.rel_path.clone()).with_selector("body"))
-.with_help("Wrap main content in <article> or <section> elements for better RAG embedding."));
+.with_help("Sectioning elements give tools that split pages into chunks clear boundaries. A single <main> with headings can be enough."));
             }
 
             let h2_count = html.select(&H2_SEL).count();
             let h3_count = html.select(&H3_SEL).count();
             if word_count > 600 && h2_count == 0 && h3_count == 0 {
-                findings.push(Finding::fail("ai-visibility/no-subheadings", format!(
-                        "Page has {} words but no H2/H3 subheadings — limits AI content chunking",
+                findings.push(Finding::review("ai-visibility/no-subheadings", format!(
+                        "Page has ~{} words of visible text but no H2/H3 subheadings",
                         word_count
                     ))
 .with_severity(Severity::Medium)
 .at(Location::file(page.rel_path.clone()).with_selector("body"))
-.with_help("Add H2/H3 headings to structure long content for better AI comprehension and RAG chunking."));
+.with_help("Long text without subheadings is harder to scan and to split into sections. Add H2/H3 headings where the content has distinct parts."));
             }
 
             // === Dimension 5: AI Policy ===
@@ -177,10 +134,10 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                     .is_some_and(|c| c.to_lowercase().contains("noindex"))
             });
             if is_noindex {
-                findings.push(Finding::fail("ai-visibility/noindex-page","Page has noindex — AI crawlers may also skip this page")
+                findings.push(Finding::fail("ai-visibility/noindex-page","Page has a noindex robots meta tag")
 .with_severity(Severity::Low)
 .at(Location::file(page.rel_path.clone()).with_selector("head"))
-.with_help("Remove noindex if you want AI systems to index and cite this page."));
+.with_help("Remove noindex if this page should be indexed; crawlers that honour it will skip the page."));
             }
 
             findings
