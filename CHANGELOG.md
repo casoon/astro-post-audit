@@ -13,6 +13,8 @@ reconstructed from the git history and the README release notes.
 - **Accessibility:** findings that only concern WCAG AAA criteria are reported once per element pattern across the site instead of once per page; the message gives the number of occurrences and pages.
 - **AI visibility and UX:** heuristic findings carry the outcome `review` instead of `fail`: `ai-visibility/low-word-count`, `no-semantic-sections`, `no-subheadings`, `missing-author-schema`, `ux/no-cta`, `ux/no-trust-signals`, `ux/high-link-density` and `ux/high-interactive-density`. Severity and build gating are unchanged. Messages say what was found, not what AI systems or users supposedly prefer (#103).
 
+- **Documentation:** the README states the cold-cache cost of `rules.html_validation` and recommends persisting `node_modules/.cache/astro-post-audit/` in CI (#109).
+
 ### Removed
 
 - **AI visibility and UX:** five rules that repeated other modules are gone: `ai-visibility/lang-missing`, `missing-og-title`, `missing-og-description`, `missing-canonical` and `ux/generic-link-text`. `document/lang-missing`, `opengraph/title-missing`, `opengraph/description-missing`, `canonical/missing` and `links/generic-name` report the same. Old ids keep working in `severity` overrides and baselines. Enable `rules.opengraph.require_og_title` and `require_og_description` to keep the Open Graph checks (#103).
