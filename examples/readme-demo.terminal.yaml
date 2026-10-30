@@ -1,0 +1,33 @@
+version: 1
+
+terminal:
+  title: astro-post-audit
+  cols: 118
+  rows: 13
+  theme: catppuccin-mocha
+
+steps:
+  - run: astro-post-audit dist 2>/dev/null
+  - output:
+      raw: "
+
+        \e[1;91m✖\e[0m astro-post-audit
+
+
+        \  \e[2mErrors: \e[0m\e[1;91m2\e[0m   \e[2mWarnings: \e[0m\e[1;93m0\e[0m   \e[2mInfo: \e[0m\e[36m0\e[0m   \e[2mFiles: \e[0m\e[2m2\e[0m
+
+
+        ● \e[1;96mindex.html\e[0m \e[2m(2)\e[0m
+
+        \  - \e[1;91mBroken internal link '/contact/' -> '/contact/' (not found in dist)\e[0m \e[2m[links/broken]\e[0m at \e[36m`a[href='/contact/']`\e[0m
+
+        \    \e[2mRemedy: Verify the route in `src/pages/` or your Content Collection slug. If the target was renamed, update the href.\e[0m
+
+        \  - \e[1;91mThe image has no alt attribute.\e[0m \e[2m[images/alt-missing]\e[0m at \e[36m`:root > :nth-child(2) > :nth-child(2) > :nth-child(2)`\e[0m
+
+        \    \e[2mRemedy: Informative images need descriptive alt text.\e[0m
+
+
+        \n"
+    delay: 1
+  - wait: 3000
