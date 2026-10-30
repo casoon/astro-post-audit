@@ -1,3 +1,5 @@
+# Rebuild: npx @casoon/castwright build examples/readme-demo.terminal.yaml -o .github/readme --format svg --loop-delay 9000
+# (the final frame holds for --loop-delay; a trailing wait: is dropped in the SVG export. Output below is recorded.)
 version: 1
 
 terminal:
