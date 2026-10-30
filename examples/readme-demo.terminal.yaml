@@ -30,4 +30,4 @@ steps:
 
         \n"
     delay: 1
-  - wait: 3000
+  - wait: 9000
