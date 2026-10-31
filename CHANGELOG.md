@@ -6,6 +6,10 @@ reconstructed from the git history and the README release notes.
 
 ## [Unreleased]
 
+### Changed
+
+- **Performance:** measured on a real site (insights.casoon.de, 1092 HTML pages, `html_validation` on, cache cold): 0.9.0 takes 73–81 s, 0.10.0 takes 4.5–4.8 s (#109, #113). Errors (0) and warnings (5583) are identical; the info count drops from 1100 to 23 because `structured-data/website-missing-search-action` is no longer reported (1088 pages), while 11 info findings from the new link rules appear.
+
 ## [0.10.0] - 2026-10-31
 
 ### Changed
