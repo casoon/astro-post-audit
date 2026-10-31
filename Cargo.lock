@@ -201,7 +201,7 @@ dependencies = [
 
 [[package]]
 name = "astro-post-audit"
-version = "0.9.3"
+version = "0.10.0"
 dependencies = [
  "a11y-dom",
  "a11y-report",
@@ -1527,9 +1527,9 @@ dependencies = [
 
 [[package]]
 name = "html-conform"
-version = "0.3.2"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6f8ac01a08ae645d800ad4b5bbf2fa948b48327fbb7a7c4bd6e5954a2c0acb7"
+checksum = "979b9960a3828e191d483401a79a1f6ee346b480b642d8e27d82d4e354806afa"
 dependencies = [
  "csp-parse",
  "encoding_rs",
@@ -1545,9 +1545,9 @@ dependencies = [
 
 [[package]]
 name = "html5-parser"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2813e1598b78703c3339b10ee9ea6e55c41935cba69129046a13653c0c856d84"
+checksum = "38ffb819bfbd6e33f301804dfbdc4ef8f756e731be9dcea206a39eeada55a34f"
 
 [[package]]
 name = "html5ever"
@@ -2885,9 +2885,9 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "relax-ng"
-version = "0.2.1"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27b2efa2e54ad1aad613278b6a6ae9b08186b4a4cc92467f06300f3b3ab695e0"
+checksum = "8af2d0324bcb3eb335927bce74d489dbacbf59a77286b7446ae1cd8e42ea7ae1"
 dependencies = [
  "regex",
  "roxmltree",
@@ -3076,9 +3076,9 @@ dependencies = [
 
 [[package]]
 name = "schematron-engine"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07c05422a9c10ccc8ca8c5939e191af07a0542578d52f3bbd7558d5c02b0619c"
+checksum = "2d03d137c8f6fe46a110081ff99c95562c2dc22f1c9f10b06933cb457551857e"
 dependencies = [
  "roxmltree",
  "xpath-eval",
@@ -4236,9 +4236,9 @@ checksum = "cd223bc94c615fc02bf2f4bbc22a4a9bfe489c2add3ec10b1038df3aca44cac7"
 
 [[package]]
 name = "xpath-eval"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83058fdeec995449ff47adb0bc5773092b56aa91423c4cb257ef4e4e11df542b"
+checksum = "05096d87ea0052f3820cc861b617d9af265574e18733064a8a011caa9e7f63bc"
 
 [[package]]
 name = "yoke"
