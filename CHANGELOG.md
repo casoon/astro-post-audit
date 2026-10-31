@@ -6,8 +6,11 @@ reconstructed from the git history and the README release notes.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-31
+
 ### Changed
 
+- **Performance:** `html-conform` 0.3.4 (relax-ng 0.2.3, schematron-engine 0.2.1, xpath-eval 0.2.3) cuts `html_validation` from about 0.5 s to roughly 15–20 ms CPU per page when the cache is cold; findings are unchanged (#109, #113).
 - **Site:** the footer follows the page language instead of always showing German text, and the start page now carries a release teaser and an FAQ (theme 0.11.1).
 - **Accessibility:** rules come from `a11y-rules` 0.26. Several heuristic rules now report `review` instead of `fail`, landmark and heading-structure rules count as best practice, and new link rules (`links/new-window-unannounced`, `links/purpose-link-only`, URL and single-character link names) are added.
 - **Accessibility:** findings that only concern WCAG AAA criteria are reported once per element pattern across the site instead of once per page; the message gives the number of occurrences and pages.
