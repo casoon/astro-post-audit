@@ -6,6 +6,8 @@ Fast, offline post-build auditor for Astro sites — SEO signals, internal link 
 
 Release history and upgrade notes are in the [Changelog](https://casoon.github.io/astro-post-audit/changelog/).
 
+<p align="center"><img src=".github/readme/demo.svg" alt="astro-post-audit dist reports two errors for a small site: a broken internal link to /contact/ and an image without an alt attribute." width="1015"></p>
+
 ## Installation
 
 ```bash
