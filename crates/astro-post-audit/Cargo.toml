@@ -17,10 +17,13 @@ path = "src/main.rs"
 [dependencies]
 # Gemeinsames Befundmodell ueber astro-post-audit, auditmysite und LiveAudit.
 # Der Vertrag liegt in barrierlab, nicht hier.
-a11y-report = "0.26"
-a11y-dom = "0.26"
-a11y-rules = "0.26"
-accname = "0.26"
+a11y-report = "0.28"
+a11y-dom = "0.28"
+a11y-rules = "0.28"
+accname = "0.28"
+# Berechnete Stile ohne Browser: die Kaskade fuer die Darstellungs-Regeln (Kontrast).
+style-cascade = "0.1.1"
+stylesheet-parse = "0.1.1"
 
 # CLI
 clap = { version = "4", features = ["derive"] }

@@ -23,9 +23,16 @@ binary, offline and without a browser.
 
 ## Where it stops
 
-Everything is static analysis of the built files. There are no computed styles, so contrast
-(WCAG 1.4.3) is out of scope: the JSON report lists those rules as `capability_missing`
-instead of counting them as passed. Use Lighthouse, axe-core or pa11y for contrast.
+Everything is static analysis of the built files; there is no browser and no layout. By default
+there are no computed styles either, so contrast (WCAG 1.4.3) and the other rules that need
+them are listed in the JSON report as `capability_missing` instead of being counted as passed.
+
+With `rules.a11y.contrast: true` the tool computes styles from the stylesheets in `dist/` (linked,
+inline, local `@import`) and checks text contrast without a browser, in the light scheme and, if a
+stylesheet uses `prefers-color-scheme`, in the dark one. A stylesheet that is not on disk, such as
+a remote URL, keeps the affected rules `untested` and is listed under `inputs`. Background images,
+gradients, geometry (target sizes, spacing) and anything JavaScript builds stay out of reach; use
+Lighthouse, axe-core or pa11y for those.
 
 The tool is configured only through `astro.config.mjs`. The Rust binary is an internal detail
 of the integration, not a standalone CLI.

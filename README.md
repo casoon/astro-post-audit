@@ -441,7 +441,7 @@ lists every rule setting with its default. The package also exports a JSON Schem
 - **robots.txt** — Existence check, sitemap link, disallow-all detection, crawl-delay threshold, AI bot policy (citation bots such as PerplexityBot/OAI-SearchBot blocked, training bots such as GPTBot/CCBot allowed), noindex/Disallow contradiction, sitemap entries blocked by robots
 - **Redirects** — Static meta-refresh redirect chains, loops, and internal links that point at redirect pages
 - **HTML** — `<html lang>`, `<title>`, viewport, meta description, heading hierarchy, native HTML5 conformance validation *(opt-in)*
-- **Accessibility** — img alt + alt-text quality heuristics, link/button names, form labels (including wrapping labels), generic link text, skip link, aria-hidden on focusable elements, landmark structure (`<main>`, `<nav>`, `<header>`, `<footer>`), duplicate IDs, WAI-ARIA role validation
+- **Accessibility** — img alt + alt-text quality heuristics, link/button names, form labels (including wrapping labels), generic link text, skip link, aria-hidden on focusable elements, landmark structure (`<main>`, `<nav>`, `<header>`, `<footer>`), duplicate IDs, WAI-ARIA role validation, text contrast from the stylesheets in `dist/` *(opt-in, see [Contrast](#contrast-computed-styles-without-a-browser))*
 - **Open Graph** — og:title, og:description, og:image (absolute URL + existence/dimensions/size), og:type, og:url, twitter:card (valid values), twitter:image, title consistency
 - **Structured Data** — JSON-LD syntax, semantics, duplicate type detection, property completeness (author, datePublished, image, publisher, breadcrumb positions …)
 - **Images** — Missing `width`/`height` attributes (CLS), missing `loading="lazy"`, missing `srcset`, modern format hints
@@ -738,9 +738,9 @@ translated on read, with one warning per id. Writing always uses the new ones.
 A finding carries two axes, never one merged number: `outcome` says how certain
 the statement is (`fail`, `review`, `pass`, `untested`), `severity` how heavy
 the problem is (`low` … `critical`). The JSON report also lists `rule_runs` for
-rules this tool could not serve at all — static HTML has no computed styles, so
-the contrast rules appear there with `capability_missing` rather than silently
-counting as passed.
+rules this tool could not serve at all — without `rules.a11y.contrast` there are
+no computed styles, so the contrast rules appear there with `capability_missing`
+rather than silently counting as passed.
 
 Findings with outcome `review` are heuristic and need a human to confirm them; their
 `severity` still decides whether they fail the build, so use `severity` overrides
@@ -753,6 +753,44 @@ Findings that only concern WCAG AAA criteria (such as `links/new-window-unannoun
 3.2.5) are reported once per element pattern across the site, not once per page: a
 `target="_blank"` link in the footer yields one finding whose message says how often
 and on how many pages it occurs. Findings for level A and AA stay per page.
+
+### Contrast: computed styles without a browser
+
+Built output has all its CSS on disk, so the tool can compute styles itself with
+[`style-cascade`](https://crates.io/crates/style-cascade) from barrierlab: selector matching with
+specificity, inheritance, `var()`, `@media` and the browser's default styles. Enable it with
+`rules.a11y.contrast: true`. It is **off by default** (see below).
+
+```js
+astroPostAudit({ rules: { a11y: { contrast: true } } })
+```
+
+What is read: `<link rel="stylesheet" href>` resolved against the page file or `dist/`
+(root-relative paths honour `site.base`), every `<style>`, and `@import` of a local file
+(with `layer()`, `supports()` and media lists). Each file is parsed once per run, however many pages
+share it. What runs on top of the styles: `contrast/*` (1.4.3, 1.4.6, 1.4.11), the stylesheet rules
+`focus/outline-removed`, `motion/reduced-motion-ignored`, `orientation/content-hidden`,
+`text/justified`, `text/line-height-tight`, and `display: none` / `visibility: hidden` are respected
+by the other rules. Contrast is checked in the light scheme, and again in the dark one when a
+stylesheet mentions `prefers-color-scheme`; a finding that only occurs there says so.
+
+What stays unchecked, and how it shows:
+
+- **A stylesheet that is not on disk** (remote URL, file missing from `dist/`, a path outside
+  `dist/`) or an `@import` that cannot be resolved: the page's contrast findings come out
+  `untested` (`contrast/text-undetermined`, one per page with the number of elements), never as
+  a pass, and the report lists the stylesheet under `inputs` with the reason and the number of
+  pages. A remote `@import` of a web font stylesheet counts as unresolved too.
+- **Background images, gradients, blend modes**: `untested`.
+- **Geometry** (target size, spacing, overlap, focus indicators), animation timing: not measured,
+  listed in `rule_runs` as `capability_missing`, no per-page finding.
+- **JavaScript-built content and class-toggled themes** (`.dark` set by a script): not seen.
+
+Why it is opt-in: contrast failures have severity `high` and fail the build, so turning it on for
+everybody would break existing pipelines on upgrade, and every page with a remote stylesheet adds
+`untested` warnings that trip `strict`. It also adds AAA findings (`contrast/text-enhanced`, 7:1)
+that most sites do not need. Silence those with `severity: { 'contrast/text-enhanced': 'off' }`.
+The default will be reconsidered once the cascade has been run against more real sites.
 
 ### Display-mode convention
 

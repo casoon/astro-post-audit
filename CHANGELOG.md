@@ -6,8 +6,15 @@ reconstructed from the git history and the README release notes.
 
 ## [Unreleased]
 
+### Added
+
+- **Accessibility:** `rules.a11y.contrast` checks text contrast and other style-dependent rules without a browser, computing styles from the stylesheets in `dist/`. A stylesheet that is not on disk keeps the affected rules `untested` (#115). Off by default; see [Contrast](https://github.com/casoon/astro-post-audit#contrast-computed-styles-without-a-browser).
+- **Performance:** with `rules.a11y.contrast` on, 1000 generated pages sharing two stylesheets take about 1.5 s in the accessibility check instead of 0.1 s; without the option nothing changes.
+- **Report:** the JSON report gains `inputs`, one note per stylesheet that could not be read (remote URL, missing file, unresolved `@import`) with the number of pages affected; the text and Markdown reports list them under "Stylesheets not read".
+
 ### Changed
 
+- **Accessibility:** rules come from `a11y-rules` 0.28 (was 0.26). An empty page now reports `headings/none` instead of `landmarks/main-missing`; the full list of upstream changes is in the `a11y-rules` changelog.
 - **Performance:** measured on a real site (insights.casoon.de, 1092 HTML pages, `html_validation` on, cache cold): 0.9.0 takes 73–81 s, 0.10.0 takes 4.5–4.8 s (#109, #113). Errors (0) and warnings (5583) are identical; the info count drops from 1100 to 23 because `structured-data/website-missing-search-action` is no longer reported (1088 pages), while 11 info findings from the new link rules appear.
 
 ## [0.10.0] - 2026-10-31

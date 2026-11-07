@@ -30,8 +30,11 @@ the integration.
 | `c2pa` | Local validation of C2PA Content Credentials |
 
 <Callout type="note">
-  Colour contrast is deliberately not checked. It needs computed styles, which static HTML does
-  not have; the JSON report lists those rules as <code>capability_missing</code>.
+  Colour contrast needs computed styles. With <code>rules.a11y.contrast</code> the stylesheets in
+  <code>dist/</code> are fed to <code>style-cascade</code> (selector matching, inheritance,
+  <code>var()</code>, <code>@media</code>, UA defaults) and the rules run on the result. Without
+  it, or where a stylesheet is not on disk, the contrast rules are <code>capability_missing</code>
+  or <code>untested</code>, never passed. Background images, gradients and layout stay unchecked.
 </Callout>
 
 ## Release artifacts

@@ -15,6 +15,7 @@ mod normalize;
 mod overview;
 mod report;
 mod rule_ids;
+mod styles;
 
 use config::Config;
 use discovery::SiteIndex;
@@ -409,7 +410,11 @@ fn run() -> Result<i32> {
         None
     };
 
-    let reporter = Reporter::new(format, color);
+    let run_info = report::RunInfo {
+        rule_runs: checks::a11y_core::nicht_gelaufen(&config),
+        inputs: site_index.styles.vermerke(),
+    };
+    let reporter = Reporter::new(format, color).with_run(run_info);
     reporter.print(&findings, &summary, benchmark_data.as_ref())?;
 
     // Write extra report files (all formats from a single audit run)
@@ -418,7 +423,10 @@ fn run() -> Result<i32> {
             .format
             .parse::<report::Format>()
             .map_err(|e| anyhow::anyhow!("extra_reports: {e}"))?;
-        let extra_reporter = Reporter::new(fmt, color);
+        let extra_reporter = Reporter::new(fmt, color).with_run(report::RunInfo {
+            rule_runs: Vec::new(),
+            inputs: site_index.styles.vermerke(),
+        });
         let content =
             extra_reporter.render_to_string(&findings, &summary, benchmark_data.as_ref())?;
         std::fs::write(&extra.path, content)?;

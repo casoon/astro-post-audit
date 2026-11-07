@@ -1,3 +1,6 @@
+// Jede Testdatei nutzt nur einen Teil der Helfer.
+#![allow(dead_code)]
+
 use std::fs;
 use std::path::Path;
 

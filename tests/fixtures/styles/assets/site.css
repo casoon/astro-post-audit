@@ -1,0 +1,10 @@
+/* Light text colours, a dark colour scheme and a local @import. */
+@import "./imported.css";
+:root { --fg: #222222; --bg: #ffffff; --link: #0b4a9e; }
+@media (prefers-color-scheme: dark) {
+  :root { --fg: #dddddd; --bg: #111111; --link: #9ec5ff; }
+}
+body { color: var(--fg); background: var(--bg); }
+a { color: var(--link); }
+.good { color: var(--fg); }
+.low { color: #bbbbbb; }

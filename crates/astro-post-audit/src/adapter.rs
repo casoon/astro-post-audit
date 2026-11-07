@@ -11,17 +11,23 @@
 //! Rolle und Accessible Name werden nach HTML-AAM und accname 1.2 berechnet,
 //! nicht aus Teilbaumtext geraten.
 //!
-//! **Darstellung nicht.** Statische HTML-Analyse kennt keine berechneten Stile
-//! und keine Geometrie. Die Kontrastregeln melden deshalb `UNTESTED` — nicht
+//! **Darstellung nur auf Wunsch.** Ohne `a11y.contrast` kennt dieser Adapter
+//! keine berechneten Stile; die Kontrastregeln melden dann `UNTESTED` — nicht
 //! `PASS` und nicht Schweigen. Genau das ist der Unterschied zu einem
-//! Werkzeug, das eine nicht geprüfte Regel als bestanden zählt.
+//! Werkzeug, das eine nicht geprüfte Regel als bestanden zählt. Mit
+//! `a11y.contrast` liefert [`SeiteMitStilen`] die Stile aus `style-cascade`
+//! über den Stylesheets, die im Build auf der Platte liegen. Geometrie gibt es
+//! in beiden Fällen nicht.
 
 use std::collections::HashMap;
 
-use a11y_dom::{Document, NameSource, NodeId, NodeKind, Semantics};
+use a11y_dom::{
+    Backdrop, ComputedStyle, Document, NameSource, NodeId, NodeKind, Rect, Rendering, Semantics,
+};
 use accname::IdIndex;
 use ego_tree::NodeRef;
 use scraper::{Html, Node as ScraperNode};
+use style_cascade::Cascade;
 
 /// `ego_tree::NodeId` gibt seinen Index nicht her — er ist bewusst opak.
 ///
@@ -267,6 +273,115 @@ impl Semantics for SeiteMitNamen<'_> {
     fn is_ignored<'n>(&'n self, node: Self::N<'n>) -> bool {
         use a11y_dom::Node;
         node.attr("aria-hidden") == Some("true")
+    }
+}
+
+/// Wie [`SeiteMitNamen`], dazu berechnete Stile aus `style-cascade`.
+///
+/// Dieselbe Aufteilung wie in `a11y-static`: Farben und Hintergründe kommen aus
+/// der Kaskade, Geometrie gibt es nicht. Fehlt ein Stylesheet (`unvollstaendig`),
+/// behauptet der Host **keine** Farbe -- die Kontrastregeln melden dann
+/// `untested` statt gegen eine ungestylte Seite zu bestehen oder durchzufallen.
+/// `display` und `visibility` bleiben, ein verstecktes Element bleibt versteckt.
+pub struct SeiteMitStilen<'a> {
+    seite: &'a Seite<'a>,
+    ids: IdIndex<'a, Knoten<'a>>,
+    cascade: Cascade,
+    unvollstaendig: bool,
+}
+
+impl<'a> SeiteMitStilen<'a> {
+    pub fn new(seite: &'a Seite<'a>, cascade: Cascade, fehlende_blaetter: bool) -> Self {
+        SeiteMitStilen {
+            ids: IdIndex::build(seite.root()),
+            unvollstaendig: fehlende_blaetter || !cascade.unresolved_imports().is_empty(),
+            cascade,
+            seite,
+        }
+    }
+
+    /// Die Vorspänne der `@import`-Regeln, die niemand aufgelöst hat.
+    pub fn unaufgeloeste_imports(&self) -> &[String] {
+        self.cascade.unresolved_imports()
+    }
+}
+
+impl Document for SeiteMitStilen<'_> {
+    type N<'n>
+        = Knoten<'n>
+    where
+        Self: 'n;
+
+    fn root(&self) -> Self::N<'_> {
+        self.seite.root()
+    }
+
+    fn node_count(&self) -> Option<usize> {
+        self.seite.node_count()
+    }
+}
+
+impl Semantics for SeiteMitStilen<'_> {
+    fn role<'n>(&'n self, node: Self::N<'n>) -> Option<String> {
+        accname::role(node).map(str::to_string)
+    }
+
+    fn accessible_name<'n>(&'n self, node: Self::N<'n>) -> Option<String> {
+        accname::name_rendered(self, node, &self.ids)
+    }
+
+    fn name_source<'n>(&'n self, _node: Self::N<'n>) -> Option<NameSource> {
+        None
+    }
+
+    fn is_ignored<'n>(&'n self, node: Self::N<'n>) -> bool {
+        use a11y_dom::{ancestors, Node};
+        std::iter::once(node)
+            .chain(ancestors(node))
+            .any(|n| n.attr("aria-hidden") == Some("true") || n.has_attr("inert"))
+    }
+}
+
+impl Rendering for SeiteMitStilen<'_> {
+    fn computed_style<'n>(&'n self, node: Self::N<'n>) -> Option<ComputedStyle> {
+        use a11y_dom::Node;
+        (node.kind() == NodeKind::Element).then(|| {
+            let mut style = self.cascade.computed_style(node);
+            if self.unvollstaendig {
+                // Ein fehlendes Blatt kann jede Farbe setzen: keine behaupten.
+                style.color = None;
+                style.background_color = None;
+                style.own_background_color = None;
+                style.border_top_color = None;
+            }
+            style
+        })
+    }
+
+    /// Ohne Layout gibt es keine Kästen.
+    fn bounds<'n>(&'n self, _node: Self::N<'n>) -> Option<Rect> {
+        None
+    }
+
+    fn sampled_backdrop<'n>(&'n self, node: Self::N<'n>) -> Option<Backdrop> {
+        if self.unvollstaendig {
+            return None;
+        }
+        self.cascade
+            .backdrop_luminances(node)
+            .map(|luminance| Backdrop { luminance })
+    }
+
+    fn is_rendered<'n>(&'n self, node: Self::N<'n>) -> bool {
+        use a11y_dom::ancestors;
+        let sichtbar = self
+            .cascade
+            .computed_style(node)
+            .visibility
+            .is_none_or(|v| v != "hidden" && v != "collapse");
+        let none =
+            |n: Knoten<'_>| self.cascade.computed_style(n).display.as_deref() == Some("none");
+        sichtbar && !std::iter::once(node).chain(ancestors(node)).any(none)
     }
 }
 

@@ -989,8 +989,10 @@ fn edge_case_empty_file() {
     assert!(rule_ids.contains(&"document/title-missing"));
     // headings/h1-missing setzt voraus, dass es ueberhaupt Ueberschriften
     // gibt. Eine leere Datei hat keine Gliederung, der sie fehlen koennte --
-    // sie meldet document/title-missing und landmarks/main-missing.
-    assert!(rule_ids.contains(&"landmarks/main-missing"));
+    // sie meldet document/title-missing und, seit a11y-rules 0.27, statt
+    // landmarks/main-missing den Befund headings/none (weder Ueberschriften noch
+    // main-Landmark noch Sprunglink).
+    assert!(rule_ids.contains(&"headings/none"));
     assert_eq!(code, 1);
     // Should NOT crash
 }

@@ -213,6 +213,11 @@ export interface RulesConfig {
     manual_checklist?: boolean;
     /** Run the display-mode convention rules (`viz/*`, `display/*`); see `groups.viz_alternatives`. @default false */
     viz_alternatives?: boolean;
+    /**
+     * Compute styles from the stylesheets in `dist/` (linked, inline, local `@import`) and run the rules that need them: `contrast/*`, `focus/outline-removed`, `motion/reduced-motion-ignored`, `text/*` and others. Contrast is checked in the light scheme, and in the dark one when a stylesheet uses `prefers-color-scheme`. A stylesheet that is not on disk (remote URL, missing file) keeps the affected rules `untested`, with a note under `inputs` in the JSON report. Off by default: contrast failures have severity `high` and fail the build.
+     * @default false
+     */
+    contrast?: boolean;
   };
   /** Asset reference and size checks. */
   assets?: {

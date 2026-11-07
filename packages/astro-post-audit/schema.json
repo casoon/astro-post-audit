@@ -160,6 +160,11 @@
                             "description": "Check for semantic landmark elements (`<main>`, `<nav>`, `<header>`, `<footer>`).",
                             "type": "boolean"
                         },
+                        "contrast": {
+                            "default": false,
+                            "description": "Compute styles from the stylesheets in `dist/` (linked, inline, local `@import`) and run the rules that need them: `contrast/*`, `focus/outline-removed`, `motion/reduced-motion-ignored`, `text/*` and others. Contrast is checked in the light scheme, and in the dark one when a stylesheet uses `prefers-color-scheme`. A stylesheet that is not on disk (remote URL, missing file) keeps the affected rules `untested`, with a note under `inputs` in the JSON report. Off by default: contrast failures have severity `high` and fail the build.",
+                            "type": "boolean"
+                        },
                         "img_alt_required": {
                             "default": true,
                             "description": "`<img>` elements must have an `alt` attribute.",
