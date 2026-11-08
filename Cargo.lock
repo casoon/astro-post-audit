@@ -4,27 +4,28 @@ version = 4
 
 [[package]]
 name = "a11y-dom"
-version = "0.26.0"
+version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e7130864ea34c9df173fee6d57e3d58cf7a3412aca5d4195483f8354172cdae"
+checksum = "758dc9048021dcc84d416e911fa9809ecbb41edae5c0b2905dad6266520435ac"
 
 [[package]]
 name = "a11y-report"
-version = "0.26.0"
+version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b1483e265c7e89ed65712039c8bded0147591eb8a35440e816ef33b44f6150b"
+checksum = "d64da4e0305059cdd73199d89da83ceb7f153d4373d5fd10aafc768834415f50"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "a11y-rules"
-version = "0.26.0"
+version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2dafc8d77c1d3a4a0c25a60d2351194fd22bc51a2a72716b507ef0902d4b14ac"
+checksum = "59e43af3e20072a66d1d62c775faecfcc1358c320eb97e70383044de68f3da2a"
 dependencies = [
  "a11y-dom",
  "a11y-report",
+ "style-cascade",
  "stylesheet-parse",
 ]
 
@@ -49,9 +50,9 @@ dependencies = [
 
 [[package]]
 name = "accname"
-version = "0.26.0"
+version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68f67704891b8e514cf2e29bd970f5d2756158cbc0bedc372b6bcbb3d453a628"
+checksum = "8a91abdd3c7035a48107051591cd91bb055e2a92b1c7ade63b6e1f4e84052fd6"
 dependencies = [
  "a11y-dom",
 ]
@@ -224,6 +225,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "style-cascade",
+ "stylesheet-parse",
  "tempfile",
  "terminal_size",
  "thiserror 2.0.21",
@@ -865,6 +868,12 @@ name = "csp-parse"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1cd2527b63dd3d6edbb8a0f251aa31bb52e81cc7ad37dc461d2974084fa5c33"
+
+[[package]]
+name = "css-tokenize"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f1ad48f06c01b658df3098d4fec3a598a6adc2c72cbe3193a87b4e4303eb6f8"
 
 [[package]]
 name = "cssparser"
@@ -1534,7 +1543,7 @@ dependencies = [
  "csp-parse",
  "encoding_rs",
  "html5-parser",
- "media-query-parse",
+ "media-query-parse 0.1.0",
  "relax-ng",
  "schematron-engine",
  "serde",
@@ -2032,6 +2041,15 @@ name = "media-query-parse"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f93a1e4247a741c4a1d80414a107c4ddae6302e41b783de3eabcfbceca71727c"
+
+[[package]]
+name = "media-query-parse"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b152f240adcab2252b8cbb87c5f6674ebd41b5940e54f7a002917131b8f69c1b"
+dependencies = [
+ "css-tokenize",
+]
 
 [[package]]
 name = "memchr"
@@ -3485,12 +3503,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
-name = "stylesheet-parse"
-version = "0.1.0"
+name = "style-cascade"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f656ee850467622d66fdb15c3253df676e7f547d4252396117731f67cd55560"
+checksum = "c9417d52ecde9ecdf07088082cd8cffe3e344e5c06bc7713265c89f8055f7c73"
 dependencies = [
- "media-query-parse",
+ "a11y-dom",
+ "media-query-parse 0.2.0",
+ "stylesheet-parse",
+]
+
+[[package]]
+name = "stylesheet-parse"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7156bf0be5016122c6eed75398192c5576458158fd7e6bbaac80bb77e40d265"
+dependencies = [
+ "css-tokenize",
 ]
 
 [[package]]

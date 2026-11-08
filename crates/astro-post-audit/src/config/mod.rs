@@ -272,6 +272,10 @@ pub struct A11yConfig {
     pub manual_checklist: bool,
     /// Run the display-mode convention rules (`viz/*`, `display/*`). @default false
     pub viz_alternatives: bool,
+    /// Compute styles from the stylesheets in `dist/` and run the rules that need them
+    /// (`contrast/*`, `focus/outline-removed`, `text/*` and others). A stylesheet that is not on
+    /// disk keeps the affected rules `untested`, with a note in the report. @default false
+    pub contrast: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -955,6 +959,7 @@ impl Default for A11yConfig {
             check_alt_quality: true,
             manual_checklist: false,
             viz_alternatives: false,
+            contrast: false,
         }
     }
 }

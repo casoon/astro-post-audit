@@ -30,8 +30,14 @@ All four can be written in the same run. The legacy `output` option writes JSON 
 
 Since 0.7.0 a finding carries two axes: `outcome` says how certain the statement is (`fail`,
 `review`, `pass`, `untested`), `severity` how heavy the problem is (`low` … `critical`). The JSON
-report also lists `rule_runs`. Rules the tool cannot serve from static HTML, such as colour
-contrast, appear there as `capability_missing`.
+report also lists `rule_runs`. Rules the tool cannot serve, such as colour contrast without
+`rules.a11y.contrast` or anything that needs layout, appear there as `capability_missing`.
+
+With `rules.a11y.contrast` the report adds `inputs`: one note per stylesheet that could not be
+read from `dist/` (`stylesheet_unavailable`: remote URL, missing file, path outside `dist/`) or an
+`@import` left unresolved (`stylesheet_unresolved`), with the number of pages affected. While such
+a note applies to a page, its contrast findings are `untested`, never `pass`. The text and
+Markdown reports show the same notes under "Stylesheets not read".
 
 Accessibility and document rule ids come from `a11y-rules`, so a finding has the same id in
 astro-post-audit, auditmysite and LiveAudit, for example `images/alt-missing`.

@@ -146,14 +146,53 @@ fn runemark_confidence(outcome: Outcome) -> Option<RunemarkConfidence> {
     }
 }
 
+/// Was der Lauf über seine eigene Reichweite zu sagen hat.
+///
+/// Ohne diese Angaben hieße „nicht geprüft" nach außen dasselbe wie
+/// „bestanden" -- genau der Unterschied, den das gemeinsame Modell festhalten
+/// soll.
+#[derive(Default)]
+pub struct RunInfo {
+    /// Regeln, die dieser Host nicht bedienen konnte, samt Grund.
+    pub rule_runs: Vec<a11y_report::RuleRun>,
+    /// Eingaben, die fehlten oder unvollständig waren (Stylesheets).
+    pub inputs: Vec<a11y_report::InputNote>,
+}
+
+impl RunInfo {
+    /// Eine Zeile je Vermerk, für Text und Markdown.
+    fn input_lines(&self) -> Vec<String> {
+        self.inputs
+            .iter()
+            .map(|n| {
+                let subject = n.subject.as_deref().unwrap_or("-");
+                match n.detail.as_deref() {
+                    Some(d) => format!("{subject}: {d}"),
+                    None => subject.to_string(),
+                }
+            })
+            .collect()
+    }
+}
+
 pub struct Reporter {
     format: Format,
     color: ColorMode,
+    run: RunInfo,
 }
 
 impl Reporter {
     pub fn new(format: Format, color: ColorMode) -> Self {
-        Self { format, color }
+        Self {
+            format,
+            color,
+            run: RunInfo::default(),
+        }
+    }
+
+    pub fn with_run(mut self, run: RunInfo) -> Self {
+        self.run = run;
+        self
     }
 
     pub fn print(
@@ -197,12 +236,15 @@ impl Reporter {
                 #[derive(Serialize)]
                 struct Report<'a> {
                     findings: &'a [Finding],
+                    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+                    inputs: &'a [a11y_report::InputNote],
                     summary: &'a Summary,
                     #[serde(skip_serializing_if = "Option::is_none")]
                     benchmark: Option<&'a BenchmarkData>,
                 }
                 let report = Report {
                     findings,
+                    inputs: &self.run.inputs,
                     summary,
                     benchmark,
                 };
@@ -241,6 +283,11 @@ impl Reporter {
                 "Output",
                 vec!["Truncated due to the max-errors limit".into()],
             ));
+        }
+
+        let lines = self.run.input_lines();
+        if !lines.is_empty() {
+            report = report.add_scope_note(ScopeNote::new("Stylesheets not read", lines));
         }
 
         let mut by_file: std::collections::BTreeMap<&str, Vec<&Finding>> =
@@ -296,10 +343,13 @@ impl Reporter {
             ///
             /// Ohne dieses Feld hiesse „nicht geprueft" nach aussen dasselbe
             /// wie „bestanden" -- genau der Unterschied, den das gemeinsame
-            /// Modell festhalten soll. Statisches HTML kennt keine berechneten
-            /// Stile, deshalb steht der Kontrast hier.
-            #[serde(skip_serializing_if = "Vec::is_empty")]
-            rule_runs: Vec<a11y_report::RuleRun>,
+            /// Modell festhalten soll. Ohne `a11y.contrast` kennt der Host keine
+            /// berechneten Stile, deshalb steht der Kontrast hier.
+            #[serde(skip_serializing_if = "<[_]>::is_empty")]
+            rule_runs: &'a [a11y_report::RuleRun],
+            /// Fehlende oder unvollstaendige Eingaben (nicht gelesene Stylesheets).
+            #[serde(skip_serializing_if = "<[_]>::is_empty")]
+            inputs: &'a [a11y_report::InputNote],
             summary: &'a Summary,
             #[serde(skip_serializing_if = "Option::is_none")]
             benchmark: Option<&'a BenchmarkData>,
@@ -307,7 +357,8 @@ impl Reporter {
 
         let report = Report {
             findings,
-            rule_runs: crate::checks::a11y_core::nicht_gelaufen(),
+            rule_runs: &self.run.rule_runs,
+            inputs: &self.run.inputs,
             summary,
             benchmark,
         };
@@ -323,6 +374,14 @@ impl Reporter {
             "{} pages checked · {} errors · {} warnings · {} info\n",
             summary.files_checked, summary.errors, summary.warnings, summary.info
         ));
+
+        let lines = self.run.input_lines();
+        if !lines.is_empty() {
+            out.push_str("\n## Stylesheets not read\n\n");
+            for l in &lines {
+                out.push_str(&format!("- {l}\n"));
+            }
+        }
 
         if findings.is_empty() {
             out.push_str("\nAll checks passed!\n");

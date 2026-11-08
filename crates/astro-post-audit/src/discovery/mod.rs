@@ -72,6 +72,8 @@ pub struct SiteIndex {
     pub html_total: usize,
     /// HTML files remaining after include/exclude filtering (diagnostics).
     pub html_matched: usize,
+    /// Stylesheets of the build, read once per run (see `styles`).
+    pub styles: crate::styles::StyleStore,
 }
 
 impl SiteIndex {
@@ -290,6 +292,7 @@ impl SiteIndex {
             base_path,
             html_total,
             html_matched,
+            styles: Default::default(),
         })
     }
 

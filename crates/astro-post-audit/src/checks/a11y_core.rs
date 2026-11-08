@@ -9,19 +9,23 @@
 //! # Was hier nicht geprüft werden kann
 //!
 //! Statisches HTML bedient Tier 1 und, über `accname`, Tier 2. Tier 3 —
-//! berechnete Stile und Geometrie — gibt es nicht. Kontrast, Fokus, Zielgrößen u. a. laufen
-//! deshalb nicht und werden als **nicht gelaufen** vermerkt statt übergangen.
+//! berechnete Stile und Geometrie — gibt es nur mit `a11y.contrast`, und dann
+//! ohne Geometrie. Was nicht läuft (Kontrast ohne den Schalter, Zielgrößen
+//! immer), wird als **nicht gelaufen** vermerkt statt übergangen.
 //! [`nicht_gelaufen`] gibt diese Vermerke nach außen; wer sie unterschlägt,
 //! macht aus „nicht geprüft" ein stillschweigendes „bestanden".
 
 use std::collections::{HashMap, HashSet};
 
-use a11y_report::{Finding, RootCauseId, RuleRun};
+use a11y_report::{Finding, NotRun, Outcome, RootCauseId, RuleRun};
 use rayon::prelude::*;
 
-use crate::adapter::{Seite, SeiteMitNamen};
+use a11y_rules::Locale;
+use style_cascade::{Cascade, Environment};
+
+use crate::adapter::{Seite, SeiteMitNamen, SeiteMitStilen};
 use crate::config::Config;
-use crate::discovery::SiteIndex;
+use crate::discovery::{PageInfo, SiteIndex};
 
 /// Ob diese Regel nach der Konfiguration laufen soll.
 ///
@@ -182,62 +186,240 @@ fn aaa_zusammenfassen(findings: Vec<Finding>) -> Vec<Finding> {
         .collect()
 }
 
+/// Hängt die Verortung an, die dieses Werkzeug braucht, und wendet die Schalter an.
+fn verorten(
+    mut f: Finding,
+    page: &PageInfo,
+    seite: &Seite<'_>,
+    config: &Config,
+) -> Option<Finding> {
+    if !eingeschaltet(&f.rule_id, config) {
+        return None;
+    }
+    // Die Regeln verorten über die Knotenkennung; dieses Werkzeug prüft
+    // Dateien. Beides bleibt stehen — die Kennung ist der Rückbezug in den
+    // Baum.
+    f.location.file = Some(page.rel_path.clone());
+    if f.location.selector.is_none() {
+        f.location.selector = f.location.node.as_deref().and_then(|n| seite.selector(n));
+    }
+    if f.help.is_none() {
+        f.help = hilfe_zu(&f.rule_id).map(str::to_string);
+        if f.rule_id == "navigation/location-missing" {
+            if let Some(help) = &mut f.help {
+                help.push_str(
+                    " On the home page, aria-current=\"page\" can go on the home/logo link.",
+                );
+            }
+        }
+    }
+    if f.suggestion.is_none() {
+        f.suggestion = vorschlag_zu(&f.rule_id).map(str::to_string);
+    }
+    Some(f)
+}
+
+/// Struktur und Semantik, keine Stile: das Verhalten ohne `a11y.contrast`.
+fn seite_ohne_stile(page: &PageInfo, config: &Config) -> Vec<Finding> {
+    let html = page.parse_html();
+    let seite = Seite::new(&html);
+    let doc = SeiteMitNamen::new(&seite);
+    a11y_rules::run_with_semantics(&doc)
+        .findings
+        .into_iter()
+        .filter_map(|f| verorten(f, page, &seite, config))
+        .collect()
+}
+
+/// Eine Heuristik, die der Host nicht bedienen kann, meldet sich als
+/// `untested` am Wurzelknoten („der Host misst X nicht"). Das ist keine Aussage
+/// über die Seite, sondern über den Host, und gehört in `rule_runs`. Je Seite
+/// wiederholt -- und `focus/indicator-unmeasured` trägt Schwere `high` --
+/// ließe es jeden Build scheitern.
+fn host_luecke(f: &Finding, wurzel: &str) -> bool {
+    f.outcome == Outcome::Untested
+        && f.location.node.as_deref() == Some(wurzel)
+        && !f.rule_id.starts_with("manual/")
+}
+
+/// Ein nicht lesbares Blatt macht jeden Text der Seite „nicht bestimmbar". Das
+/// wären Hunderte gleichlautender Befunde je Seite, mit derselben Ursache; sie
+/// stehen hier als einer mit Zähler. Befunde, die etwas über ein bestimmtes
+/// Element sagen (`fail`, `review`), bleiben einzeln.
+fn unbestimmt_zusammenfassen(findings: Vec<Finding>) -> Vec<Finding> {
+    let unbestimmt = |f: &Finding| {
+        f.outcome == Outcome::Untested
+            && matches!(
+                f.rule_id.as_str(),
+                "contrast/text-undetermined" | "contrast/control-undetermined"
+            )
+    };
+    let mut gesehen: HashMap<String, usize> = HashMap::new();
+    for f in findings.iter().filter(|f| unbestimmt(f)) {
+        *gesehen.entry(f.rule_id.clone()).or_default() += 1;
+    }
+    let mut erster: HashSet<String> = HashSet::new();
+    findings
+        .into_iter()
+        .filter_map(|mut f| {
+            if !unbestimmt(&f) {
+                return Some(f);
+            }
+            if !erster.insert(f.rule_id.clone()) {
+                return None;
+            }
+            let n = gesehen[&f.rule_id];
+            if n > 1 {
+                f.message
+                    .push_str(&format!(" {n} elements on this page; reported once."));
+            }
+            Some(f)
+        })
+        .collect()
+}
+
+/// Regeln über Stylesheets sagen etwas über das Blatt, nicht über die Seite.
+/// Ein Blatt, das alle Seiten teilen, ergäbe auf jeder denselben Befund; er
+/// steht einmal, bei der alphabetisch ersten Datei, mit der Zahl der Seiten.
+fn blatt_befunde_zusammenfassen(findings: Vec<Finding>) -> Vec<Finding> {
+    let ids: HashSet<&str> = a11y_rules::stylesheet_metas()
+        .iter()
+        .flat_map(|m| m.ids.iter().copied())
+        .collect();
+    let blatt = |f: &Finding| ids.contains(f.rule_id.as_str());
+    let schluessel = |f: &Finding| (f.rule_id.clone(), f.message.clone());
+    let mut gruppen: HashMap<(String, String), (usize, Option<String>)> = HashMap::new();
+    for f in findings.iter().filter(|f| blatt(f)) {
+        let g = gruppen.entry(schluessel(f)).or_insert((0, None));
+        g.0 += 1;
+        if g.1.is_none() || f.location.file < g.1 {
+            g.1.clone_from(&f.location.file);
+        }
+    }
+    let mut ausgegeben: HashSet<(String, String)> = HashSet::new();
+    findings
+        .into_iter()
+        .filter_map(|mut f| {
+            if !blatt(&f) {
+                return Some(f);
+            }
+            let k = schluessel(&f);
+            let (n, datei) = &gruppen[&k];
+            if f.location.file != *datei || !ausgegeben.insert(k) {
+                return None;
+            }
+            if *n > 1 {
+                f.message.push_str(&format!(
+                    " Same stylesheet rule on {n} page(s); reported once."
+                ));
+            }
+            Some(f)
+        })
+        .collect()
+}
+
+/// Alle Tiers, die die Kaskade bedienen kann, über den Blättern der Seite.
+///
+/// Läuft im hellen Schema; fragt ein Blatt nach `prefers-color-scheme`, läuft
+/// der Kontrast ein zweites Mal im dunklen. Ein Befund, der in beiden Schemata
+/// gleich ausfällt, steht nur einmal da.
+fn seite_mit_stilen(page: &PageInfo, index: &SiteIndex, config: &Config) -> Vec<Finding> {
+    let html = page.parse_html();
+    let seite = Seite::new(&html);
+    let stile = index.styles.fuer_seite(index, page, &html);
+    let lauf = |env: Environment| -> Vec<Finding> {
+        let cascade = Cascade::new(&stile.blaetter, env);
+        let host = SeiteMitStilen::new(&seite, cascade, stile.fehlende);
+        for vorspann in host.unaufgeloeste_imports().iter().filter(|_| !env.dark) {
+            index
+                .styles
+                .unaufgeloest_nachtragen(vorspann, &stile.offene_imports);
+        }
+        let report = a11y_rules::run_full_in(&host, Locale::En);
+        a11y_rules::run_stylesheets_in(report, &host, &stile.blaetter, Locale::En).findings
+    };
+    let hell = Environment::default();
+    let mut findings = lauf(hell);
+    if stile.dunkel {
+        let dunkel = lauf(Environment { dark: true, ..hell });
+        let schluessel = |f: &Finding| (f.rule_id.clone(), f.location.node.clone());
+        let bekannt: HashSet<_> = findings.iter().map(schluessel).collect();
+        findings.extend(
+            dunkel
+                .into_iter()
+                .filter(|f| f.rule_id.starts_with("contrast/") && !bekannt.contains(&schluessel(f)))
+                .map(|mut f| {
+                    f.message.push_str(" (dark color scheme)");
+                    f
+                }),
+        );
+    }
+    let wurzel = a11y_dom::Node::id(a11y_dom::Document::root(&seite)).to_string();
+    let findings = findings
+        .into_iter()
+        .filter(|f| !host_luecke(f, &wurzel))
+        .filter_map(|f| verorten(f, page, &seite, config))
+        .collect();
+    unbestimmt_zusammenfassen(findings)
+}
+
 /// Prüft jede Seite mit dem gemeinsamen Regelbestand.
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     let findings = index
         .pages
         .par_iter()
         .flat_map(|page| {
-            let html = page.parse_html();
-            let seite = Seite::new(&html);
-            let doc = SeiteMitNamen::new(&seite);
-
-            a11y_rules::run_with_semantics(&doc)
-                .findings
-                .into_iter()
-                .filter(|f| eingeschaltet(&f.rule_id, config))
-                .map(|mut f| {
-                    // Die Regeln verorten über die Knotenkennung; dieses
-                    // Werkzeug prüft Dateien. Beides bleibt stehen — die
-                    // Kennung ist der Rückbezug in den Baum.
-                    f.location.file = Some(page.rel_path.clone());
-                    if f.location.selector.is_none() {
-                        f.location.selector = f.location.node.as_deref().and_then(|n| seite.selector(n));
-                    }
-                    if f.help.is_none() {
-                        f.help = hilfe_zu(&f.rule_id).map(str::to_string);
-                        if f.rule_id == "navigation/location-missing" {
-                            if let Some(help) = &mut f.help {
-                                help.push_str(" On the home page, aria-current=\"page\" can go on the home/logo link.");
-                            }
-                        }
-                    }
-                    if f.suggestion.is_none() {
-                        f.suggestion = vorschlag_zu(&f.rule_id).map(str::to_string);
-                    }
-                    f
-                })
-                .collect::<Vec<_>>()
+            if config.a11y.contrast {
+                seite_mit_stilen(page, index, config)
+            } else {
+                seite_ohne_stile(page, config)
+            }
         })
         .collect();
-    aaa_zusammenfassen(findings)
+    blatt_befunde_zusammenfassen(aaa_zusammenfassen(findings))
 }
 
 /// Die Regeln, die dieser Host nicht bedienen kann, samt Grund.
 ///
 /// Hängt nicht an der einzelnen Seite: Welche Tiers ein Host bedient, ist eine
-/// Eigenschaft des Hosts. Einmal ermittelt, gilt für den ganzen Lauf.
-pub fn nicht_gelaufen() -> Vec<RuleRun> {
+/// Eigenschaft des Hosts. Einmal ermittelt, gilt für den ganzen Lauf. Mit
+/// `a11y.contrast` bedient der Host auch die Darstellung; offen bleiben dann
+/// die Regeln, die Geometrie brauchen.
+pub fn nicht_gelaufen(config: &Config) -> Vec<RuleRun> {
     // Ein leeres Dokument genügt: Gefragt ist nicht, was gefunden wurde,
     // sondern welche Regeln gar nicht erst laufen konnten.
     let html = scraper::Html::parse_document("<html></html>");
     let seite = Seite::new(&html);
-    let doc = SeiteMitNamen::new(&seite);
-    a11y_rules::run_with_semantics(&doc)
+    let (report, wurzel) = if config.a11y.contrast {
+        let cascade = Cascade::new(&[], Environment::default());
+        let host = SeiteMitStilen::new(&seite, cascade, false);
+        let report = a11y_rules::run_full_in(&host, Locale::En);
+        let report = a11y_rules::run_stylesheets_in(report, &host, &[], Locale::En);
+        (
+            report,
+            a11y_dom::Node::id(a11y_dom::Document::root(&host)).to_string(),
+        )
+    } else {
+        let report = a11y_rules::run_with_semantics(&SeiteMitNamen::new(&seite));
+        (report, String::new())
+    };
+    let mut offen: Vec<RuleRun> = report
         .rule_runs
         .into_iter()
         .filter(|r| r.not_run.is_some())
-        .collect()
+        .collect();
+    // Heuristiken, die sich als `untested` am Wurzelknoten melden (siehe
+    // `host_luecke`), stehen hier als nicht gelaufen.
+    for f in report.findings.iter().filter(|f| host_luecke(f, &wurzel)) {
+        if !offen.iter().any(|r| r.rule_id == f.rule_id) {
+            offen.push(
+                RuleRun::not_run(f.rule_id.clone(), NotRun::CapabilityMissing)
+                    .with_wcag(f.wcag.iter().cloned())
+                    .with_reason(f.message.clone()),
+            );
+        }
+    }
+    offen
 }
 
 #[cfg(test)]
@@ -330,7 +512,7 @@ mod tests {
     /// Kontrastregeln vermerkt, nicht verschwiegen.
     #[test]
     fn kontrast_wird_als_nicht_gelaufen_vermerkt() {
-        let offen = nicht_gelaufen();
+        let offen = nicht_gelaufen(&Config::default());
         let ids: Vec<&str> = offen.iter().map(|r| r.rule_id.as_str()).collect();
         for erwartet in ["contrast/text-insufficient", "contrast/text-undetermined"] {
             assert!(ids.contains(&erwartet), "{erwartet} fehlt: {ids:?}");
