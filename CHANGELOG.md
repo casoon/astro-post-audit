@@ -14,7 +14,7 @@ reconstructed from the git history and the README release notes.
 
 ### Changed
 
-- **Accessibility:** rules come from `a11y-rules` 0.28 (was 0.26). An empty page now reports `headings/none` instead of `landmarks/main-missing`; the full list of upstream changes is in the `a11y-rules` changelog.
+- **Accessibility:** rules come from `a11y-rules` 0.29 (was 0.26), with `style-cascade` 0.2, `html-conform` 0.5 and `html5-parser` 0.5; a single copy of each in the dependency graph. Rules whose measurement this tool cannot take are listed in `rule_runs` as `capability_missing` (including `focus/indicator-missing`, which replaces `focus/indicator-unmeasured`, and the target-size rules when `rules.a11y.contrast` is on), never as passed. An empty page now reports `headings/none` instead of `landmarks/main-missing`; the full list of upstream changes is in the `a11y-rules` changelog.
 - **Pages:** the project site uses the current shared theme (0.12.6).
 - **Performance:** measured on a real site (insights.casoon.de, 1092 HTML pages, `html_validation` on, cache cold): 0.9.0 takes 73–81 s, 0.10.0 takes 4.5–4.8 s (#109, #113). Errors (0) and warnings (5583) are identical; the info count drops from 1100 to 23 because `structured-data/website-missing-search-action` is no longer reported (1088 pages), while 11 info findings from the new link rules appear.
 

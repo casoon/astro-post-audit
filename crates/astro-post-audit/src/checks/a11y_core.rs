@@ -17,7 +17,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use a11y_report::{Finding, NotRun, Outcome, RootCauseId, RuleRun};
+use a11y_report::{Finding, Outcome, RootCauseId, RuleRun};
 use rayon::prelude::*;
 
 use a11y_rules::Locale;
@@ -231,17 +231,6 @@ fn seite_ohne_stile(page: &PageInfo, config: &Config) -> Vec<Finding> {
         .collect()
 }
 
-/// Eine Heuristik, die der Host nicht bedienen kann, meldet sich als
-/// `untested` am Wurzelknoten („der Host misst X nicht"). Das ist keine Aussage
-/// über die Seite, sondern über den Host, und gehört in `rule_runs`. Je Seite
-/// wiederholt -- und `focus/indicator-unmeasured` trägt Schwere `high` --
-/// ließe es jeden Build scheitern.
-fn host_luecke(f: &Finding, wurzel: &str) -> bool {
-    f.outcome == Outcome::Untested
-        && f.location.node.as_deref() == Some(wurzel)
-        && !f.rule_id.starts_with("manual/")
-}
-
 /// Ein nicht lesbares Blatt macht jeden Text der Seite „nicht bestimmbar". Das
 /// wären Hunderte gleichlautender Befunde je Seite, mit derselben Ursache; sie
 /// stehen hier als einer mit Zähler. Befunde, die etwas über ein bestimmtes
@@ -354,10 +343,8 @@ fn seite_mit_stilen(page: &PageInfo, index: &SiteIndex, config: &Config) -> Vec<
                 }),
         );
     }
-    let wurzel = a11y_dom::Node::id(a11y_dom::Document::root(&seite)).to_string();
     let findings = findings
         .into_iter()
-        .filter(|f| !host_luecke(f, &wurzel))
         .filter_map(|f| verorten(f, page, &seite, config))
         .collect();
     unbestimmt_zusammenfassen(findings)
@@ -379,44 +366,50 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     blatt_befunde_zusammenfassen(aaa_zusammenfassen(findings))
 }
 
+/// Ein Dokument mit je einem Kandidaten für die Regeln über Messungen des
+/// Hosts: Eine Regel ohne Ziel gilt als gelaufen, erst ein Kandidat ohne
+/// Messung macht sie zu `NotRun::CapabilityMissing`.
+const SONDE: &str = "<html lang=\"en\"><body><a href=\"/x\">x</a><button>b</button>\
+<input type=\"password\"><iframe src=\"/f\"></iframe><p>t</p></body></html>";
+
+/// `rule_runs` der Regeln, die der Host nicht bedienen konnte, über `SONDE`.
+fn sonde(mit_stilen: bool) -> Vec<RuleRun> {
+    let html = scraper::Html::parse_document(SONDE);
+    let seite = Seite::new(&html);
+    let report = if mit_stilen {
+        let cascade = Cascade::new(&[], Environment::default());
+        let host = SeiteMitStilen::new(&seite, cascade, false);
+        let report = a11y_rules::run_full_in(&host, Locale::En);
+        a11y_rules::run_stylesheets_in(report, &host, &[], Locale::En)
+    } else {
+        a11y_rules::run_with_semantics(&SeiteMitNamen::new(&seite))
+    };
+    report
+        .rule_runs
+        .into_iter()
+        .filter(|r| r.not_run.is_some())
+        .collect()
+}
+
 /// Die Regeln, die dieser Host nicht bedienen kann, samt Grund.
 ///
 /// Hängt nicht an der einzelnen Seite: Welche Tiers ein Host bedient, ist eine
 /// Eigenschaft des Hosts. Einmal ermittelt, gilt für den ganzen Lauf. Mit
 /// `a11y.contrast` bedient der Host auch die Darstellung; offen bleiben dann
-/// die Regeln, die Geometrie brauchen.
+/// die Regeln, die Geometrie brauchen. `SeiteMitStilen::bounds` liefert keine
+/// Kästen, die Zielgrößen-Regeln fänden dort keine Ziele und gälten als
+/// gelaufen -- sie stehen deshalb auch dann als nicht gelaufen da.
 pub fn nicht_gelaufen(config: &Config) -> Vec<RuleRun> {
-    // Ein leeres Dokument genügt: Gefragt ist nicht, was gefunden wurde,
-    // sondern welche Regeln gar nicht erst laufen konnten.
-    let html = scraper::Html::parse_document("<html></html>");
-    let seite = Seite::new(&html);
-    let (report, wurzel) = if config.a11y.contrast {
-        let cascade = Cascade::new(&[], Environment::default());
-        let host = SeiteMitStilen::new(&seite, cascade, false);
-        let report = a11y_rules::run_full_in(&host, Locale::En);
-        let report = a11y_rules::run_stylesheets_in(report, &host, &[], Locale::En);
-        (
-            report,
-            a11y_dom::Node::id(a11y_dom::Document::root(&host)).to_string(),
-        )
-    } else {
-        let report = a11y_rules::run_with_semantics(&SeiteMitNamen::new(&seite));
-        (report, String::new())
-    };
-    let mut offen: Vec<RuleRun> = report
-        .rule_runs
-        .into_iter()
-        .filter(|r| r.not_run.is_some())
-        .collect();
-    // Heuristiken, die sich als `untested` am Wurzelknoten melden (siehe
-    // `host_luecke`), stehen hier als nicht gelaufen.
-    for f in report.findings.iter().filter(|f| host_luecke(f, &wurzel)) {
-        if !offen.iter().any(|r| r.rule_id == f.rule_id) {
-            offen.push(
-                RuleRun::not_run(f.rule_id.clone(), NotRun::CapabilityMissing)
-                    .with_wcag(f.wcag.iter().cloned())
-                    .with_reason(f.message.clone()),
-            );
+    let mut offen = sonde(config.a11y.contrast);
+    if config.a11y.contrast {
+        let ohne_stile = sonde(false);
+        for r in ohne_stile
+            .into_iter()
+            .filter(|r| r.rule_id.starts_with("targets/"))
+        {
+            if !offen.iter().any(|o| o.rule_id == r.rule_id) {
+                offen.push(r);
+            }
         }
     }
     offen
@@ -520,6 +513,35 @@ mod tests {
         assert!(offen
             .iter()
             .all(|r| r.not_run == Some(a11y_report::NotRun::CapabilityMissing)));
+    }
+
+    /// Eine Regel ohne Ziel gilt als gelaufen; die Sonde hat für jede Regel
+    /// über Host-Messungen ein Ziel, mit und ohne Stile. Zielgrößen brauchen
+    /// Kästen, die dieser Host nie hat.
+    #[test]
+    fn messungen_des_hosts_stehen_mit_und_ohne_stile_als_nicht_gelaufen() {
+        for kontrast in [false, true] {
+            let mut config = Config::default();
+            config.a11y.contrast = kontrast;
+            let ids: Vec<String> = nicht_gelaufen(&config)
+                .into_iter()
+                .map(|r| r.rule_id)
+                .collect();
+            for erwartet in [
+                "focus/indicator-missing",
+                "focus/obscured-enhanced",
+                "auth/paste-blocked",
+                "frames/cross-origin",
+                "text-spacing/clipped",
+                "targets/size",
+                "targets/size-enhanced",
+            ] {
+                assert!(
+                    ids.iter().any(|i| i == erwartet),
+                    "contrast={kontrast}: {erwartet} fehlt: {ids:?}"
+                );
+            }
+        }
     }
 
     fn aaa_befund(datei: &str, selektor: &str) -> Finding {
