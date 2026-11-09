@@ -4,24 +4,24 @@ version = 4
 
 [[package]]
 name = "a11y-dom"
-version = "0.28.2"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "758dc9048021dcc84d416e911fa9809ecbb41edae5c0b2905dad6266520435ac"
+checksum = "fe84816bded4b87c208c87fc70ced0d66e0b34ed4eb4540d56e207eca60f41b3"
 
 [[package]]
 name = "a11y-report"
-version = "0.28.2"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d64da4e0305059cdd73199d89da83ceb7f153d4373d5fd10aafc768834415f50"
+checksum = "5a68da9c99052487eb1eea261c68de01915aa9d3a80183c750e75683cad86ee3"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "a11y-rules"
-version = "0.28.2"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59e43af3e20072a66d1d62c775faecfcc1358c320eb97e70383044de68f3da2a"
+checksum = "b64a188b945aa0d27c7e16d7eec2683a465ed6917e87b45438771c4833e63733"
 dependencies = [
  "a11y-dom",
  "a11y-report",
@@ -50,9 +50,9 @@ dependencies = [
 
 [[package]]
 name = "accname"
-version = "0.28.2"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a91abdd3c7035a48107051591cd91bb055e2a92b1c7ade63b6e1f4e84052fd6"
+checksum = "1c2a52a214df24a1d59cfe5e8ae5d7c9013866a44d5a28287971be6a4b346874"
 dependencies = [
  "a11y-dom",
 ]
@@ -865,9 +865,9 @@ dependencies = [
 
 [[package]]
 name = "csp-parse"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1cd2527b63dd3d6edbb8a0f251aa31bb52e81cc7ad37dc461d2974084fa5c33"
+checksum = "753c2d52fe6774eeb5f41b0d08d6e4b4e93c328c49849a5648abaed823efd234"
 
 [[package]]
 name = "css-tokenize"
@@ -1536,14 +1536,15 @@ dependencies = [
 
 [[package]]
 name = "html-conform"
-version = "0.3.4"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "979b9960a3828e191d483401a79a1f6ee346b480b642d8e27d82d4e354806afa"
+checksum = "81a708495b8adcf890cbf43c741ea7e95e0391b4ddff9a5163c1481358131898"
 dependencies = [
+ "a11y-report",
  "csp-parse",
  "encoding_rs",
  "html5-parser",
- "media-query-parse 0.1.0",
+ "media-query-parse",
  "relax-ng",
  "schematron-engine",
  "serde",
@@ -1554,9 +1555,9 @@ dependencies = [
 
 [[package]]
 name = "html5-parser"
-version = "0.4.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38ffb819bfbd6e33f301804dfbdc4ef8f756e731be9dcea206a39eeada55a34f"
+checksum = "b112f3fe2444e671bbf8c4aadb058abc8b87e18ece52e61f2674bd578c736fd6"
 
 [[package]]
 name = "html5ever"
@@ -2035,12 +2036,6 @@ dependencies = [
  "quote",
  "syn 2.0.119",
 ]
-
-[[package]]
-name = "media-query-parse"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f93a1e4247a741c4a1d80414a107c4ddae6302e41b783de3eabcfbceca71727c"
 
 [[package]]
 name = "media-query-parse"
@@ -2903,9 +2898,9 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "relax-ng"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8af2d0324bcb3eb335927bce74d489dbacbf59a77286b7446ae1cd8e42ea7ae1"
+checksum = "d2aeba816d1c2ecf73087549a2929a40554805fe2db602cf1de25ee0047a6742"
 dependencies = [
  "regex",
  "roxmltree",
@@ -3094,9 +3089,9 @@ dependencies = [
 
 [[package]]
 name = "schematron-engine"
-version = "0.2.1"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d03d137c8f6fe46a110081ff99c95562c2dc22f1c9f10b06933cb457551857e"
+checksum = "e0372a184cfb1ccad73b2e06bfad64de481d2508bf748a08c416b15cfa112f9b"
 dependencies = [
  "roxmltree",
  "xpath-eval",
@@ -3504,12 +3499,12 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "style-cascade"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9417d52ecde9ecdf07088082cd8cffe3e344e5c06bc7713265c89f8055f7c73"
+checksum = "75e4897d802c89c0d538a31df373d6f04ecc84bf1802f0afd18dba7aa925100f"
 dependencies = [
  "a11y-dom",
- "media-query-parse 0.2.0",
+ "media-query-parse",
  "stylesheet-parse",
 ]
 

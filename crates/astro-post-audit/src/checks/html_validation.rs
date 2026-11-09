@@ -1,3 +1,8 @@
+// html-conform 0.4+ deprecates its own Finding/Severity in favour of
+// `CheckReport::to_report()`; they keep working and the result cache stores them.
+// Moving this check to the shared model is a separate change.
+#![allow(deprecated)]
+
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::Path;
