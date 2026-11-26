@@ -855,6 +855,10 @@ cargo publish --manifest-path crates/astro-post-audit/Cargo.toml
 
 The Cargo package, npm package, lockfiles and `vX.Y.Z` tag must use the same version. The release workflow rejects mismatches before building artifacts.
 
+## Author
+
+Built and maintained by [Jörn Seidel](https://www.casoon.de/joern-seidel/) ([CASOON](https://www.casoon.de/)). Background and design decisions are described in an article on Insights (in German): [astro-post-audit: SEO- und Accessibility-Checks direkt nach dem Build](https://insights.casoon.de/artikel/astro-post-audit-seo-a11y-checks-nach-dem-build/).
+
 ## License
 
 MIT
