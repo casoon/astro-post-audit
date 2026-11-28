@@ -368,6 +368,7 @@ const MAX_SITEMAP_DEPTH: usize = 3;
 
 /// Read the sitemap `file` (relative to dist) into `urls`; a sitemap index
 /// pulls in its children from dist. The first problem ends up in `error`.
+#[allow(clippy::too_many_arguments)] // rekursiv, Zustand je Aufruf durchgereicht
 fn load_sitemap(
     dist: &Path,
     file: &str,
@@ -401,7 +402,16 @@ fn load_sitemap(
     }
     for loc in sitemap.locs {
         match child_sitemap_file(dist, base_path, &loc) {
-            Some(child) => load_sitemap(dist, &child, base_path, depth + 1, visited, urls, lastmods, error),
+            Some(child) => load_sitemap(
+                dist,
+                &child,
+                base_path,
+                depth + 1,
+                visited,
+                urls,
+                lastmods,
+                error,
+            ),
             None => {
                 error.get_or_insert_with(|| {
                     format!("{file}: child sitemap '{loc}' not found in dist")

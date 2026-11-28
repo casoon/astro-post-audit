@@ -58,7 +58,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         findings.push(structural_finding(*issue, block, at.clone()));
                     }
                     for (node_index, node) in block.nodes.iter().enumerate() {
-                        for (field_path, rel_url) in relative_url_fields(&node.content) {
+                        for (field_path, rel_url) in sd::relative_url_fields(&node.content) {
                             findings.push(
                                 Finding::fail(
                                     "structured-data/relative-url",
@@ -272,66 +272,4 @@ fn recommended_rule(
         ),
         _ => return None,
     })
-}
-
-const JSON_LD_URL_FIELDS: &[&str] = &[
-    "url",
-    "image",
-    "logo",
-    "thumbnailUrl",
-    "contentUrl",
-    "embedUrl",
-    "item",
-    "sameAs",
-    "publishingPrinciples",
-];
-
-fn relative_url_fields(content: &serde_json::Value) -> Vec<(String, String)> {
-    let mut out = Vec::new();
-    collect_relative_urls(content, "", false, &mut out);
-    out
-}
-
-fn collect_relative_urls(
-    value: &serde_json::Value,
-    prefix: &str,
-    expect_url: bool,
-    out: &mut Vec<(String, String)>,
-) {
-    match value {
-        serde_json::Value::String(s) if expect_url => {
-            let trimmed = s.trim();
-            if !trimmed.is_empty()
-                && !trimmed.starts_with("https://")
-                && !trimmed.starts_with("http://")
-            {
-                out.push((prefix.to_string(), trimmed.to_string()));
-            }
-        }
-        serde_json::Value::Array(items) => {
-            for (idx, item) in items.iter().enumerate() {
-                let path = if prefix.is_empty() {
-                    format!("[{idx}]")
-                } else {
-                    format!("{prefix}[{idx}]")
-                };
-                collect_relative_urls(item, &path, expect_url, out);
-            }
-        }
-        serde_json::Value::Object(map) => {
-            for (key, val) in map {
-                if key.starts_with('@') {
-                    continue;
-                }
-                let path = if prefix.is_empty() {
-                    key.clone()
-                } else {
-                    format!("{prefix}.{key}")
-                };
-                let is_url_field = JSON_LD_URL_FIELDS.contains(&key.as_str());
-                collect_relative_urls(val, &path, is_url_field, out);
-            }
-        }
-        _ => {}
-    }
 }

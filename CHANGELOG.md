@@ -16,6 +16,8 @@ reconstructed from the git history and the README release notes.
 
 - **Accessibility:** rules come from `a11y-rules` 0.28 (was 0.26). An empty page now reports `headings/none` instead of `landmarks/main-missing`; the full list of upstream changes is in the `a11y-rules` changelog.
 - **Pages:** the project site uses the current shared theme (0.19.0).
+- **robots.txt:** checks use `web-checks` 0.9 (was 0.5). AI bots follow the operators' current documentation: `ClaudeBot` counts as a training bot and can now trigger `robots-txt/ai-training-bot-allowed`, `ChatGPT-User` as a citation bot, `Applebot` and `GoogleOther` as search engines; newer AI crawlers are recognised. A comment line no longer ends a `User-agent` group, end-of-line comments are stripped, and an empty `Disallow:` blocks nothing (RFC 9309).
+- **Structured data:** the relative-URL check (`structured-data/relative-url`) comes from `web-checks` instead of a local copy; findings are unchanged.
 - **Report:** runemark 0.10: with `color: 'auto'`, an empty `NO_COLOR` counts as unset and `TERM=dumb` gives plain output without colour or Unicode symbols. Everything else renders as before.
 - **Performance:** measured on a real site (insights.casoon.de, 1092 HTML pages, `html_validation` on, cache cold): 0.9.0 takes 73–81 s, 0.10.0 takes 4.5–4.8 s (#109, #113). Errors (0) and warnings (5583) are identical; the info count drops from 1100 to 23 because `structured-data/website-missing-search-action` is no longer reported (1088 pages), while 11 info findings from the new link rules appear.
 
