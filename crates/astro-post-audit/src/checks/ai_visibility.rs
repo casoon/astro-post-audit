@@ -20,10 +20,13 @@ static ARTICLE_SEL: LazyLock<Selector> =
 static LD_SEL: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("script[type='application/ld+json']").expect("valid selector")
 });
-static META_ROBOTS_SEL: LazyLock<Selector> =
-    LazyLock::new(|| Selector::parse("meta[name='robots']").expect("valid selector"));
+static META_ROBOTS_SEL: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse("meta[name='robots'], meta[name='googlebot']").expect("valid selector")
+});
 static MARKDOWN_LINK_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\[[^\]]*\]\(([^)\s]+)").expect("valid regex"));
+static SOURCE_LINE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?m)^Source:\s*(\S+)").expect("valid regex"));
 
 pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     if !config.ai_visibility.enabled {
@@ -37,7 +40,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         let llms_path = index.dist_path.join("llms.txt");
         let llms_full_path = index.dist_path.join("llms-full.txt");
         if !llms_path.exists() && !llms_full_path.exists() {
-            site_findings.push(Finding::fail("ai-visibility/missing-llms-txt","No llms.txt or llms-full.txt found in dist/")
+            site_findings.push(Finding::review("ai-visibility/missing-llms-txt","No llms.txt or llms-full.txt found in dist/")
 .with_severity(Severity::Low)
 .at(Location::file("llms.txt").with_selector("root"))
 .with_help("llms.txt is a proposed convention that not every AI system reads. If you want to offer one, create public/llms.txt with key site links and summaries."));
@@ -127,17 +130,45 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
 
             // === Dimension 5: AI Policy ===
 
-            // noindex check
+            // noindex check (respects robots_meta.allow_noindex so intentional 404/legal pages don't fail)
             let is_noindex = html.select(&META_ROBOTS_SEL).any(|el| {
                 el.value()
                     .attr("content")
                     .is_some_and(|c| c.to_lowercase().contains("noindex"))
             });
-            if is_noindex {
-                findings.push(Finding::fail("ai-visibility/noindex-page","Page has a noindex robots meta tag")
-.with_severity(Severity::Low)
-.at(Location::file(page.rel_path.clone()).with_selector("head"))
-.with_help("Remove noindex if this page should be indexed; crawlers that honour it will skip the page."));
+            if is_noindex && !config.robots_meta.allow_noindex {
+                let finding = if config.robots_meta.fail_if_noindex {
+                    Finding::fail("ai-visibility/noindex-page", "Page has a noindex robots meta tag")
+                } else {
+                    Finding::review("ai-visibility/noindex-page", "Page has a noindex robots meta tag")
+                };
+                findings.push(
+                    finding
+                        .with_severity(Severity::Low)
+                        .at(Location::file(page.rel_path.clone()).with_selector("head"))
+                        .with_help("Remove noindex if this page should be indexed; crawlers that honour it will skip the page."),
+                );
+            }
+
+            // Snippet / AI-preview restrictions (nosnippet, max-snippet:0, noai)
+            let snippet_restricted = html.select(&META_ROBOTS_SEL).any(|el| {
+                el.value().attr("content").is_some_and(|c| {
+                    c.split(',').any(|part| {
+                        let d = part.trim().to_ascii_lowercase();
+                        d == "nosnippet" || d == "max-snippet:0" || d == "noai"
+                    })
+                })
+            });
+            if snippet_restricted {
+                findings.push(
+                    Finding::review(
+                        "ai-visibility/snippet-restricted",
+                        "Page restricts snippets/AI previews via nosnippet, max-snippet:0, or noai",
+                    )
+                    .with_severity(Severity::Low)
+                    .at(Location::file(page.rel_path.clone()).with_selector("head"))
+                    .with_help("nosnippet and max-snippet:0 prevent Google AI Overviews and AI assistants from quoting this page. Verify this is intentional."),
+                );
             }
 
             findings
@@ -154,15 +185,21 @@ fn check_llms_links(index: &SiteIndex, path: &std::path::Path, content: &str) ->
         .and_then(|name| name.to_str())
         .unwrap_or("llms.txt");
 
-    MARKDOWN_LINK_RE
+    let md_links = MARKDOWN_LINK_RE
         .captures_iter(content)
-        .filter_map(|captures| captures.get(1).map(|capture| capture.as_str()))
+        .filter_map(|captures| captures.get(1).map(|capture| capture.as_str()));
+    let source_links = SOURCE_LINE_RE
+        .captures_iter(content)
+        .filter_map(|captures| captures.get(1).map(|capture| capture.as_str()));
+
+    md_links
+        .chain(source_links)
         .filter(|href| is_internal_llms_link(href, index))
         .filter(|href| !llms_link_exists(href, index))
         .map(|href| {
             Finding::fail(
                 "ai-visibility/llms-txt-broken-link",
-                format!("llms.txt links to a missing internal target: '{href}'"),
+                format!("{file} links to a missing internal target: '{href}'"),
             )
             .with_severity(Severity::Medium)
             .at(Location::file(file).with_selector("markdown link"))

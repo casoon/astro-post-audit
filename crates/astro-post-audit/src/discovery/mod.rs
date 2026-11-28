@@ -57,6 +57,8 @@ pub struct SiteIndex {
     /// Sitemap entries (absolute URL -> sitemap file in dist that lists it).
     /// Child sitemaps of a sitemap index are resolved offline.
     pub sitemap_urls: HashMap<String, String>,
+    /// `<lastmod>` dates found across URL entries in the sitemap(s).
+    pub sitemap_lastmods: Vec<String>,
     /// The root sitemap in dist (`sitemap-index.xml` or `sitemap.xml`), if any.
     pub sitemap_file: Option<String>,
     /// Parse error for the sitemap or one of its children, if any.
@@ -153,7 +155,7 @@ impl SiteIndex {
         let base_path = normalize_base_path(config.site.base_path.as_deref());
         let norm_config = config.url_normalization.clone();
         let canonical_sel = Selector::parse("link[rel='canonical']").ok();
-        let robots_sel = Selector::parse("meta[name='robots']").ok();
+        let robots_sel = Selector::parse("meta[name='robots'], meta[name='googlebot']").ok();
         let anchor_sel = Selector::parse("a[href]").ok();
         let id_sel = Selector::parse("[id]").ok();
         let lang_sel = Selector::parse("html[lang]").ok();
@@ -268,6 +270,7 @@ impl SiteIndex {
             .find(|name| dist_path.join(name).is_file())
             .map(str::to_string);
         let mut sitemap_urls = HashMap::new();
+        let mut sitemap_lastmods = Vec::new();
         let mut sitemap_parse_error = None;
         if let Some(file) = &sitemap_file {
             load_sitemap(
@@ -277,6 +280,7 @@ impl SiteIndex {
                 0,
                 &mut HashSet::new(),
                 &mut sitemap_urls,
+                &mut sitemap_lastmods,
                 &mut sitemap_parse_error,
             );
         }
@@ -285,6 +289,7 @@ impl SiteIndex {
             pages,
             route_to_index,
             sitemap_urls,
+            sitemap_lastmods,
             sitemap_file,
             sitemap_parse_error,
             dist_path,
@@ -370,6 +375,7 @@ fn load_sitemap(
     depth: usize,
     visited: &mut HashSet<String>,
     urls: &mut HashMap<String, String>,
+    lastmods: &mut Vec<String>,
     error: &mut Option<String>,
 ) {
     if !visited.insert(file.to_string()) {
@@ -386,6 +392,7 @@ fn load_sitemap(
         for url in sitemap.locs {
             urls.entry(url).or_insert_with(|| file.to_string());
         }
+        lastmods.extend(sitemap.lastmods);
         return;
     }
     if depth >= MAX_SITEMAP_DEPTH {
@@ -394,7 +401,7 @@ fn load_sitemap(
     }
     for loc in sitemap.locs {
         match child_sitemap_file(dist, base_path, &loc) {
-            Some(child) => load_sitemap(dist, &child, base_path, depth + 1, visited, urls, error),
+            Some(child) => load_sitemap(dist, &child, base_path, depth + 1, visited, urls, lastmods, error),
             None => {
                 error.get_or_insert_with(|| {
                     format!("{file}: child sitemap '{loc}' not found in dist")
@@ -416,6 +423,7 @@ fn child_sitemap_file(dist: &Path, base_path: &str, loc: &str) -> Option<String>
 struct ParsedSitemap {
     is_index: bool,
     locs: Vec<String>,
+    lastmods: Vec<String>,
 }
 
 fn parse_sitemap(path: &Path) -> Result<ParsedSitemap> {
@@ -427,10 +435,12 @@ fn parse_sitemap(path: &Path) -> Result<ParsedSitemap> {
     let mut reader = Reader::from_str(&content);
 
     let mut urls = Vec::new();
+    let mut lastmods = Vec::new();
     let mut is_index = false;
     let mut root_seen = false;
-    // Text of the open <loc>; entities arrive as separate events since quick-xml 0.38.
+    // Text of the open <loc> or <lastmod>; entities arrive as separate events since quick-xml 0.38.
     let mut loc: Option<String> = None;
+    let mut lastmod: Option<String> = None;
 
     loop {
         match reader.read_event() {
@@ -441,18 +451,25 @@ fn parse_sitemap(path: &Path) -> Result<ParsedSitemap> {
             Ok(Event::Start(ref e)) if e.name().as_ref() == "loc" => {
                 loc = Some(String::new());
             }
+            Ok(Event::Start(ref e)) if e.name().as_ref() == "lastmod" => {
+                lastmod = Some(String::new());
+            }
             Ok(Event::Text(ref e)) => {
                 if let Some(text) = loc.as_mut() {
+                    text.push_str(&e.xml10_content());
+                } else if let Some(text) = lastmod.as_mut() {
                     text.push_str(&e.xml10_content());
                 }
             }
             Ok(Event::CData(ref e)) => {
                 if let Some(text) = loc.as_mut() {
                     text.push_str(&e.xml10_content());
+                } else if let Some(text) = lastmod.as_mut() {
+                    text.push_str(&e.xml10_content());
                 }
             }
             Ok(Event::GeneralRef(ref e)) => {
-                if let Some(text) = loc.as_mut() {
+                if let Some(text) = loc.as_mut().or(lastmod.as_mut()) {
                     if let Ok(Some(c)) = e.resolve_char_ref() {
                         text.push(c);
                     } else if let Some(entity) = resolve_predefined_entity(&e.xml10_content()) {
@@ -465,6 +482,14 @@ fn parse_sitemap(path: &Path) -> Result<ParsedSitemap> {
                     urls.push(text.trim().to_string());
                 }
             }
+            Ok(Event::End(ref e)) if e.name().as_ref() == "lastmod" => {
+                if let Some(text) = lastmod.take() {
+                    let trimmed = text.trim();
+                    if !trimmed.is_empty() {
+                        lastmods.push(trimmed.to_string());
+                    }
+                }
+            }
             Ok(Event::Eof) => break,
             Err(e) => anyhow::bail!("invalid XML: {e}"),
             _ => {}
@@ -474,5 +499,6 @@ fn parse_sitemap(path: &Path) -> Result<ParsedSitemap> {
     Ok(ParsedSitemap {
         is_index,
         locs: urls,
+        lastmods,
     })
 }

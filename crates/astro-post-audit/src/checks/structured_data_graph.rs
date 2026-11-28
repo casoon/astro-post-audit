@@ -30,6 +30,9 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     let mut findings = Vec::new();
     let mut snapshots: Vec<EntitySnapshot> = Vec::new();
 
+    let mut defined_ids: HashSet<String> = HashSet::new();
+    let mut referenced_ids: Vec<(String, String)> = Vec::new();
+
     for page in &index.pages {
         let html = page.parse_html();
         for script in html.select(&SCRIPT_SEL) {
@@ -42,6 +45,25 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                 continue;
             };
             collect_entity_snapshots(&json, &page.rel_path, &mut snapshots);
+            collect_id_refs(&json, &page.rel_path, &mut defined_ids, &mut referenced_ids);
+        }
+    }
+
+    let mut reported_dangling: HashSet<String> = HashSet::new();
+    for (file, ref_id) in referenced_ids {
+        if !defined_ids.contains(&ref_id) && reported_dangling.insert(ref_id.clone()) {
+            findings.push(
+                Finding::review(
+                    "structured-data-graph/dangling-id",
+                    format!(
+                        "JSON-LD references @id '{}' which is not defined as a full node on any page",
+                        ref_id
+                    ),
+                )
+                .with_severity(Severity::Low)
+                .at(Location::file(file).with_selector("script[type='application/ld+json']"))
+                .with_help("Define a matching node with this @id (e.g. Organization, WebSite, or Person) or remove the dangling reference."),
+            );
         }
     }
 
@@ -196,4 +218,35 @@ fn collect_entity_snapshots(value: &Value, file: &str, out: &mut Vec<EntitySnaps
         name,
         url,
     });
+}
+
+fn collect_id_refs(
+    value: &Value,
+    file: &str,
+    defined: &mut HashSet<String>,
+    referenced: &mut Vec<(String, String)>,
+) {
+    match value {
+        Value::Array(arr) => {
+            for item in arr {
+                collect_id_refs(item, file, defined, referenced);
+            }
+        }
+        Value::Object(map) => {
+            if let Some(id) = map.get("@id").and_then(Value::as_str) {
+                let has_data = map.keys().any(|k| k != "@id" && k != "@type" && k != "@context");
+                if has_data {
+                    defined.insert(id.to_string());
+                } else if !id.is_empty() {
+                    referenced.push((file.to_string(), id.to_string()));
+                }
+            }
+            for (k, v) in map {
+                if k != "@id" && k != "@type" && k != "@context" {
+                    collect_id_refs(v, file, defined, referenced);
+                }
+            }
+        }
+        _ => {}
+    }
 }

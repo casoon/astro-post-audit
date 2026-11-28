@@ -130,37 +130,86 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
     // widerspruechlich — GPTBot stand hier als Citation-Bot, waehrend
     // auditmysite ihn als Trainings-Bot fuehrte.
     if config.robots_txt.ai_bot_policy {
+        let mut blocked_citation: Vec<String> = Vec::new();
+        let mut allowed_training: Vec<String> = Vec::new();
+        let mut blocked_training: Vec<String> = Vec::new();
+
         for block in blocks {
             let agent = &block.user_agent;
             let has_disallow = block.disallows_all();
             let has_allow = block.allows.iter().any(|a| a == "/");
 
             if block.bot_class == BotClass::AiCitation && has_disallow && !has_allow {
-                findings.push(Finding::fail("robots-txt/ai-citation-bot-blocked", format!(
-                        "AI citation bot '{}' is blocked — reduces AI search visibility",
-                        agent
-                    ))
-.with_severity(Severity::Medium)
-.at(Location::file("robots.txt"))
-.with_help(format!(
+                blocked_citation.push(agent.clone());
+                findings.push(
+                    Finding::review(
+                        "robots-txt/ai-citation-bot-blocked",
+                        format!(
+                            "AI citation bot '{}' is blocked — reduces AI search visibility",
+                            agent
+                        ),
+                    )
+                    .with_severity(Severity::Medium)
+                    .at(Location::file("robots.txt"))
+                    .with_help(format!(
                         "Remove 'Disallow: /' for {} to allow AI-powered search engines to cite your content",
                         agent
-                    )));
+                    )),
+                );
             }
 
-            if block.bot_class == BotClass::AiTraining && !has_disallow {
-                findings.push(Finding::fail("robots-txt/ai-training-bot-allowed", format!(
-                        "AI training bot '{}' is allowed — consider blocking if you don't want your content used for training",
-                        agent
-                    ))
-.with_severity(Severity::Low)
-.at(Location::file("robots.txt"))
-.with_help(format!(
-                        "Add 'User-agent: {}\nDisallow: /' to block AI training crawlers",
-                        agent
-                    )));
+            if block.bot_class == BotClass::AiTraining {
+                if has_disallow && !has_allow {
+                    blocked_training.push(agent.clone());
+                } else {
+                    allowed_training.push(agent.clone());
+                    findings.push(
+                        Finding::review(
+                            "robots-txt/ai-training-bot-allowed",
+                            format!(
+                                "AI training bot '{}' is allowed — consider blocking if you don't want your content used for training",
+                                agent
+                            ),
+                        )
+                        .with_severity(Severity::Low)
+                        .at(Location::file("robots.txt"))
+                        .with_help(format!(
+                            "Add 'User-agent: {}\nDisallow: /' to block AI training crawlers",
+                            agent
+                        )),
+                    );
+                }
             }
         }
+
+        // Neutral summary even when robots.txt only has a wildcard `User-agent: *` block.
+        let has_content_signal = content
+            .lines()
+            .any(|l| l.trim().to_ascii_lowercase().starts_with("content-signal:"));
+        let citation_state = if blocked_citation.is_empty() {
+            "allowed (default)"
+        } else {
+            "partially/fully blocked"
+        };
+        let training_state = if !blocked_training.is_empty() && allowed_training.is_empty() {
+            "blocked"
+        } else if !blocked_training.is_empty() {
+            "mixed"
+        } else {
+            "allowed (default)"
+        };
+        findings.push(
+            Finding::review(
+                "robots-txt/ai-posture",
+                format!(
+                    "AI crawler posture: citation bots {citation_state}, training bots {training_state}, Content-Signal {}",
+                    if has_content_signal { "present" } else { "absent" }
+                ),
+            )
+            .with_severity(Severity::Low)
+            .at(Location::file("robots.txt"))
+            .with_help("Informational summary of how robots.txt configures AI search/citation vs. AI training crawlers."),
+        );
     }
 
     // Contradiction checks need the rules that apply to the wildcard (*) user-agent group.

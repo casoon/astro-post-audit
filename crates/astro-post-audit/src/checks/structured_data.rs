@@ -58,6 +58,21 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
                         findings.push(structural_finding(*issue, block, at.clone()));
                     }
                     for (node_index, node) in block.nodes.iter().enumerate() {
+                        for (field_path, rel_url) in relative_url_fields(&node.content) {
+                            findings.push(
+                                Finding::fail(
+                                    "structured-data/relative-url",
+                                    format!(
+                                        "JSON-LD property '{field_path}' uses a relative URL '{rel_url}'"
+                                    ),
+                                )
+                                .with_severity(Severity::Medium)
+                                .at(at.clone())
+                                .with_help(
+                                    "Use a fully-qualified absolute URL (https://...) in JSON-LD as required by Google Search Central.",
+                                ),
+                            );
+                        }
                         for schema_type in &node.types {
                             for assessment in sd::assess_node(
                                 node_index,
@@ -187,7 +202,7 @@ fn assessment_findings(
             continue;
         };
         findings.push(
-            Finding::fail(
+            Finding::review(
                 rule,
                 format!("JSON-LD {schema_type} is missing recommended property '{property}'"),
             )
@@ -230,7 +245,7 @@ fn required_rule(schema_type: &str, property: &str) -> (&'static str, Severity) 
 fn recommended_rule(
     schema_type: &str,
     property: &str,
-    is_home: bool,
+    _is_home: bool,
 ) -> Option<(&'static str, Severity)> {
     let article = matches!(schema_type, "Article" | "BlogPosting" | "NewsArticle");
     Some(match property {
@@ -255,10 +270,68 @@ fn recommended_rule(
             "structured-data/local-business-missing-telephone",
             Severity::Low,
         ),
-        "potentialAction" if schema_type == "WebSite" && is_home => (
-            "structured-data/website-missing-search-action",
-            Severity::Low,
-        ),
         _ => return None,
     })
+}
+
+const JSON_LD_URL_FIELDS: &[&str] = &[
+    "url",
+    "image",
+    "logo",
+    "thumbnailUrl",
+    "contentUrl",
+    "embedUrl",
+    "item",
+    "sameAs",
+    "publishingPrinciples",
+];
+
+fn relative_url_fields(content: &serde_json::Value) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    collect_relative_urls(content, "", false, &mut out);
+    out
+}
+
+fn collect_relative_urls(
+    value: &serde_json::Value,
+    prefix: &str,
+    expect_url: bool,
+    out: &mut Vec<(String, String)>,
+) {
+    match value {
+        serde_json::Value::String(s) if expect_url => {
+            let trimmed = s.trim();
+            if !trimmed.is_empty()
+                && !trimmed.starts_with("https://")
+                && !trimmed.starts_with("http://")
+            {
+                out.push((prefix.to_string(), trimmed.to_string()));
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for (idx, item) in items.iter().enumerate() {
+                let path = if prefix.is_empty() {
+                    format!("[{idx}]")
+                } else {
+                    format!("{prefix}[{idx}]")
+                };
+                collect_relative_urls(item, &path, expect_url, out);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for (key, val) in map {
+                if key.starts_with('@') {
+                    continue;
+                }
+                let path = if prefix.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{prefix}.{key}")
+                };
+                let is_url_field = JSON_LD_URL_FIELDS.contains(&key.as_str());
+                collect_relative_urls(val, &path, is_url_field, out);
+            }
+        }
+        _ => {}
+    }
 }

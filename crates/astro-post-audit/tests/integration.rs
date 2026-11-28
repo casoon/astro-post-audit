@@ -2014,10 +2014,10 @@ fn structured_data_top_level_array_and_breadcrumb_item_name() {
     );
 }
 
-/// Issue #88: the SearchAction is only expected on the start page; WebSite
-/// nodes on subpages are slim references.
+/// Issue #122: Google retired Sitelinks Searchbox (SearchAction) in Nov 2024,
+/// so WebSite without potentialAction must not be flagged.
 #[test]
-fn structured_data_search_action_only_on_home() {
+fn structured_data_website_no_longer_requires_search_action() {
     let dir = TempDir::new().unwrap();
     let page = |canonical: &str| {
         format!(
@@ -2042,7 +2042,26 @@ fn structured_data_search_action_only_on_home() {
         .filter(|f| f["rule_id"] == "structured-data/website-missing-search-action")
         .filter_map(|f| f["location"]["file"].as_str())
         .collect();
-    assert_eq!(files, ["index.html"]);
+    assert!(files.is_empty());
+}
+
+#[test]
+fn structured_data_flags_relative_urls() {
+    let dir = TempDir::new().unwrap();
+    fs::write(
+        dir.path().join("index.html"),
+        r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Test</title><link rel="canonical" href="https://example.com/"><script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Example","url":"https://example.com/","logo":{"@type":"ImageObject","url":"/logo.png"}}</script></head><body><h1>Test</h1></body></html>"#,
+    )
+    .unwrap();
+    let (json, _) = run_audit_json(
+        dir.path(),
+        r#"{"site":{"base_url":"https://example.com"},"structured_data":{"check_json_ld":true}}"#,
+    );
+    assert!(json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|f| f["rule_id"] == "structured-data/relative-url"));
 }
 
 #[test]
@@ -5737,14 +5756,14 @@ fn heuristic_ai_and_ux_findings_are_review() {
     .unwrap();
     let (json, _) = run_audit_json(
         noindex_dir.path(),
-        r#"{"ai_visibility":{"enabled":true,"require_llms_txt":false}}"#,
+        r#"{"ai_visibility":{"enabled":true,"require_llms_txt":false},"robots_meta":{"allow_noindex":false,"fail_if_noindex":true}}"#,
     );
     let noindex = json["findings"]
         .as_array()
         .unwrap()
         .iter()
         .find(|f| f["rule_id"] == "ai-visibility/noindex-page")
-        .expect("noindex is reported");
+        .expect("noindex is reported when allow_noindex is false");
     assert_eq!(noindex["outcome"], "fail", "noindex is observed markup");
 }
 

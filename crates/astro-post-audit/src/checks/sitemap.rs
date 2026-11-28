@@ -151,5 +151,25 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         }
     }
 
+    // Check: uniform <lastmod> across many URLs (build-timestamp anti-pattern ignored by Google)
+    if index.sitemap_lastmods.len() >= 10 {
+        let first = &index.sitemap_lastmods[0];
+        if index.sitemap_lastmods.iter().all(|d| d == first) {
+            findings.push(
+                Finding::review(
+                    "sitemap/uniform-lastmod",
+                    format!(
+                        "All {} sitemap entries share the identical <lastmod> date '{}'",
+                        index.sitemap_lastmods.len(),
+                        first
+                    ),
+                )
+                .with_severity(Severity::Low)
+                .at(Location::file(sitemap_file.clone()))
+                .with_help("Google ignores <lastmod> when every URL carries the build date. Only emit <lastmod> when it reflects actual content updates."),
+            );
+        }
+    }
+
     findings
 }

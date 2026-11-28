@@ -1331,7 +1331,9 @@ impl Config {
             },
             "robots_txt": {
                 "require": true,
-                "require_sitemap_link": true
+                "require_sitemap_link": true,
+                "check_noindex_contradiction": true,
+                "check_sitemap_blocked": true
             },
             "i18n_audit": {
                 "enabled": true
@@ -1430,7 +1432,12 @@ impl Config {
             "sitemap": {
                 "require": true,
                 "canonical_must_be_in_sitemap": true,
+                "forbid_noncanonical_in_sitemap": true,
                 "entries_must_exist_in_dist": true
+            },
+            "robots_txt": {
+                "check_noindex_contradiction": true,
+                "check_sitemap_blocked": true
             }
         })
     }
@@ -1520,7 +1527,12 @@ impl Config {
             "sitemap": {
                 "require": true,
                 "canonical_must_be_in_sitemap": true,
+                "forbid_noncanonical_in_sitemap": true,
                 "entries_must_exist_in_dist": true
+            },
+            "robots_txt": {
+                "check_noindex_contradiction": true,
+                "check_sitemap_blocked": true
             },
             "security": {
                 "check_target_blank": true
