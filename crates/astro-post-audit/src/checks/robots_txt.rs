@@ -183,9 +183,7 @@ pub fn check_all(index: &SiteIndex, config: &Config) -> Vec<Finding> {
         }
 
         // Neutral summary even when robots.txt only has a wildcard `User-agent: *` block.
-        let has_content_signal = content
-            .lines()
-            .any(|l| l.trim().to_ascii_lowercase().starts_with("content-signal:"));
+        let has_content_signal = !parsed.content_signals.is_empty();
         let citation_state = if blocked_citation.is_empty() {
             "allowed (default)"
         } else {

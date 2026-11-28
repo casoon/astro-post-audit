@@ -234,7 +234,9 @@ fn collect_id_refs(
         }
         Value::Object(map) => {
             if let Some(id) = map.get("@id").and_then(Value::as_str) {
-                let has_data = map.keys().any(|k| k != "@id" && k != "@type" && k != "@context");
+                let has_data = map
+                    .keys()
+                    .any(|k| k != "@id" && k != "@type" && k != "@context");
                 if has_data {
                     defined.insert(id.to_string());
                 } else if !id.is_empty() {
