@@ -6,20 +6,40 @@ reconstructed from the git history and the README release notes.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-28
+
+### Breaking
+
+- **Presets:** `standard`, `seo` and `strict` now enable `check_noindex_contradiction`, `check_sitemap_blocked` and `forbid_noncanonical_in_sitemap`; builds on these presets can report new failures (#124).
+
 ### Added
 
 - **Accessibility:** `rules.a11y.contrast` checks text contrast and other style-dependent rules without a browser, computing styles from the stylesheets in `dist/`. A stylesheet that is not on disk keeps the affected rules `untested` (#115). Off by default; see [Contrast](https://github.com/casoon/astro-post-audit#contrast-computed-styles-without-a-browser).
-- **Performance:** with `rules.a11y.contrast` on, 1000 generated pages sharing two stylesheets take about 1.5 s in the accessibility check instead of 0.1 s; without the option nothing changes.
+- **AI visibility:** `ai-visibility/snippet-restricted` reports pages that limit snippets (`nosnippet`, `max-snippet:0`, `noai`), and `Source:` URLs in `llms-full.txt` are checked (#123).
+- **robots.txt:** `robots-txt/ai-posture` summarises how citation and training crawlers are treated and whether a `Content-Signal` is set, also for a robots.txt with only a `User-agent: *` group (#123).
+- **Sitemap:** `sitemap/uniform-lastmod` hints when every entry carries the same `lastmod` (#124).
+- **Structured data:** `structured-data/relative-url` flags JSON-LD URL properties that are not absolute, and `structured-data-graph/dangling-id` flags `@id` references that no node defines (#122).
 - **Report:** the JSON report gains `inputs`, one note per stylesheet that could not be read (remote URL, missing file, unresolved `@import`) with the number of pages affected; the text and Markdown reports list them under "Stylesheets not read".
+- **Performance:** with `rules.a11y.contrast` on, 1000 generated pages sharing two stylesheets take about 1.5 s in the accessibility check instead of 0.1 s; without the option nothing changes.
 
 ### Changed
 
 - **Accessibility:** rules come from `a11y-rules` 0.28 (was 0.26). An empty page now reports `headings/none` instead of `landmarks/main-missing`; the full list of upstream changes is in the `a11y-rules` changelog.
+- **AI visibility and robots.txt:** `ai-citation-bot-blocked`, `ai-training-bot-allowed` and `missing-llms-txt` are policy choices and report `review` instead of `fail` (#123).
 - **Pages:** the project site uses the current shared theme (0.19.0).
 - **robots.txt:** checks use `web-checks` 0.9 (was 0.5). AI bots follow the operators' current documentation: `ClaudeBot` counts as a training bot and can now trigger `robots-txt/ai-training-bot-allowed`, `ChatGPT-User` as a citation bot, `Applebot` and `GoogleOther` as search engines; newer AI crawlers are recognised. A comment line no longer ends a `User-agent` group, end-of-line comments are stripped, and an empty `Disallow:` blocks nothing (RFC 9309).
-- **Structured data:** the relative-URL check (`structured-data/relative-url`) comes from `web-checks` instead of a local copy; findings are unchanged.
+- **Robots meta:** `meta[name="googlebot"]` is read alongside `meta[name="robots"]` (#124).
+- **Structured data:** missing recommended properties report `review` instead of `fail` (#122).
 - **Report:** runemark 0.10: with `color: 'auto'`, an empty `NO_COLOR` counts as unset and `TERM=dumb` gives plain output without colour or Unicode symbols. Everything else renders as before.
 - **Performance:** measured on a real site (insights.casoon.de, 1092 HTML pages, `html_validation` on, cache cold): 0.9.0 takes 73–81 s, 0.10.0 takes 4.5–4.8 s (#109, #113). Errors (0) and warnings (5583) are identical; the info count drops from 1100 to 23 because `structured-data/website-missing-search-action` is no longer reported (1088 pages), while 11 info findings from the new link rules appear.
+
+### Removed
+
+- **Structured data:** `structured-data/website-missing-search-action` is gone; Google retired the Sitelinks Searchbox in November 2024 (#122).
+
+### Fixed
+
+- **AI visibility:** `ai-visibility/noindex-page` respects `robots_meta.allow_noindex` (#123).
 
 ## [0.10.0] - 2026-10-31
 
